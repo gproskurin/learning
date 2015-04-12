@@ -1,5 +1,6 @@
 #include <exception>
 #include <iostream>
+#include <fstream>
 #include <set>
 #include <stdexcept>
 #include <unordered_set>
@@ -52,11 +53,12 @@ graph_t convert_graph(const adj_list_t& al)
 {
 	graph_t gr;
 	using vd_t = boost::graph_traits<graph_t>::vertex_descriptor;
+	//boost::property_map<graph_t, boost::edge_weight_t>::type weight_map = boost::get(boost::edge_weight, gr);
 	for (const adj_item_t& a : al) {
 		const auto p = boost::add_edge(vd_t(a.v1), vd_t(a.v2), gr);
 		assert(p.second==true);
 		const auto& ed = p.first;
-		ed
+		//ed
 	}
 
 	return gr;
@@ -65,7 +67,9 @@ graph_t convert_graph(const adj_list_t& al)
 
 void run()
 {
-	const adj_list_t al = load_graph(std::cin);
+	std::ifstream in;
+	in.open("q3-edges.txt");
+	const adj_list_t al = load_graph(in);
 	const graph_t gr = convert_graph(al);
 
 }
