@@ -99,6 +99,10 @@ public:
 			const size_t new_count = clm.count_sets();
 			std::cout << "SETS: " << old_count << " -> " << new_count << "\n";
 		}
+
+		const item_list_t::size_type res_idx = min_cost_diff_idx(clm, min_cost_heap);
+		const item_t& item = items_.at(res_idx);
+		std::cout << "idx:" << res_idx << " n1:" << item.n1 << " n2:" << item.n2 << " cost:" << item.cost << "\n";
 	}
 
 	void add(node_t n1, node_t n2, cost_t c)
