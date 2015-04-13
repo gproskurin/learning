@@ -91,7 +91,7 @@ public:
 		std::cout << "CLM_COUNT: " << clm.count_sets() << "\n";
 		std::cout << "SETS: " << clm.count_sets() << "\n";
 
-		while (clm.count_sets() > K) {
+		while (clm.count_sets_gt(K)) {
 			const item_list_t::size_type min_item_idx = min_cost_diff_idx(clm, min_cost_heap);
 			const item_t& item = items_.at(min_item_idx);
 			assert(clm.are_separated(item.n1, item.n2));

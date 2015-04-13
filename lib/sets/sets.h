@@ -69,6 +69,19 @@ public:
 		return roots.size();
 	}
 
+	// return true if count_sets() is greater then k (optimized)
+	bool count_sets_gt(size_t k) const
+	{
+		assert(k>0);
+		std::unordered_set<set_id_t> roots;
+		for (const set_id_t s : m_) {
+			roots.insert(get_root(s));
+			if (roots.size() > k)
+				return true;
+		}
+		return false;
+	}
+
 	void print(std::ostream& os)
 	{
 		os << " size:" << m_.size() << " : ";
