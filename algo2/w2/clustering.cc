@@ -26,6 +26,8 @@ class adj_list_t {
 	typedef std::vector<item_t> item_list_t;
 	item_list_t items_;
 
+	typedef std::vector<item_list_t::size_type> item_heap_t;
+
 	// index
 	struct hash_index {
 		static size_t hash_node(node_t n) { return std::hash<node_t>()(n); }
@@ -38,29 +40,58 @@ public:
 	size_t count_size() const { return items_.size(); }
 	size_t index_size() const { return index_.size(); }
 
+	bool item_idx_cost_gt(size_t i1, size_t i2) const { return items_.at(i1).cost > items_.at(i2).cost; }
+
 	// find index of pair (with ends in different sets) with minimum cost
 	template <typename CLM>
-	item_list_t::size_type min_cost_diff_idx(const CLM& clm) const
+	item_list_t::size_type min_cost_diff_idx(const CLM& clm, item_heap_t& h) const
 	{
-		boost::optional<size_t> min_item_idx;
-		clm.foreach_separated_pair(
-			[&min_item_idx,this](node_t n1, node_t n2) {
-				if (!min_item_idx || get_cost(n1,n2) < items_.at(min_item_idx.get()).cost)
-					min_item_idx = search(n1,n2);
-			}
+		while (!h.empty()) {
+			const size_t min_idx = h.front();
+			const auto& min_item = items_.at(min_idx);
+			// first separated pair is a result
+			if (clm.are_separated(min_item.n1, min_item.n2))
+				return min_idx;
+			// not separated, remove from heap
+			std::pop_heap(
+				h.begin(),
+				h.end(),
+				[this] (size_t i1, size_t i2) { return item_idx_cost_gt(i1,i2); }
+			);
+			assert(h.back() == min_idx);
+			h.pop_back();
+		}
+		throw std::runtime_error("min_cost_not_found");
+	}
+
+	item_heap_t build_heap() const
+	{
+		item_heap_t h;
+		h.reserve(items_.size());
+		for (size_t i=0; i<items_.size(); ++i) {
+			h.push_back(i);
+		}
+		std::make_heap(
+			h.begin(),
+			h.end(),
+			[this] (size_t i1, size_t i2) { return item_idx_cost_gt(i1,i2); }
 		);
-		return min_item_idx.get();
+		const item_t& mi = items_.at(h.front());
+		std::cout << "HEAP: first: idx=" << h.front() << " n1=" << mi.n1 << " n2=" << mi.n2 << " cost=" << mi.cost << "\n";
+		return h;
 	}
 
 	void test_clustering() const
 	{
+		item_heap_t min_cost_heap = build_heap();
+
 		const size_t K = 4;
 		typedef sets_t<node_t> clm_t;
 		clm_t clm(1,500);
 		std::cout << "CLM_COUNT: " << clm.count_sets() << "\n";
 
 		while (clm.count_sets() > K) {
-			const item_list_t::size_type min_item_idx = min_cost_diff_idx(clm);
+			const item_list_t::size_type min_item_idx = min_cost_diff_idx(clm, min_cost_heap);
 			const item_t& item = items_.at(min_item_idx);
 			assert(clm.are_separated(item.n1, item.n2));
 			const size_t old_count = clm.count_sets();
