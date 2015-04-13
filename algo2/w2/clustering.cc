@@ -91,14 +91,9 @@ public:
 
 	item_list_t::size_type search(node_t n1, node_t n2) const
 	{
-		for (size_t i=0; i<items_.size(); ++i) {
-			const auto& item = items_[i];
-			if ((item.n1==n1 && item.n2==n2)
-				|| (item.n2==n1 && item.n1==n2))
-			{
-				return i;
-			}
-		}
+		const item_list_t::const_iterator iter = find_eq_n1_n2(n1, n2);
+		if (iter != items_.cend())
+			return iter - items_.cbegin();
 		throw std::runtime_error("search_not_found");
 	}
 
