@@ -42,8 +42,9 @@ public:
 
 	void _reparent_set_to(const set_id_t s, const set_id_t new_parent)
 	{
-		const size_t s_idx = set_to_idx(s);
-		m_.at(s_idx) = new_parent;
+		const set_id_t root = get_root(s);
+		const size_t root_idx = set_to_idx(root);
+		m_.at(root_idx) = new_parent;
 	}
 
 	template <typename Func>
