@@ -14,7 +14,7 @@ int main()
 		sets._reparent_set_to(103, 104);
 		sets.print(std::cout);
 
-		sets.foreach_pair_in_different_sets(
+		sets.foreach_separated_pair(
 			[](int s1, int s2) { std::cout << "(" << s1 << "," << s2 << ")\n"; }
 		);
 	}

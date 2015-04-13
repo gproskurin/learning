@@ -43,7 +43,7 @@ public:
 	item_list_t::size_type min_cost_diff_idx(const CLM& clm) const
 	{
 		boost::optional<size_t> min_item_idx;
-		clm.foreach_pair_in_different_sets(
+		clm.foreach_separated_pair(
 			[&min_item_idx,this](node_t n1, node_t n2) {
 				if (!min_item_idx || get_cost(n1,n2) < items_.at(min_item_idx.get()).cost)
 					min_item_idx = search(n1,n2);
@@ -62,7 +62,7 @@ public:
 		while (clm.count_sets() > K) {
 			const item_list_t::size_type min_item_idx = min_cost_diff_idx(clm);
 			const item_t& item = items_.at(min_item_idx);
-			assert(!clm.in_one_set(item.n1, item.n2));
+			assert(clm.are_separated(item.n1, item.n2));
 			const size_t old_count = clm.count_sets();
 			clm.union_sets(item.n1, item.n2);
 			const size_t new_count = clm.count_sets();

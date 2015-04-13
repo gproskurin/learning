@@ -48,13 +48,13 @@ public:
 	}
 
 	template <typename Func>
-	void foreach_pair_in_different_sets(Func func) const
+	void foreach_separated_pair(Func func) const
 	{
 		for (size_t i1=0; i1<m_.size(); ++i1) {
 			for (size_t i2 = i1+1; i2<m_.size(); ++i2) {
 				const set_id_t s1 = idx_to_set(i1);
 				const set_id_t s2 = idx_to_set(i2);
-				if (get_root(s1) != get_root(s2)) {
+				if (are_separated(s1, s2)) {
 					func(s1, s2);
 				}
 			}
@@ -66,9 +66,9 @@ public:
 		_reparent_set_to(s1, s2);
 	}
 
-	bool in_one_set(const set_id_t s1, const set_id_t s2) const
+	bool are_separated(const set_id_t s1, const set_id_t s2) const
 	{
-		return get_root(s1) == get_root(s2);
+		return get_root(s1) != get_root(s2);
 	}
 
 	size_t count_sets() const
