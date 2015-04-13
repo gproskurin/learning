@@ -1,4 +1,4 @@
-#include "../../lib/sets/sets.h"
+#include "sets.h"
 
 #include <algorithm>
 #include <exception>
