@@ -47,20 +47,6 @@ public:
 		m_.at(root_idx) = new_parent;
 	}
 
-	template <typename Func>
-	void foreach_separated_pair(Func func) const
-	{
-		for (size_t i1=0; i1<m_.size(); ++i1) {
-			for (size_t i2 = i1+1; i2<m_.size(); ++i2) {
-				const set_id_t s1 = idx_to_set(i1);
-				const set_id_t s2 = idx_to_set(i2);
-				if (are_separated(s1, s2)) {
-					func(s1, s2);
-				}
-			}
-		}
-	}
-
 	void union_sets(const set_id_t s1, const set_id_t s2)
 	{
 		_reparent_set_to(s1, s2);
