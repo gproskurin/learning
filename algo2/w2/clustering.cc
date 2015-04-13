@@ -89,20 +89,22 @@ public:
 		typedef sets_t<node_t> clm_t;
 		clm_t clm(1,500);
 		std::cout << "CLM_COUNT: " << clm.count_sets() << "\n";
+		std::cout << "SETS: " << clm.count_sets() << "\n";
 
 		while (clm.count_sets() > K) {
 			const item_list_t::size_type min_item_idx = min_cost_diff_idx(clm, min_cost_heap);
 			const item_t& item = items_.at(min_item_idx);
 			assert(clm.are_separated(item.n1, item.n2));
-			const size_t old_count = clm.count_sets();
+			//const size_t old_count = clm.count_sets();
 			clm.union_sets(item.n1, item.n2);
-			const size_t new_count = clm.count_sets();
-			std::cout << "SETS: " << old_count << " -> " << new_count << "\n";
+			//const size_t new_count = clm.count_sets();
+			//std::cout << "SETS: " << old_count << " -> " << new_count << "\n";
 		}
 
 		const item_list_t::size_type res_idx = min_cost_diff_idx(clm, min_cost_heap);
 		const item_t& item = items_.at(res_idx);
-		std::cout << "idx:" << res_idx << " n1:" << item.n1 << " n2:" << item.n2 << " cost:" << item.cost << "\n";
+		std::cout << "SETS: " << clm.count_sets() << "\n";
+		std::cout << "Result: idx:" << res_idx << " n1:" << item.n1 << " n2:" << item.n2 << " cost:" << item.cost << "\n";
 	}
 
 	void add(node_t n1, node_t n2, cost_t c)
