@@ -6,6 +6,7 @@
 #include <iomanip>
 #include <iostream>
 #include <stdexcept>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -14,19 +15,7 @@ const number_t N24 = 24;
 
 typedef std::vector<number_t> num_list_t;
 
-struct number_info_t {
-	number_t num;
-	number_t parent;
-
-	explicit number_info_t(number_t n) : num(n), parent(n) {}
-
-	struct hasher {
-		size_t operator()(const number_info_t& ni) const { return std::hash<number_t>()(ni.num); }
-	};
-	struct key_equal {
-		bool operator()(const number_info_t& ni1, const number_info_t& ni2) const { return ni1.num==ni2.num; }
-	};
-};
+typedef std::unordered_map<number_t, number_t> numset_t;
 
 size_t count_1_bits(number_t n)
 {
@@ -68,28 +57,77 @@ num_list_t generate_2bit(size_t num_bits)
 	return res;
 }
 
+template <typename NumSet, typename Iter>
+Iter get_root_impl(NumSet&& ns, Iter iter)
+{
+	//std::cout << "start get_root\n";
+	assert(iter != ns.cend());
+	while (iter->first != iter->second) {
+		iter = ns.find(iter->second); // search for parent of current element
+		assert(iter != ns.cend());
+	}
+	//std::cout << "end get_root\n";
+	return iter;
+}
+
+numset_t::const_iterator get_root(const numset_t& ns, numset_t::const_iterator iter)
+{
+	const auto root_iter = get_root_impl(ns, iter);
+	assert(root_iter->first == root_iter->second);
+	return root_iter;
+}
+
+numset_t::iterator get_root(numset_t& ns, numset_t::iterator iter)
+{
+	numset_t::iterator const root_iter = get_root_impl(ns, iter);
+	assert(root_iter->first == root_iter->second);
+	iter->second = root_iter->first; // path compression
+	return root_iter;
+}
+
+void reparent(numset_t& ns, numset_t::iterator iter, number_t new_parent)
+{
+	const numset_t::iterator root_iter = get_root(ns, iter);
+	assert(root_iter->first == root_iter->second);
+	root_iter->second = new_parent; // set new parent
+}
+
+void union_hamming_dist(numset_t& ns, const num_list_t& dists)
+{
+	//size_t count = 0;
+	for (numset_t::iterator cur_iter=ns.begin(); cur_iter!=ns.end(); ++cur_iter) {
+		const number_t cur_num = cur_iter->first;
+		const number_t cur_num_root = get_root(ns, cur_iter)->second;
+		//std::cout << "NUM: " << cur_num << " PAR:" << cur_iter->second << " ROOT:" << cur_num_root << "\n";
+		for (const number_t d : dists) {
+			//std::cout << "\tdist:" << d << "\n";
+			const number_t search_num = cur_num ^ d;
+			numset_t::iterator const iter = ns.find(search_num);
+			if (iter != ns.cend()) {
+				reparent(ns, iter, cur_num_root);
+			}
+		}
+		//++count;
+		//if (count % 100 == 0)
+		//	std::cout << count << "\n";
+	}
+}
+
 num_list_t generate_2bit_brute(size_t num_bits)
 {
 	num_list_t res;
-	for (size_t num=0; num<(1<<num_bits); ++num) {
+	for (size_t num=0; num<(size_t(1)<<num_bits); ++num) {
 		if (count_1_bits(num)==2)
 			res.push_back(num);
 	}
+	std::sort(res.begin(), res.end());
 	return res;
 }
 
 
-typedef std::unordered_set<
-		number_info_t,
-		number_info_t::hasher,
-		number_info_t::key_equal
-	>
-	input_set_t;
-
-
-input_set_t load_data(std::istream& is)
+numset_t load_data(std::istream& is)
 {
-	input_set_t res;
+	numset_t res;
 	size_t num_lines;
 	size_t num_bits;
 	is >> num_lines >> num_bits;
@@ -107,7 +145,7 @@ input_set_t load_data(std::istream& is)
 			else
 				num = (num << 1) | bit;
 		}
-		res.emplace(num);
+		res.emplace(num,num);
 	}
 	if (!is)
 		throw std::runtime_error("early_EOF");
@@ -119,14 +157,34 @@ input_set_t load_data(std::istream& is)
 	return res;
 }
 
+size_t count_clusters(const numset_t& ns)
+{
+	std::unordered_set<number_t> roots;
+	for (auto i=ns.cbegin(); i!=ns.cend(); ++i) {
+		const numset_t::const_iterator root_iter = get_root(ns, i);
+		assert(root_iter != ns.cend());
+		assert(root_iter->first == root_iter->second);
+		roots.emplace(root_iter->first);
+	}
+	return roots.size();
+}
+
 void run()
 {
-	const input_set_t nums = load_data(std::cin);
+	numset_t nums = load_data(std::cin);
 	std::cout << nums.size() << "\n";
 
 	const num_list_t b1 = generate_1bit(N24);
 	const num_list_t b2 = generate_2bit(N24);
 	std::cout << "b1:" << b1.size() << " b2:" << b2.size() << "\n";
+
+	std::cout << "Clusters: " << count_clusters(nums) << "\n";
+
+	union_hamming_dist(nums, b1);
+	std::cout << "Hamming distance 1 done. Clusters: " << count_clusters(nums) << "\n";
+
+	union_hamming_dist(nums, b2);
+	std::cout << "Hamming distance 2 done. Clusters: " << count_clusters(nums) << "\n";
 }
 
 int main()
