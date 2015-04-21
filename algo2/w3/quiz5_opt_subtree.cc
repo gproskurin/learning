@@ -1,11 +1,9 @@
 #include <algorithm>
-#include <vector>
-#include <unordered_map>
-#include <map>
 #include <iostream>
+#include <map>
+#include <vector>
 
 #include <assert.h>
-#include <stddef.h>
 
 template<typename T, typename Index>
 class sparse_matrix_t {
