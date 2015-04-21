@@ -43,7 +43,7 @@ public:
 			throw std::runtime_error("set_new_at_exists");
 	};
 		
-	const size_t* get_ptr_at(size_t a, size_t b) const noexcept {
+	const T* get_ptr_at(size_t a, size_t b) const noexcept {
 		check_idx(a,b);
 		const auto iter1 = data_.find(a);
 		if (iter1 == data_.cend()) {
