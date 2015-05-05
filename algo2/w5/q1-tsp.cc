@@ -182,6 +182,17 @@ void run()
 			}
 		}
 	}
+
+	const bitset_t Sall((1ULL << N) - 1);
+	double min = pos_inf;
+	for (size_t j=1; j<=N; ++j) {
+		const double* const cur_ptr = A.get_ptr_at(Sall, j);
+		assert(cur_ptr != nullptr);
+		const double cur = *cur_ptr + dist(pp.at(j), pp.at(0));
+		if (cur < min)
+			min = cur;
+	}
+	std::cout << "Result: " << min << "\n";
 }
 
 int main()
