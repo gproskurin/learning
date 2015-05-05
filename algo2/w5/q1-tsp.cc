@@ -131,9 +131,7 @@ public:
 		//std::cout << " ** set_at(\"" << S.to_string() << "\", " << j << ", ...)\n";
 		const auto iter1 = data_.find(S);
 		if (iter1 == data_.end()) {
-			map2_t map2;
-			map2.emplace(j, val);
-			const auto p = data_.emplace(S, std::move(map2));
+			const auto p = data_.emplace(S, map2_t{ {j,val} });
 			assert(p.second == true);
 			return;
 		}
