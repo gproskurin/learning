@@ -12,7 +12,7 @@
 #include <assert.h>
 
 // for speed. To use bitset
-const size_t N = 3;
+const size_t N = 25;
 
 static_assert(std::numeric_limits<double>::has_infinity, "no_inf_for_double");
 static const double pos_inf = std::numeric_limits<double>::infinity();
