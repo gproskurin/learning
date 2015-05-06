@@ -90,7 +90,7 @@ private:
 		std::cout << "max_val: " << max_str << " len:" << max_str.size() << "\n";
 		for (unsigned long long i=0; i<=max_val; ++i) {
 			bitset_t S(i);
-			if (S[0]==false)
+			if (S.test(0)==false)
 				continue;
 			const auto count1 = S.count();
 			if (count1 < 2)
@@ -99,7 +99,7 @@ private:
 				assert(count1==N);
 			else
 				assert(count1 < N);
-			data_[count1].emplace_back(std::move(S));
+			data_.at(count1).emplace_back(std::move(S));
 		}
 		std::cout << "Subsets: " << total_count() << "\n";
 	}
@@ -112,7 +112,7 @@ class results_t {
 public:
 	const double* get_ptr_at(const bitset_t& S, size_t j) const noexcept {
 		//std::cout << " ** get_ptr_at(\"" << S.to_string() << "\", " << j << ")" << std::flush;
-		assert(S[0]==true);
+		assert(S.test(0)==true);
 		if (j==0) { // path to initial point
 			if (S.count()==1) {
 				static const double zero = 0.0;
@@ -139,7 +139,7 @@ public:
 
 	void set_at(const bitset_t& S, size_t j, double val) {
 		//std::cout << " ** set_at(\"" << S.to_string() << "\", " << j << ", " << val << ")\n";
-		assert(S[0]==true);
+		assert(S.test(0)==true);
 		//assert(get_ptr_at(S,j) == nullptr);
 		const auto iter1 = data_.find(S);
 		if (iter1 == data_.end()) {
@@ -173,17 +173,17 @@ void run()
 		const auto& SS = Sgen.get_subsets_with_1_count(m);
 		std::cout << " * subproblem_size:" << m << " subsets:" << SS.size() << "\n";
 		for (const bitset_t& S : SS) {
-			assert(S[0]==true);
+			assert(S.test(0)==true);
 			assert(S.count()==m);
 			for (size_t j=1; j<=N; ++j) {
-				if (S[j]==false)
+				if (S.test(j)==false)
 					continue;
 				double min = pos_inf;
 				for (size_t k=0; k<=N; ++k) {
-					if (k!=j && S[k]==true) {
+					if (k!=j && S.test(k)==true) {
 						bitset_t S_minus_j = S;
-						assert(S_minus_j[j] == true);
-						S_minus_j[j] = false;
+						assert(S_minus_j.test(j) == true);
+						S_minus_j.reset(j);
 						const double* const cur_ptr = A.get_ptr_at(S_minus_j, k);
 						assert(cur_ptr != nullptr);
 						const double cur = *cur_ptr + dist(pp.at(k), pp.at(j));
