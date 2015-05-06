@@ -175,11 +175,11 @@ void run()
 		for (const bitset_t& S : SS) {
 			assert(S.test(0)==true);
 			assert(S.count()==m);
-			for (size_t j=1; j<=N; ++j) {
+			for (size_t j=1; j<N; ++j) {
 				if (S.test(j)==false)
 					continue;
 				double min = pos_inf;
-				for (size_t k=0; k<=N; ++k) {
+				for (size_t k=0; k<N; ++k) {
 					if (k!=j && S.test(k)==true) {
 						bitset_t S_minus_j = S;
 						assert(S_minus_j.test(j) == true);
@@ -199,7 +199,7 @@ void run()
 	const bitset_t Sall((1ULL << N) - 1);
 	std::cout << "Sall: " << Sall.to_string() << "\n";
 	double min = pos_inf;
-	for (size_t j=1; j<=N; ++j) {
+	for (size_t j=1; j<N; ++j) {
 		const double* const cur_ptr = A.get_ptr_at(Sall, j);
 		assert(cur_ptr != nullptr);
 		const double cur = *cur_ptr + dist(pp.at(j), pp.at(0));
