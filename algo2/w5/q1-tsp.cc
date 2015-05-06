@@ -6,12 +6,13 @@
 #include <stdexcept>
 #include <unordered_map>
 #include <vector>
+#include <sstream>
 
 #include <math.h>
 #include <assert.h>
 
 // for speed. To use bitset
-const size_t N = 25;
+const size_t N = 3;
 
 static_assert(std::numeric_limits<double>::has_infinity, "no_inf_for_double");
 static const double pos_inf = std::numeric_limits<double>::infinity();
@@ -21,6 +22,7 @@ struct point_t {
 	double y;
 	point_t(double xx, double yy) : x(xx), y(yy) {}
 	point_t() : point_t(0.0, 0.0) {}
+	std::string to_string() const { std::ostringstream os; os << "("<<x<<","<<y<<")"; return os.str(); }
 };
 typedef std::array<point_t, N> points_t;
 typedef std::bitset<N> bitset_t;
@@ -34,7 +36,9 @@ double dist2(const point_t& p1, const point_t& p2)
 
 double dist(const point_t& p1, const point_t& p2)
 {
-	return sqrt(dist2(p1,p2));
+	const double d = sqrt(dist2(p1,p2));
+	std::cout << "dist: " << p1.to_string() << " " << p2.to_string() << " = " << d << "\n";
+	return d;
 }
 
 points_t load_graph(std::istream& is)
@@ -107,28 +111,36 @@ class results_t {
 	res_cache_t data_;
 public:
 	const double* get_ptr_at(const bitset_t& S, size_t j) const noexcept {
+		std::cout << " ** get_ptr_at(\"" << S.to_string() << "\", " << j << ")" << std::flush;
 		assert(S[0]==true);
 		if (j==0) {
 			if (S.count()==1) {
 				static const double zero = 0.0;
+				std::cout << " -> zero (j==0, S.count()==1)\n";
 				return &zero;
 			}
+			std::cout << " -> pos_inf (j==0, S.count()!=1)\n";
 			return &pos_inf; // TODO: don't use global
 		}
 		const auto iter1 = data_.find(S);
-		if (iter1==data_.cend())
+		if (iter1==data_.cend()) {
+			std::cout << " -> nullptr (S not found)\n";
 			return nullptr;
+		}
 		const auto& D = iter1->second;
 		const auto iter2 = D.find(j);
-		if (iter2==D.cend())
+		if (iter2==D.cend()) {
+			std::cout << " -> nullptr (S found, data not)\n";
 			return nullptr;
+		}
+		std::cout << " -> " << iter2->second << "\n";
 		return &iter2->second;
 	}
 
 	void set_at(const bitset_t& S, size_t j, double val) {
+		std::cout << " ** set_at(\"" << S.to_string() << "\", " << j << ", " << val << ")\n";
 		assert(S[0]==true);
-		assert(get_ptr_at(S,j) == nullptr);
-		//std::cout << " ** set_at(\"" << S.to_string() << "\", " << j << ", ...)\n";
+		//assert(get_ptr_at(S,j) == nullptr);
 		const auto iter1 = data_.find(S);
 		if (iter1 == data_.end()) {
 			const auto p = data_.emplace(S, map2_t{ {j,val} });
@@ -143,10 +155,11 @@ public:
 
 void run()
 {
+	std::cout << "bitset_t size: " << sizeof(bitset_t) << "\n";
 	const points_t pp = load_graph(std::cin);
 	std::cout << "Data size: " << pp.size() << "\n";
 	assert(pp.size() == N);
-#if 0
+#if 1
 	// print
 	std::cout.precision(10);
 	for (const auto& p : pp) {
@@ -184,6 +197,7 @@ void run()
 	}
 
 	const bitset_t Sall((1ULL << N) - 1);
+	std::cout << "Sall: " << Sall.to_string() << "\n";
 	double min = pos_inf;
 	for (size_t j=1; j<=N; ++j) {
 		const double* const cur_ptr = A.get_ptr_at(Sall, j);
