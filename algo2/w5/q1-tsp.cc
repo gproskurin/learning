@@ -37,7 +37,7 @@ double dist2(const point_t& p1, const point_t& p2)
 double dist(const point_t& p1, const point_t& p2)
 {
 	const double d = sqrt(dist2(p1,p2));
-	std::cout << "dist: " << p1.to_string() << " " << p2.to_string() << " = " << d << "\n";
+	//std::cout << "dist: " << p1.to_string() << " " << p2.to_string() << " = " << d << "\n";
 	return d;
 }
 
@@ -111,34 +111,34 @@ class results_t {
 	res_cache_t data_;
 public:
 	const double* get_ptr_at(const bitset_t& S, size_t j) const noexcept {
-		std::cout << " ** get_ptr_at(\"" << S.to_string() << "\", " << j << ")" << std::flush;
+		//std::cout << " ** get_ptr_at(\"" << S.to_string() << "\", " << j << ")" << std::flush;
 		assert(S[0]==true);
-		if (j==0) {
+		if (j==0) { // path to initial point
 			if (S.count()==1) {
 				static const double zero = 0.0;
-				std::cout << " -> zero (j==0, S.count()==1)\n";
+				//std::cout << " -> zero (j==0, S.count()==1)\n";
 				return &zero;
 			}
-			std::cout << " -> pos_inf (j==0, S.count()!=1)\n";
+			//std::cout << " -> pos_inf (j==0, S.count()!=1)\n";
 			return &pos_inf; // TODO: don't use global
 		}
 		const auto iter1 = data_.find(S);
 		if (iter1==data_.cend()) {
-			std::cout << " -> nullptr (S not found)\n";
+			//std::cout << " -> nullptr (S not found)\n";
 			return nullptr;
 		}
 		const auto& D = iter1->second;
 		const auto iter2 = D.find(j);
 		if (iter2==D.cend()) {
-			std::cout << " -> nullptr (S found, data not)\n";
+			//std::cout << " -> nullptr (S found, data not)\n";
 			return nullptr;
 		}
-		std::cout << " -> " << iter2->second << "\n";
+		//std::cout << " -> " << iter2->second << "\n";
 		return &iter2->second;
 	}
 
 	void set_at(const bitset_t& S, size_t j, double val) {
-		std::cout << " ** set_at(\"" << S.to_string() << "\", " << j << ", " << val << ")\n";
+		//std::cout << " ** set_at(\"" << S.to_string() << "\", " << j << ", " << val << ")\n";
 		assert(S[0]==true);
 		//assert(get_ptr_at(S,j) == nullptr);
 		const auto iter1 = data_.find(S);
@@ -159,7 +159,7 @@ void run()
 	const points_t pp = load_graph(std::cin);
 	std::cout << "Data size: " << pp.size() << "\n";
 	assert(pp.size() == N);
-#if 1
+#if 0
 	// print
 	std::cout.precision(10);
 	for (const auto& p : pp) {
