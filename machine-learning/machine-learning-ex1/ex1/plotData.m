@@ -3,6 +3,10 @@ function plotData(x, y)
 %   PLOTDATA(x,y) plots the data points and gives the figure axes labels of
 %   population and profit.
 
+plot(x,y,'rd','markersize',10)
+ylabel('Profit in $10.000s')
+xlabel('Population of the city * 10000')
+
 % ====================== YOUR CODE HERE ======================
 % Instructions: Plot the training data into a figure using the 
 %               "figure" and "plot" commands. Set the axes labels using
