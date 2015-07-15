@@ -2,6 +2,7 @@
 #include <deque>
 #include <iterator>
 #include <iostream>
+#include <vector>
 
 #include <boost/range/iterator_range.hpp>
 
@@ -84,6 +85,7 @@ size_t merge_sort_count_inv(IterIn first, IterIn last, IterOut result, Pred less
 	return detail::merge_sort_impl(first, last, result, less);
 }
 
+#if 0
 template <typename IterIn, typename Pred>
 size_t count_inv_simple(IterIn first, IterIn last, Pred less)
 {
@@ -114,13 +116,53 @@ void print(const C& c, std::ostream& os)
 	std::copy(c.cbegin(), c.cend(), std::ostream_iterator<typename C::value_type>(os, " "));
 	os << "\n";
 }
+#endif
+
+template <typename T>
+std::vector<T> read_data(std::istream& is)
+{
+	std::vector<T> res;
+	while (is) {
+		T n;
+		is >> n;
+		if (is)
+			res.push_back(n);
+	}
+	std::cout << "Size: " << res.size() << "\n";
+	return res;
+}
+
+void run()
+{
+	const auto data = read_data<long>(std::cin);
+	std::vector<long> data_sorted;
+	data_sorted.reserve(data.size());
+	const auto inv_count = merge_sort_count_inv(
+		data.begin(),
+		data.end(),
+		std::back_inserter(data_sorted),
+		std::less<long>()
+	);
+	assert(data.size()==data_sorted.size());
+	assert(std::is_sorted(data_sorted.begin(), data_sorted.end()));
+	std::cout << "inv_count: " << inv_count << "\n";
+}
 
 int main()
 {
+#if 0
 	std::vector<int> v1 = gen_vector(50000);
 	//print(v1, std::cout);
 	std::cout << "InvSimple:\t" << count_inv_simple(v1.cbegin(), v1.cend(), std::less<int>()) << "\n";
 	std::vector<int> vs;
 	const size_t inv2 = merge_sort_count_inv(v1.cbegin(), v1.cend(), std::back_inserter(vs), std::less<int>());
 	std::cout << "Count:\t\t" << inv2 << "\n";
+#endif
+	try {
+		run();
+		return 0;
+	} catch (const std::exception& ex) {
+		std::cerr << "Ex: " << ex.what() << "\n";
+	}
+	return 1;
 }
