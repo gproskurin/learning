@@ -1,6 +1,7 @@
 #![feature(scoped)]
 
 extern crate rand;
+extern crate num_cpus;
 
 
 #[derive(Copy,Clone)]
@@ -315,7 +316,7 @@ fn papadimitriou_inner(V : usize, e : &Expr, fa : &FixedAss, inner_iter : usize)
 
 fn papadimitriou_parallel(ass_sz : usize, e : &Expr, fa : &FixedAss) -> OptAss
 {
-	let outer_iter : usize = 8; // threads count
+	let outer_iter : usize = num_cpus::get();; // threads count
 	let inner_iter : usize = 1000000;
 	let mut fut = Vec::new();
 	for _ in 0..outer_iter {
