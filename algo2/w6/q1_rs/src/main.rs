@@ -1,8 +1,7 @@
-#![feature(scoped)]
+//#![feature(scoped)]
 
 extern crate rand;
 extern crate num_cpus;
-
 
 #[derive(Copy,Clone)]
 struct Literal {
@@ -157,7 +156,7 @@ fn load_expr() -> (Expr, usize)
 fn print_stat(e : &Expr)
 {
 	println!("Expr size: {}", e.len());
-	if (!e.is_empty()) {
+	if !e.is_empty() {
 		let mut min_var : usize = e[0][0].varnum;
 		let mut max_var : usize = min_var;
 		for c in e {
@@ -320,7 +319,7 @@ fn papadimitriou_parallel(ass_sz : usize, e : &Expr, fa : &FixedAss) -> OptAss
 	let inner_iter : usize = 1000000;
 	let mut fut = Vec::new();
 	for _ in 0..outer_iter {
-		let f = std::thread::scoped(|| papadimitriou_inner(ass_sz, &e, &fa, inner_iter) );
+		let f = std::thread::spawn(|| papadimitriou_inner(ass_sz, e, &fa, inner_iter) );
 		fut.push(f);
 	}
 
@@ -330,7 +329,7 @@ fn papadimitriou_parallel(ass_sz : usize, e : &Expr, fa : &FixedAss) -> OptAss
 	for f in fut {
 		let cur_res = f.join();
 		match res {
-			None => { res = cur_res; }
+			None => { res = cur_res.unwrap(); }
 			_ => {}
 		}
 	}

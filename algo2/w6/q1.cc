@@ -5,7 +5,6 @@
 #include <future>
 #include <iostream>
 #include <iterator>
-#include <list>
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
@@ -340,7 +339,7 @@ opt_ass_t papadimitriou_parallel(size_t ass_sz, const expr_t& e, const fixed_ass
 	srandom(time(nullptr));
 	const size_t outer_iter = 8; // threads count
 	const size_t inner_iter = 1000000;
-	std::list< std::future<opt_ass_t> > fut;
+	std::vector< std::future<opt_ass_t> > fut;
 	for (size_t i=0; i<outer_iter; ++i) {
 		fut.emplace_back(
 			std::async(
