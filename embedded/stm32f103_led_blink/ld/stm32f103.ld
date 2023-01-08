@@ -11,7 +11,7 @@ SECTIONS {
     . = 1k; /* skip remaining vectors. FIXME: better? */
   } > flash
   .text     : { *(.text*) }           > flash
-  .rodata   : { *(.rodata*) }         > flash
+/*  .rodata   : { *(.rodata*) }         > flash */
 
   .data : {
     _sdata = .;   /* .data section start */
