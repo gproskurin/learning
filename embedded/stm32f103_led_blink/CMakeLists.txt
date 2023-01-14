@@ -1,27 +1,49 @@
-project(led_blinky)
+project(led_blinky C CXX)
 cmake_minimum_required(VERSION 3.25)
 
-set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/ld/stm32f103.ld)
+#set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/ld/stm32f103.ld)
+#add_definitions(-DTARGET_STM32L152)
+set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/ld/stm32l152.ld)
 add_definitions(-DTARGET_STM32L152)
+
+#set(Boost_NO_SYSTEM_PATH ON)
+#set(BOOST_ROOT "/data/gpr/src/boost_1_81_0")
+#find_package(Boost 1.81.0 REQUIRED)
+
 set(OBJCOPY arm-none-eabi-objcopy)
 
 set(FIRMWARE_ELF ${PROJECT_NAME}.elf)
 set(FIRMWARE_BIN ${PROJECT_NAME}.bin)
+set(FIRMWARE_IHEX ${PROJECT_NAME}.ihex)
+
+set(CMSIS_ROOT "${CMAKE_SOURCE_DIR}/..")
+set(CMSIS_ARM_INCLUDE "${CMAKE_SOURCE_DIR}/../CMSIS_5/CMSIS/Core/Include")
+include_directories(
+	${CMSIS_ROOT}
+	${CMSIS_ARM_INCLUDE}
+)
 
 add_compile_options(
-	-mcpu=cortex-m3 -O2 -ffreestanding
+	-mcpu=cortex-m3 -g -ffreestanding
 )
-set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-std=c++17 -fno-rtti -fno-exceptions -Werror -Wall")
+set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-std=c++17 -fno-rtti -fno-exceptions -Werror -Wall -I${Boost_INCLUDE_DIR}")
 
 add_custom_target(${FIRMWARE_BIN}
 	ALL
 	DEPENDS ${FIRMWARE_ELF}
-	COMMAND ${OBJCOPY} -Obinary ${CMAKE_BINARY_DIR}/${FIRMWARE_ELF} ${CMAKE_BINARY_DIR}/${FIRMWARE_BIN}
+	COMMAND ${OBJCOPY} -O binary ${CMAKE_BINARY_DIR}/${FIRMWARE_ELF} ${CMAKE_BINARY_DIR}/${FIRMWARE_BIN}
+)
+
+add_custom_target(${FIRMWARE_IHEX}
+	ALL
+	DEPENDS ${FIRMWARE_ELF}
+	COMMAND ${OBJCOPY} -O ihex ${CMAKE_BINARY_DIR}/${FIRMWARE_ELF} ${CMAKE_BINARY_DIR}/${FIRMWARE_IHEX}
 )
 
 add_executable(${FIRMWARE_ELF}
 	src/startup.c
 	src/main.cc
+	#${CMSIS_ROOT}/cmsis_device_l1/Source/Templates/gcc/startup_stm32l152xe.s
 )
 
 target_link_libraries(${FIRMWARE_ELF}
