@@ -12,7 +12,7 @@
 	#define GPIOB_BASE 0x40010C00
 	#define GPIO_LED 12 // PB12
 #elif defined TARGET_STM32L152
-	#define GPIO_LED 5 // PA5
+	#define PIN_LED 5 // PA5
 #else
 	#error
 #endif
@@ -42,7 +42,7 @@ void basic_timer_init(TIM_TypeDef* const tim, uint16_t prescaler, uint16_t arr)
 	//tim->EGR |= TIM_EGR_UG; // remove
 	tim->PSC = prescaler;
 	tim->ARR = arr;
-	//tim->DIER |= TIM_DIER_UIE; // enable hardware interrupt
+	tim->DIER |= TIM_DIER_UIE; // enable hardware interrupt
 	tim->CR1 = (tim->CR1 & ~(TIM_CR1_UDIS | TIM_CR1_OPM)) | TIM_CR1_CEN;
 }
 
@@ -62,11 +62,14 @@ void gpio_set_mode(uint32_t gpio_base_addr, int reg, uint32_t mode, uint32_t cnf
 
 #elif defined TARGET_STM32L152
 
-void gpio_set_mode(GPIO_TypeDef* const gpio, int reg, uint32_t mode)
+void gpio_set_mode(GPIO_TypeDef* const gpio, int reg)
 {
-	const uint32_t mask = mode << (reg * 2);
-	const uint32_t mask_value = mode << (reg * 2);
+	const uint32_t mask = 0b11 << (reg * 2);
+	const uint32_t mask_value = 0b01 << (reg * 2); // general-purpose output
 	gpio->MODER = (gpio->MODER & ~mask) | mask_value;
+	gpio->OTYPER &= ~(1U << reg); // push-pull
+	gpio->OSPEEDR &= ~(0b11 << (reg*2)) ; // 0b00 = low speed
+	gpio->PUPDR &= (0b11 << (reg*2)); // 0b00 = no pull up/down
 }
 #endif
 
@@ -84,20 +87,19 @@ void delay(int val)
 	}
 }
 
-volatile bool led_high = false;
-
 void toggle_led()
 {
-	const bool high = led_high;
-	gpio_set(GPIOA, GPIO_LED, high);
-	led_high = !high;
+	//const bool high = led_high;
+	GPIOA->ODR ^= (1U << PIN_LED);
+	//gpio_set(GPIOA, GPIO_LED, high);
+	//led_high = !high;
 }
 
-void IntHandler_Tim6()
+extern "C" __attribute__ ((interrupt)) void IntHandler_Tim6()
 {
-	TIM_TypeDef* const pt = TIM6;
-	if (pt->SR & TIM_SR_UIF) {
-		pt->SR &= ~TIM_SR_UIF;
+	const uint32_t sr = TIM6->SR;
+	if (sr & TIM_SR_UIF) {
+		TIM6->SR = sr & ~TIM_SR_UIF;
 		toggle_led();
 	}
 }
@@ -119,15 +121,9 @@ void gpio_bus_enable()
 	RCC->APB1ENR |= RCC_APB1ENR_TIM6EN_Msk; // enable TIM6 // pos=43 prio=50
 }
 
-extern "C" void (*tab[2])(void);
 void nvic_init_tim6()
 {
-	// set interrupt handler
-	*(volatile uint32_t*) NVIC_ADDR_TIM6 = (uintptr_t) &IntHandler_Tim6;
-	tab[43] = &IntHandler_Tim6;
-
 	// enable interrupt
-	//NVIC->ISER[1] = 1U << (NVIC_POS_TIM6 - 32);
 	NVIC_SetPriority(TIM6_IRQn, 3);
 	NVIC_EnableIRQ(TIM6_IRQn);
 }
@@ -137,38 +133,32 @@ void nvic_init_tim6()
 void blink(int n)
 {
 	while (n-- > 0) {
-		gpio_set(GPIOA, GPIO_LED, 1);
+		gpio_set(GPIOA, PIN_LED, 1);
 		delay(50000);
-		gpio_set(GPIOA, GPIO_LED, 0);
+		gpio_set(GPIOA, PIN_LED, 0);
 		delay(50000);
 	}
 }
 
 
-int main()
+__attribute__ ((noreturn)) int main()
 {
 	gpio_bus_enable();
 
 #if defined TARGET_STM32F100
 	gpio_set_mode(GPIOB_BASE, GPIO_LED, MODE, CNF);
 #elif defined TARGET_STM32L152
-	gpio_set_mode(GPIOA, GPIO_LED, 0b01);
+	gpio_set_mode(GPIOA, PIN_LED);
 #endif
 	blink(1); delay(300000);
 
-	//nvic_init_tim6();
-	//blink(2); delay(300000);
-	basic_timer_init(TIM6, 1000, 500);
-	blink(1); delay(300000);
+	nvic_init_tim6();
+	blink(2); delay(300000);
+	basic_timer_init(TIM6, 100-1, 2000-1);
+	//blink(3); delay(300000);
 
-	//bool s = true;
 	for (;;) {
-		//gpio_set(GPIOA_BASE, GPIO_LED, s);
-		//delay(s ? 200000 : 50000);
-		//s = !s;
-		//blink(1); delay(500000);
-		IntHandler_Tim6();
+		__WFI();
 	}
-	return 0;
 }
 

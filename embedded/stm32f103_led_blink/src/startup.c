@@ -3,6 +3,7 @@
 
 extern int main();
 extern void _estack(void);
+extern void IntHandler_Tim6();
 
 
 __attribute__((naked, noreturn)) void _reset(void)
@@ -26,8 +27,67 @@ __attribute__((naked, noreturn)) void _reset(void)
 }
 
 
-__attribute__((section(".vectors"))) void (*tab[2 /*16 + 68*/])(void) =
+__attribute__((section(".vectors"))) void (*tab[])(void) =
 {
-	_estack, _reset
+	_estack,
+	_reset,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	&IntHandler_Tim6 // 59 = 16 + 43
 };
 
