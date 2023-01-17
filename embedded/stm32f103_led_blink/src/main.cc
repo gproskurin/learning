@@ -97,9 +97,8 @@ void toggle_led()
 
 extern "C" __attribute__ ((interrupt)) void IntHandler_Tim6()
 {
-	const uint32_t sr = TIM6->SR;
-	if (sr & TIM_SR_UIF) {
-		TIM6->SR = sr & ~TIM_SR_UIF;
+	if (TIM6->SR & TIM_SR_UIF) {
+		TIM6->SR = ~TIM_SR_UIF;
 		toggle_led();
 	}
 }
@@ -116,9 +115,15 @@ void gpio_bus_enable()
 #elif defined TARGET_STM32L152
 void gpio_bus_enable()
 {
-	RCC->AHBENR |= RCC_AHBENR_GPIOAEN_Msk; // enable port A
-	//RCC->APB1RSTR = RCC_APB1RSTR_TIM6RST_Msk; // reset TIM6
-	RCC->APB1ENR |= RCC_APB1ENR_TIM6EN_Msk; // enable TIM6 // pos=43 prio=50
+	// enable port A
+	RCC->AHBENR |= RCC_AHBENR_GPIOAEN_Msk;
+
+	// enable TIM6
+	RCC->APB1ENR |= RCC_APB1ENR_TIM6EN_Msk;
+
+	// reset TIM6
+	RCC->APB1RSTR |= RCC_APB1RSTR_TIM6RST_Msk;
+	RCC->APB1RSTR &= ~RCC_APB1RSTR_TIM6RST_Msk;
 }
 
 void nvic_init_tim6()
