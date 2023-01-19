@@ -27,7 +27,7 @@ SECTIONS {
     *(.first_data)
     *(.data SORT(.data.*))
     _edata = .;
-  } > flash AT > sram
+  } > sram AT > flash
   _sidata = LOADADDR(.data);
 
   .bss(NOLOAD) : {

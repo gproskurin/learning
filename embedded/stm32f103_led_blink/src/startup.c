@@ -3,7 +3,7 @@
 
 extern int main();
 extern void _estack(void);
-extern void IntHandler_Tim6();
+extern void IntHandler_Timer();
 
 
 __attribute__((naked, noreturn)) void _reset(void)
@@ -45,6 +45,7 @@ __attribute__((section(".vectors"))) void (*tab[])(void) =
 	0,
 	0,
 	0,
+
 	0,
 	0,
 	0,
@@ -70,6 +71,9 @@ __attribute__((section(".vectors"))) void (*tab[])(void) =
 	0,
 	0,
 	0,
+	&IntHandler_Timer, // TIM9
+	0,
+	0, // TIM11 43 = 27 + 16
 	0,
 	0,
 	0,
@@ -85,9 +89,6 @@ __attribute__((section(".vectors"))) void (*tab[])(void) =
 	0,
 	0,
 	0,
-	0,
-	0,
-	0,
-	&IntHandler_Tim6 // 59 = 16 + 43
+	0 // &IntHandler_Timer // TIM6 59 = 16 + 43
 };
 

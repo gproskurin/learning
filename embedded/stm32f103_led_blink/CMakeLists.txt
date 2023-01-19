@@ -3,7 +3,9 @@ cmake_minimum_required(VERSION 3.25)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
 #set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/ld/stm32f103.ld)
+#set(TARGET_DEF "-DTARGET_STM32F103")
 set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/ld/stm32l152.ld)
+set(TARGET_DEF "-DTARGET_STM32L152")
 
 #set(Boost_NO_SYSTEM_PATH ON)
 #set(BOOST_ROOT "/data/gpr/src/boost_1_81_0")
@@ -18,9 +20,10 @@ set(FIRMWARE_IHEX ${PROJECT_NAME}.ihex)
 set(CMSIS_ROOT "${CMAKE_SOURCE_DIR}/..")
 set(CMSIS_ARM_INCLUDE "${CMAKE_SOURCE_DIR}/../CMSIS_5/CMSIS/Core/Include")
 
+
 set(C_CXX_FLAGS " \
-	-mcpu=cortex-m3 -g -ffreestanding -Werror -Wall \
-	-DTARGET_STM32L152 \
+	-mcpu=cortex-m3 -mthumb -g -ffreestanding -Werror -Wall \
+	${TARGET_DEF} \
 	-I${CMSIS_ROOT} \
 	-I${CMSIS_ARM_INCLUDE} \
 ")
