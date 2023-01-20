@@ -30,7 +30,8 @@ void basic_timer_init(TIM_TypeDef* const tim, uint16_t prescaler, uint16_t arr)
 	//tim->EGR |= TIM_EGR_UG; // remove
 	tim->PSC = prescaler;
 	tim->ARR = arr;
-	tim->DIER |= TIM_DIER_UIE; // enable hardware interrupt
+	tim->CCR1 = arr / 4 * 3;
+	tim->DIER |= TIM_DIER_UIE | TIM_DIER_CC1IE; // enable hardware interrupt
 	tim->CR1 = (tim->CR1 & ~(TIM_CR1_UDIS | TIM_CR1_OPM)) | TIM_CR1_CEN;
 }
 
@@ -75,6 +76,7 @@ void delay(int val)
 	}
 }
 
+#if 0
 void toggle_led()
 {
 	//const bool high = led_high;
@@ -82,12 +84,19 @@ void toggle_led()
 	//gpio_set(GPIOA, GPIO_LED, high);
 	//led_high = !high;
 }
+#endif
 
 extern "C" __attribute__ ((interrupt)) void IntHandler_Timer()
 {
-	if (LED_TIM->SR & TIM_SR_UIF) {
+	const uint32_t sr = LED_TIM->SR;
+	if (sr & TIM_SR_UIF) {
+		// new cycle starts, led on
 		LED_TIM->SR = ~TIM_SR_UIF;
-		toggle_led();
+		gpio_set(LED_GPIO, LED_PIN, 1);
+	} else if (sr & TIM_SR_CC1IF) {
+		// compare event triggered, part of cycle finished, led off
+		LED_TIM->SR = ~TIM_SR_CC1IF;
+		gpio_set(LED_GPIO, LED_PIN, 0);
 	}
 }
 
@@ -162,7 +171,7 @@ __attribute__ ((noreturn)) int main()
 
 	nvic_init_tim();
 	blink(2); delay(300000);
-	basic_timer_init(LED_TIM, 100-1, 2000-1);
+	basic_timer_init(LED_TIM, 100-1, 15000-1);
 	//blink(3); delay(300000);
 
 	for (;;) {
