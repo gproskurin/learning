@@ -27,6 +27,7 @@ __attribute__((naked, noreturn)) void _reset(void)
 }
 
 
+#if defined TARGET_STM32L152
 __attribute__((section(".vectors"))) void (*tab[])(void) =
 {
 	_estack,
@@ -91,4 +92,55 @@ __attribute__((section(".vectors"))) void (*tab[])(void) =
 	0,
 	0 // &IntHandler_Timer // TIM6 59 = 16 + 43
 };
+#elif defined TARGET_STM32F103
+__attribute__((section(".vectors"))) void (*tab[])(void) =
+{
+	_estack,
+	_reset,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
 
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	&IntHandler_Timer, // TIM2
+	0
+};
+#endif

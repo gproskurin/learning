@@ -16,7 +16,7 @@
 	// PB12
 	#define LED_GPIO GPIOB
 	#define LED_PIN 12
-	#define LED_TIM TIM1
+	#define LED_TIM TIM2
 #elif defined TARGET_STM32L152
 	// PA5
 	#define LED_GPIO GPIOA
@@ -28,9 +28,10 @@
 void basic_timer_init(TIM_TypeDef* const tim, uint16_t prescaler, uint16_t arr)
 {
 	//tim->EGR |= TIM_EGR_UG; // remove
+	//tim->EGR |= TIM_EGR_CC1G | TIM_EGR_UG;
 	tim->PSC = prescaler;
 	tim->ARR = arr;
-	tim->CCR1 = arr / 4 * 3;
+	tim->CCR1 = arr / 5 * 4;
 	tim->DIER |= TIM_DIER_UIE | TIM_DIER_CC1IE; // enable hardware interrupt
 	tim->CR1 = (tim->CR1 & ~(TIM_CR1_UDIS | TIM_CR1_OPM)) | TIM_CR1_CEN;
 }
@@ -65,6 +66,9 @@ void gpio_set_mode(GPIO_TypeDef* const gpio, int reg)
 
 void gpio_set(GPIO_TypeDef* const gpio, int reg, bool high)
 {
+#ifdef TARGET_STM32F103
+	high = !high;
+#endif
 	uint32_t const mask = (high ? (1U << reg) : (1U << reg) << 16);
 	gpio->BSRR = mask;
 }
@@ -106,11 +110,12 @@ void gpio_bus_enable()
 
 #if defined TARGET_STM32F103
 	// enable timer and port B
-	RCC->APB2ENR |= RCC_APB2ENR_TIM1EN_Msk | RCC_APB2ENR_IOPBEN_Msk;
+	RCC->APB2ENR |= RCC_APB2ENR_IOPBEN_Msk;
+	RCC->APB1ENR |= RCC_APB1ENR_TIM2EN_Msk;
 
-	// reset TIM1
-	RCC->APB2RSTR |= RCC_APB2RSTR_TIM1RST_Msk;
-	RCC->APB2RSTR &= ~RCC_APB2RSTR_TIM1RST_Msk;
+	// reset TIM2
+	RCC->APB1RSTR |= RCC_APB1RSTR_TIM2RST_Msk;
+	RCC->APB1RSTR &= ~RCC_APB1RSTR_TIM2RST_Msk;
 
 #elif defined TARGET_STM32L152
 	// enable port A
@@ -143,8 +148,8 @@ void nvic_init_tim()
 {
 	// enable interrupt
 #if defined TARGET_STM32F103
-	NVIC_SetPriority(TIM1_UP_IRQn, 3);
-	NVIC_EnableIRQ(TIM1_UP_IRQn);
+	NVIC_SetPriority(TIM2_IRQn, 3);
+	NVIC_EnableIRQ(TIM2_IRQn);
 #elif defined TARGET_STM32L152
 	NVIC_SetPriority(TIM9_IRQn, 3);
 	NVIC_EnableIRQ(TIM9_IRQn);
