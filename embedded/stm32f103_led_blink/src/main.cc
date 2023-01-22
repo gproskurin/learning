@@ -1,12 +1,4 @@
-//
-
-#if defined TARGET_STM32L152
-#include <cmsis_device_l1/Include/stm32l152xe.h>
-#elif defined TARGET_STM32F103
-#include <cmsis_device_f1/Include/stm32f103xb.h>
-#else
-#error
-#endif
+#include "lib_stm32.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -17,60 +9,70 @@
 	#define LED_GPIO GPIOB
 	#define LED_PIN 12
 	#define LED_TIM TIM2
+
+	// USART1, tx(PA9)
+	#define USART_LOG USART1
+	#define USART_LOG_GPIO GPIOA
+	#define USART_LOG_PIN_TX 9
 #elif defined TARGET_STM32L152
 	// PA5
 	#define LED_GPIO GPIOA
 	#define LED_PIN 5
 	#define LED_TIM TIM9
+
+	// USART1, tx(PA9)
+	#define USART_LOG USART1
+	#define USART_LOG_GPIO GPIOA
+	#define USART_LOG_PIN_TX 9
+	//#define USART_LOG_PIN_RX 10
 #endif
+
+#define USART_CON_BAUDRATE 115200
+#if defined (TARGET_STM32F103)
+#define CLOCK_SPEED 48000000 // FIXME
+#elif defined (TARGET_STM32L152)
+#define CLOCK_SPEED 2000000 // FIXME
+#endif
+
+
+void usart_init(USART_TypeDef* const usart)
+{
+#ifdef TARGET_STM32F103
+	stm32_lib::gpio::set_mode_af_lowspeed_pu(USART_LOG_GPIO, USART_LOG_PIN_TX, 7/*FIXME*/);
+	//usart->BRR = ((div / 16) << USART_BRR_DIV_MANTISSA_Pos) | ((div % 16) << USART_BRR_DIV_FRACTION_Pos);
+#elif defined TARGET_STM32L152
+	stm32_lib::gpio::set_mode_af_lowspeed_pu(USART_LOG_GPIO, USART_LOG_PIN_TX, 7);
+	usart->BRR = 2000000 / USART_CON_BAUDRATE;
+	usart->CR1 = USART_CR1_UE | USART_CR1_TE;
+	//usart->CR3 = USART_CR3_DMAT;
+#endif
+}
+
+
+void usart_tx(USART_TypeDef* const usart, const char* s)
+{
+	while (*s) {
+		while (! (usart->SR & USART_SR_TXE)) {
+		}
+		usart->DR = *s;
+		++s;
+	}
+}
+
+
+void log_str(const char* s)
+{
+	usart_tx(USART_LOG, s);
+}
 
 
 void basic_timer_init(TIM_TypeDef* const tim, uint16_t prescaler, uint16_t arr)
 {
-	//tim->EGR |= TIM_EGR_UG; // remove
-	//tim->EGR |= TIM_EGR_CC1G | TIM_EGR_UG;
 	tim->PSC = prescaler;
 	tim->ARR = arr;
 	tim->CCR1 = arr / 5 * 4;
 	tim->DIER |= TIM_DIER_UIE | TIM_DIER_CC1IE; // enable hardware interrupt
 	tim->CR1 = (tim->CR1 & ~(TIM_CR1_UDIS | TIM_CR1_OPM)) | TIM_CR1_CEN;
-}
-
-
-#if defined TARGET_STM32F103
-void gpio_set_mode(GPIO_TypeDef* const gpio, int reg)
-{
-	const uint32_t mode = 0b10; // output mode, max speed 2 MHz
-	const uint32_t cnf = 0b00; // output push-pull
-	const uint32_t reg_lo = ((reg < 8) ? reg : reg - 8);
-	uint32_t bits = (cnf << 2) | mode;
-	const uint32_t mask = 0b1111 << (reg_lo * 4);
-	const uint32_t mask_value = bits << (reg_lo * 4);
-	auto const cr = ((reg < 8) ? &gpio->CRL : &gpio->CRH);
-	*cr = (*cr & ~mask) | mask_value;
-}
-
-#elif defined TARGET_STM32L152
-
-void gpio_set_mode(GPIO_TypeDef* const gpio, int reg)
-{
-	const uint32_t mask = 0b11 << (reg * 2);
-	const uint32_t mask_value = 0b01 << (reg * 2); // general-purpose output
-	gpio->MODER = (gpio->MODER & ~mask) | mask_value;
-	gpio->OTYPER &= ~(1U << reg); // push-pull
-	gpio->OSPEEDR &= ~(0b11 << (reg*2)) ; // 0b00 = low speed
-	gpio->PUPDR &= (0b11 << (reg*2)); // 0b00 = no pull up/down
-}
-#endif
-
-
-void gpio_set(GPIO_TypeDef* const gpio, int reg, bool high)
-{
-#ifdef TARGET_STM32F103
-	high = !high;
-#endif
-	uint32_t const mask = (high ? (1U << reg) : (1U << reg) << 16);
-	gpio->BSRR = mask;
 }
 
 
@@ -80,15 +82,6 @@ void delay(int val)
 	}
 }
 
-#if 0
-void toggle_led()
-{
-	//const bool high = led_high;
-	LED_GPIO->ODR ^= (1U << LED_PIN);
-	//gpio_set(GPIOA, GPIO_LED, high);
-	//led_high = !high;
-}
-#endif
 
 extern "C" __attribute__ ((interrupt)) void IntHandler_Timer()
 {
@@ -96,16 +89,16 @@ extern "C" __attribute__ ((interrupt)) void IntHandler_Timer()
 	if (sr & TIM_SR_UIF) {
 		// new cycle starts, led on
 		LED_TIM->SR = ~TIM_SR_UIF;
-		gpio_set(LED_GPIO, LED_PIN, 1);
+		stm32_lib::gpio::set_state(LED_GPIO, LED_PIN, 1);
 	} else if (sr & TIM_SR_CC1IF) {
 		// compare event triggered, part of cycle finished, led off
 		LED_TIM->SR = ~TIM_SR_CC1IF;
-		gpio_set(LED_GPIO, LED_PIN, 0);
+		stm32_lib::gpio::set_state(LED_GPIO, LED_PIN, 0);
 	}
 }
 
 
-void gpio_bus_enable()
+void bus_init()
 {
 
 #if defined TARGET_STM32F103
@@ -121,25 +114,15 @@ void gpio_bus_enable()
 	// enable port A
 	RCC->AHBENR |= RCC_AHBENR_GPIOAEN_Msk;
 
-if (0) {
-	// TIM6
-	// enable TIM
-	RCC->APB1ENR |= RCC_APB1ENR_TIM6EN_Msk;
+	// USART
+	RCC->APB2ENR |= RCC_APB2ENR_USART1EN_Msk;
+	RCC->APB2RSTR |= RCC_APB2RSTR_USART1RST_Msk;
+	RCC->APB2RSTR &= ~RCC_APB2RSTR_USART1RST_Msk;
 
-	// reset TIM
-	RCC->APB1RSTR |= RCC_APB1RSTR_TIM6RST_Msk;
-	RCC->APB1RSTR &= ~RCC_APB1RSTR_TIM6RST_Msk;
-}
-
-if (1) {
 	// TIM9
-	// enable TIM
 	RCC->APB2ENR |= RCC_APB2ENR_TIM9EN_Msk;
-
-	// reset TIM
 	RCC->APB2RSTR |= RCC_APB2RSTR_TIM9RST_Msk;
 	RCC->APB2RSTR &= ~RCC_APB2RSTR_TIM9RST_Msk;
-}
 #endif
 }
 
@@ -151,6 +134,7 @@ void nvic_init_tim()
 	NVIC_SetPriority(TIM2_IRQn, 3);
 	NVIC_EnableIRQ(TIM2_IRQn);
 #elif defined TARGET_STM32L152
+	//NVIC_SetVector(TIM9_IRQn, (uint32_t) &IntHandler_Timer);
 	NVIC_SetPriority(TIM9_IRQn, 3);
 	NVIC_EnableIRQ(TIM9_IRQn);
 #endif
@@ -160,25 +144,34 @@ void nvic_init_tim()
 void blink(int n)
 {
 	while (n-- > 0) {
-		gpio_set(LED_GPIO, LED_PIN, 1);
+		stm32_lib::gpio::set_state(LED_GPIO, LED_PIN, 1);
 		delay(50000);
-		gpio_set(LED_GPIO, LED_PIN, 0);
-		delay(50000);
+		stm32_lib::gpio::set_state(LED_GPIO, LED_PIN, 0);
+		delay(10000);
 	}
 }
 
 
 __attribute__ ((noreturn)) int main()
 {
-	gpio_bus_enable();
-	gpio_set_mode(LED_GPIO, LED_PIN);
-	blink(1); delay(300000);
+	bus_init();
+	usart_init(USART_LOG);
+	log_str("\r\n");
 
+	log_str("Setting mode for LED\r\n");
+	stm32_lib::gpio::set_mode_output_lowspeed_pushpull(LED_GPIO, LED_PIN);
+	log_str("Switching off LED\r\n");
+	stm32_lib::gpio::set_state(LED_GPIO, LED_PIN, 0);
+
+	log_str("Initializing interrupts\r\n");
 	nvic_init_tim();
-	blink(2); delay(300000);
-	basic_timer_init(LED_TIM, 100-1, 15000-1);
-	//blink(3); delay(300000);
 
+	log_str("Initializing timer\r\n");
+	basic_timer_init(LED_TIM, 2000-1, 1000-1);
+
+	log_str("Initialization done\r\n");
+
+	log_str("Starting WFI loop\r\n");
 	for (;;) {
 		__WFI();
 	}
