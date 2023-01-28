@@ -1,4 +1,5 @@
 include("cmake/arm-none-eabi.cmake")
+
 project(led_blinky C CXX)
 cmake_minimum_required(VERSION 3.25)
 set(CMAKE_VERBOSE_MAKEFILE ON)
@@ -31,6 +32,16 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${C_CXX_FLAGS} -std=c++17 -fno-rtti -fno
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${C_CXX_FLAGS}")
 set(CMAKE_ASM_FLAGS "-mthumb")
 
+## FreeRTOS
+#add_library(freertos_config INTERFACE)
+#target_include_directories(freertos_config SYSTEM
+#	INTERFACE freertos
+#)
+#set(FREERTOS_PORT "GCC_ARM_CM3")
+#set(FREERTOS_HEAP "")
+#add_subdirectory("${CMAKE_SOURCE_DIR}/../FreeRTOS-Kernel" "FreeRTOS")
+####
+
 add_custom_target(${FIRMWARE_BIN}
 	ALL
 	DEPENDS ${FIRMWARE_ELF}
@@ -53,6 +64,7 @@ target_link_libraries(${FIRMWARE_ELF}
 	-T${LINKER_SCRIPT}
 	-nostartfiles
 	#-nostdlib
+	#freertos_kernel
 )
 
 set_property(TARGET ${FIRMWARE_ELF}

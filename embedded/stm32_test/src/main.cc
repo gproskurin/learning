@@ -1,5 +1,8 @@
 #include "lib_stm32.h"
 
+//#include "FreeRTOS.h"
+//#include "task.h"
+
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -171,6 +174,7 @@ __attribute__ ((noreturn)) void main()
 
 	log_str("Initialization done\r\n");
 
+	// vTaskStartScheduler();
 	log_str("Starting WFI loop\r\n");
 	for (;;) {
 		__WFI();
