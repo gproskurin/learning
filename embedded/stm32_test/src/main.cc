@@ -152,7 +152,7 @@ void blink(int n)
 }
 
 
-__attribute__ ((noreturn)) int main()
+__attribute__ ((noreturn)) void main()
 {
 	bus_init();
 	usart_init(USART_LOG);

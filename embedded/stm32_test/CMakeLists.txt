@@ -51,7 +51,8 @@ add_executable(${FIRMWARE_ELF}
 
 target_link_libraries(${FIRMWARE_ELF}
 	-T${LINKER_SCRIPT}
-	-nostdlib -nostartfiles
+	-nostartfiles
+	#-nostdlib
 )
 
 set_property(TARGET ${FIRMWARE_ELF}

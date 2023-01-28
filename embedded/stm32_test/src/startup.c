@@ -1,7 +1,8 @@
 #include <stdint.h>
+#include <string.h>
 
 
-extern int main();
+extern void main();
 extern void _estack(void);
 extern void IntHandler_Timer();
 
@@ -13,7 +14,8 @@ __attribute__((naked, noreturn)) void _reset(void)
 	//extern long _stext_flash_to_sram, _etext_flash_to_sram, _stext_sram; // text
 
 	// zero bss
-	for (long *src = &_sbss; src < &_ebss; src++) *src = 0;
+	//for (long *src = &_sbss; src < &_ebss; src++) *src = 0;
+	memset(&_sbss, 0, &_ebss - &_sbss);
 
 	// copy data to sram
 	for (long *src = &_sdata, *dst = &_sidata; src < &_edata;) *src++ = *dst++;
