@@ -1,7 +1,7 @@
 #include "lib_stm32.h"
 
-//#include "FreeRTOS.h"
-//#include "task.h"
+#include "FreeRTOS.h"
+#include "task.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -155,6 +155,31 @@ void blink(int n)
 }
 
 
+#define STACK_SIZE_ULOGGER 128
+StaticTask_t xTaskBufferUlogger;
+StackType_t xStackUlogger[STACK_SIZE_ULOGGER];
+void vTask_usart_logger(void*)
+{
+	log_str("Task started: usart_logger\r\n");
+	for (;;) {
+		blink(2);
+		delay(100000);
+	}
+}
+
+
+#define STACK_SIZE_IDLE 128
+StaticTask_t xTaskBufferIdle;
+StackType_t xStackIdle[STACK_SIZE_IDLE];
+extern "C"
+void vApplicationGetIdleTaskMemory(StaticTask_t **tcbIdle, StackType_t **stackIdle, uint32_t *stackSizeIdle)
+{
+	*tcbIdle = &xTaskBufferIdle;
+	*stackIdle = xStackIdle;
+	*stackSizeIdle = STACK_SIZE_IDLE;
+}
+
+
 __attribute__ ((noreturn)) void main()
 {
 	bus_init();
@@ -166,18 +191,38 @@ __attribute__ ((noreturn)) void main()
 	log_str("Switching off LED\r\n");
 	stm32_lib::gpio::set_state(LED_GPIO, LED_PIN, 0);
 
+	blink(2);
+	delay(100000);
+
+	xTaskCreateStatic(
+		&vTask_usart_logger,
+		"ulogger",
+		STACK_SIZE_ULOGGER,
+		NULL, // param
+		4, // prio
+		xStackUlogger,
+		&xTaskBufferUlogger
+	);
+	blink(3);
+
+
 	log_str("Initializing interrupts\r\n");
-	nvic_init_tim();
+	//nvic_init_tim();
 
 	log_str("Initializing timer\r\n");
-	basic_timer_init(LED_TIM, 2000-1, 1000-1);
+	//basic_timer_init(LED_TIM, 2000-1, 1000-1);
 
 	log_str("Initialization done\r\n");
 
-	// vTaskStartScheduler();
+	log_str("Starting FreeRTOS scheduler\r\n");
+	vTaskStartScheduler();
+	blink(100000);
+
 	log_str("Starting WFI loop\r\n");
 	for (;;) {
-		__WFI();
+		//blink(2);
+		//delay(100000);
+		//__WFI();
 	}
 }
 

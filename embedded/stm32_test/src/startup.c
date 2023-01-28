@@ -28,6 +28,9 @@ __attribute__((naked, noreturn)) void _reset(void)
 	main();
 }
 
+extern void vPortSVCHandler(void);
+extern void xPortPendSVHandler(void);
+extern void xPortSysTickHandler(void);
 
 #if defined TARGET_STM32L152
 __attribute__((section(".vectors"))) void (*tab[])(void) =
@@ -43,11 +46,11 @@ __attribute__((section(".vectors"))) void (*tab[])(void) =
 	0,
 	0,
 	0,
+	&vPortSVCHandler, // svc
 	0,
 	0,
-	0,
-	0,
-	0,
+	&xPortPendSVHandler, // PendSV
+	&xPortSysTickHandler, // systick
 
 	0,
 	0,
