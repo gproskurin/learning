@@ -156,7 +156,6 @@ void vApplicationGetIdleTaskMemory(StaticTask_t **tcbIdle, StackType_t **stackId
 extern "C"
 void vApplicationIdleHook(void)
 {
-	logger.log_sync("IDLE task started\r\n");
 	__WFI();
 }
 
