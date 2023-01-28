@@ -7,20 +7,20 @@
 
 #include "cmsis_device.h"
 
+#include <array>
+
 
 class usart_logger_t {
 	USART_TypeDef* usart_ = nullptr;
 
 	// FreeRTOS queue
-	static constexpr size_t queue_len_ = 128;
-	const char *queue_storage_[queue_len_];
+	std::array<const char*, 128> queue_storage_;
 	StaticQueue_t queue_;
 	QueueHandle_t queue_handle_ = nullptr;
 
 	// FreeRTOS task
 	TaskHandle_t task_handle_ = nullptr;
-	static constexpr size_t task_stack_len_ = 128;
-	StackType_t task_stack_[task_stack_len_];
+	std::array<StackType_t, 128> task_stack_;
 	StaticTask_t task_buffer_;
 
 	static void task_function(void*);

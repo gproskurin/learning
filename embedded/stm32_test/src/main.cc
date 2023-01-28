@@ -5,6 +5,7 @@
 #include "task.h"
 
 #include <stdint.h>
+#include <array>
 #include <new>
 
 
@@ -142,15 +143,15 @@ void blink(int n)
 }
 
 
-#define STACK_SIZE_IDLE 128
 StaticTask_t xTaskBufferIdle;
-StackType_t xStackIdle[STACK_SIZE_IDLE];
+typedef std::array<StackType_t, 128> idle_task_stack_t;
+idle_task_stack_t idle_task_stack;
 extern "C"
 void vApplicationGetIdleTaskMemory(StaticTask_t **tcbIdle, StackType_t **stackIdle, uint32_t *stackSizeIdle)
 {
 	*tcbIdle = &xTaskBufferIdle;
-	*stackIdle = xStackIdle;
-	*stackSizeIdle = STACK_SIZE_IDLE;
+	*stackIdle = idle_task_stack.data();
+	*stackSizeIdle = idle_task_stack.size();
 }
 
 extern "C"
@@ -162,8 +163,8 @@ void vApplicationIdleHook(void)
 
 // LED blinking task
 TaskHandle_t blink_task_handle = nullptr;
-constexpr size_t blink_task_stack_len = 128;
-StackType_t blink_task_stack[blink_task_stack_len];
+typedef std::array<StackType_t, 128> blink_task_stack_t;
+blink_task_stack_t blink_task_stack;
 StaticTask_t blink_task_buffer;
 struct blink_task_args_t {
 	GPIO_TypeDef* gpio;
@@ -194,6 +195,8 @@ __attribute__ ((noreturn)) void main()
 {
 	// call constructors of global objects
 	new(&logger) usart_logger_t();
+	new(&idle_task_stack) idle_task_stack_t();
+	new(&blink_task_stack) blink_task_stack_t();
 
 	bus_init();
 	usart_init(USART_LOG);
@@ -211,10 +214,10 @@ __attribute__ ((noreturn)) void main()
 	blink_task_handle = xTaskCreateStatic(
 		&blink_task_function,
 		"blink",
-		blink_task_stack_len,
+		blink_task_stack.size(),
 		reinterpret_cast<void*>(&blink_task_args),
 		1, // prio
-		blink_task_stack,
+		blink_task_stack.data(),
 		&blink_task_buffer
 	);
 	logger.log_sync("Created blink task\r\n");

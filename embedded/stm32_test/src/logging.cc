@@ -34,9 +34,9 @@ void usart_logger_t::task_function(void* arg)
 void usart_logger_t::init_queue()
 {
 	queue_handle_ = xQueueCreateStatic(
-		queue_len_,
+		queue_storage_.size(),
 		sizeof(queue_storage_[0]),
-		reinterpret_cast<uint8_t*>(queue_storage_),
+		reinterpret_cast<uint8_t*>(queue_storage_.data()),
 		&queue_
 	);
 }
@@ -68,10 +68,10 @@ void usart_logger_t::create_task(const char* task_name, UBaseType_t prio)
 	task_handle_ = xTaskCreateStatic(
 		&task_function,
 		task_name,
-		task_stack_len_,
+		task_stack_.size(),
 		reinterpret_cast<void*>(this), // param
 		prio,
-		task_stack_,
+		task_stack_.data(),
 		&task_buffer_
 	);
 }
