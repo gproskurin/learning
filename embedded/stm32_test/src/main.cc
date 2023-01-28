@@ -160,6 +160,36 @@ void vApplicationIdleHook(void)
 }
 
 
+// LED blinking task
+TaskHandle_t blink_task_handle = nullptr;
+constexpr size_t blink_task_stack_len = 128;
+StackType_t blink_task_stack[blink_task_stack_len];
+StaticTask_t blink_task_buffer;
+struct blink_task_args_t {
+	GPIO_TypeDef* gpio;
+	int reg;
+} blink_task_args; // TODO move from globals?
+void blink_task_function(void* arg)
+{
+	blink_task_args_t* const args = reinterpret_cast<blink_task_args_t*>(arg);
+	constexpr TickType_t tm_on = configTICK_RATE_HZ * 3 / 4;
+	constexpr TickType_t tm_off = configTICK_RATE_HZ - tm_on;
+	for(int i=0;;++i) {
+		const bool do_log = (i % 16 == 0);
+		if (do_log) {
+			logger.log_async("LED -> on\r\n");
+		}
+		stm32_lib::gpio::set_state(args->gpio, args->reg, true);
+		vTaskDelay(tm_on);
+		if (do_log) {
+			logger.log_async("LED -> off\r\n");
+		}
+		stm32_lib::gpio::set_state(args->gpio, args->reg, false);
+		vTaskDelay(tm_off);
+	}
+}
+
+
 __attribute__ ((noreturn)) void main()
 {
 	// call constructors of global objects
@@ -175,18 +205,26 @@ __attribute__ ((noreturn)) void main()
 	logger.log_sync("Switching off LED\r\n");
 	stm32_lib::gpio::set_state(LED_GPIO, LED_PIN, 0);
 
-	blink(2);
-	delay(100000);
+	logger.log_sync("Creating blink task...\r\n");
+	blink_task_args.gpio = LED_GPIO;
+	blink_task_args.reg = LED_PIN;
+	blink_task_handle = xTaskCreateStatic(
+		&blink_task_function,
+		"blink",
+		blink_task_stack_len,
+		reinterpret_cast<void*>(&blink_task_args),
+		1, // prio
+		blink_task_stack,
+		&blink_task_buffer
+	);
+	logger.log_sync("Created blink task\r\n");
 
 	logger.log_sync("Creating logger queue...\r\n");
 	logger.init_queue();
 	logger.log_sync("Created logger queue\r\n");
 	logger.log_sync("Creating logger task...\r\n");
-	logger.create_task("logger", 4);
+	logger.create_task("logger", 2);
 	logger.log_sync("Created logger task\r\n");
-
-	blink(3);
-
 
 	logger.log_sync("Initializing interrupts\r\n");
 	//nvic_init_tim();
