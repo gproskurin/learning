@@ -57,6 +57,7 @@ add_custom_target(${FIRMWARE_IHEX}
 add_executable(${FIRMWARE_ELF}
 	src/startup.c
 	src/main.cc
+	src/logging.cc
 	#${CMSIS_ROOT}/cmsis_device_l1/Source/Templates/gcc/startup_stm32l152xe.s
 )
 

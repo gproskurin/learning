@@ -1,12 +1,6 @@
-#if defined TARGET_STM32L152
-#include <cmsis_device_l1/Include/stm32l152xe.h>
-#elif defined TARGET_STM32F103
-#include <cmsis_device_f1/Include/stm32f103xb.h>
-#else
-#error "Unsupported target"
-#endif
+#include "cmsis_device.h"
 
-#include <optional>
+#include <stdbool.h>
 #include <stdint.h>
 
 
@@ -14,9 +8,9 @@ namespace stm32_lib {
 namespace gpio {
 
 namespace {
-	inline uint32_t mask1(int n) { return 1 << (n); }
-	inline uint32_t mask2(int n) { return 0b11 << ((n) * 2); }
-	inline uint32_t mask4(int n) { return 0b1111 << ((n) * 4); }
+	constexpr uint32_t mask1(int n) { return 1 << (n); }
+	constexpr uint32_t mask2(int n) { return 0b11 << ((n) * 2); }
+	constexpr uint32_t mask4(int n) { return 0b1111 << ((n) * 4); }
 }
 
 

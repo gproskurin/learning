@@ -1,10 +1,11 @@
 #include "lib_stm32.h"
+#include "logging.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
 
-#include <stdbool.h>
 #include <stdint.h>
+#include <new>
 
 
 #if defined TARGET_STM32F103
@@ -38,6 +39,9 @@
 #endif
 
 
+usart_logger_t logger;
+
+
 void usart_init(USART_TypeDef* const usart)
 {
 #ifdef TARGET_STM32F103
@@ -49,23 +53,6 @@ void usart_init(USART_TypeDef* const usart)
 	usart->CR1 = USART_CR1_UE | USART_CR1_TE;
 	//usart->CR3 = USART_CR3_DMAT;
 #endif
-}
-
-
-void usart_tx(USART_TypeDef* const usart, const char* s)
-{
-	while (*s) {
-		while (! (usart->SR & USART_SR_TXE)) {
-		}
-		usart->DR = *s;
-		++s;
-	}
-}
-
-
-void log_str(const char* s)
-{
-	usart_tx(USART_LOG, s);
 }
 
 
@@ -155,19 +142,6 @@ void blink(int n)
 }
 
 
-#define STACK_SIZE_ULOGGER 128
-StaticTask_t xTaskBufferUlogger;
-StackType_t xStackUlogger[STACK_SIZE_ULOGGER];
-void vTask_usart_logger(void*)
-{
-	log_str("Task started: usart_logger\r\n");
-	for (;;) {
-		blink(2);
-		delay(100000);
-	}
-}
-
-
 #define STACK_SIZE_IDLE 128
 StaticTask_t xTaskBufferIdle;
 StackType_t xStackIdle[STACK_SIZE_IDLE];
@@ -182,43 +156,42 @@ void vApplicationGetIdleTaskMemory(StaticTask_t **tcbIdle, StackType_t **stackId
 
 __attribute__ ((noreturn)) void main()
 {
+	// call constructors of global objects
+	new(&logger) usart_logger_t();
+
 	bus_init();
 	usart_init(USART_LOG);
-	log_str("\r\n");
+	logger.set_usart(USART_LOG);
+	logger.log_sync("\r\nLogger initialized (sync)\r\n");
 
-	log_str("Setting mode for LED\r\n");
+	logger.log_sync("Setting mode for LED\r\n");
 	stm32_lib::gpio::set_mode_output_lowspeed_pushpull(LED_GPIO, LED_PIN);
-	log_str("Switching off LED\r\n");
+	logger.log_sync("Switching off LED\r\n");
 	stm32_lib::gpio::set_state(LED_GPIO, LED_PIN, 0);
 
 	blink(2);
 	delay(100000);
 
-	xTaskCreateStatic(
-		&vTask_usart_logger,
-		"ulogger",
-		STACK_SIZE_ULOGGER,
-		NULL, // param
-		4, // prio
-		xStackUlogger,
-		&xTaskBufferUlogger
-	);
+	logger.log_sync("Creating logger queue...\r\n");
+	logger.init_queue();
+	logger.log_sync("Created logger queue\r\n");
+	logger.log_sync("Creating logger task...\r\n");
+	logger.create_task("logger", 4);
+	logger.log_sync("Created logger task\r\n");
+
 	blink(3);
 
 
-	log_str("Initializing interrupts\r\n");
+	logger.log_sync("Initializing interrupts\r\n");
 	//nvic_init_tim();
 
-	log_str("Initializing timer\r\n");
+	logger.log_sync("Initializing timer\r\n");
 	//basic_timer_init(LED_TIM, 2000-1, 1000-1);
 
-	log_str("Initialization done\r\n");
-
-	log_str("Starting FreeRTOS scheduler\r\n");
+	logger.log_sync("Starting FreeRTOS scheduler\r\n");
 	vTaskStartScheduler();
-	blink(100000);
 
-	log_str("Starting WFI loop\r\n");
+	logger.log_sync("Error in FreeRTOS scheduler\r\n");
 	for (;;) {
 		//blink(2);
 		//delay(100000);
