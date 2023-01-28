@@ -111,11 +111,11 @@ __attribute__((section(".vectors"))) void (*tab[])(void) =
 	0,
 	0,
 	0,
+	&vPortSVCHandler, // svc
 	0,
 	0,
-	0,
-	0,
-	0,
+	&xPortPendSVHandler, // PendSV
+	&xPortSysTickHandler, // systick
 
 	0,
 	0,

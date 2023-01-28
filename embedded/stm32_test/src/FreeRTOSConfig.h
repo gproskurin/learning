@@ -4,7 +4,13 @@
 #define configUSE_PREEMPTION				1
 #define configUSE_PORT_OPTIMISED_TASK_SELECTION		1
 #define configUSE_TICKLESS_IDLE				0
-#define configCPU_CLOCK_HZ				2000000
+
+#ifdef TARGET_STM32F103
+	#define configCPU_CLOCK_HZ			8000000
+#elif defined TARGET_STM32L152
+	#define configCPU_CLOCK_HZ			2000000
+#endif
+
 //#define configSYSTICK_CLOCK_HZ			1000000
 #define configTICK_RATE_HZ				100
 #define configMAX_PRIORITIES				5

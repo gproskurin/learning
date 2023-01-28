@@ -9,6 +9,9 @@
 #include <new>
 
 
+#define PRIO_BLINK 1
+#define PRIO_LOGGER 2
+
 #if defined TARGET_STM32F103
 	// PB12
 	#define LED_GPIO GPIOB
@@ -34,7 +37,7 @@
 
 #define USART_CON_BAUDRATE 115200
 #if defined (TARGET_STM32F103)
-#define CLOCK_SPEED 48000000 // FIXME
+#define CLOCK_SPEED 8000000 // FIXME
 #elif defined (TARGET_STM32L152)
 #define CLOCK_SPEED 2000000 // FIXME
 #endif
@@ -46,14 +49,15 @@ usart_logger_t logger;
 void usart_init(USART_TypeDef* const usart)
 {
 #ifdef TARGET_STM32F103
-	stm32_lib::gpio::set_mode_af_lowspeed_pu(USART_LOG_GPIO, USART_LOG_PIN_TX, 7/*FIXME*/);
-	//usart->BRR = ((div / 16) << USART_BRR_DIV_MANTISSA_Pos) | ((div % 16) << USART_BRR_DIV_FRACTION_Pos);
+	stm32_lib::gpio::set_mode_af_lowspeed_pu(USART_LOG_GPIO, USART_LOG_PIN_TX);
+	const uint32_t div = CLOCK_SPEED / USART_CON_BAUDRATE;
+	usart->BRR = ((div / 16) << USART_BRR_DIV_Mantissa_Pos) | ((div % 16) << USART_BRR_DIV_Fraction_Pos);
 #elif defined TARGET_STM32L152
 	stm32_lib::gpio::set_mode_af_lowspeed_pu(USART_LOG_GPIO, USART_LOG_PIN_TX, 7);
-	usart->BRR = 2000000 / USART_CON_BAUDRATE;
-	usart->CR1 = USART_CR1_UE | USART_CR1_TE;
+	usart->BRR = CLOCK_SPEED / USART_CON_BAUDRATE;
 	//usart->CR3 = USART_CR3_DMAT;
 #endif
+	usart->CR1 = USART_CR1_UE | USART_CR1_TE;
 }
 
 
@@ -96,6 +100,12 @@ void bus_init()
 	// enable timer and port B
 	RCC->APB2ENR |= RCC_APB2ENR_IOPBEN_Msk;
 	RCC->APB1ENR |= RCC_APB1ENR_TIM2EN_Msk;
+
+	// USART
+	RCC->APB2ENR |= RCC_APB2ENR_IOPAEN_Msk;
+	RCC->APB2ENR |= RCC_APB2ENR_USART1EN_Msk;
+	RCC->APB2RSTR |= RCC_APB2RSTR_USART1RST_Msk;
+	RCC->APB2RSTR &= ~RCC_APB2RSTR_USART1RST_Msk;
 
 	// reset TIM2
 	RCC->APB1RSTR |= RCC_APB1RSTR_TIM2RST_Msk;
@@ -216,7 +226,7 @@ __attribute__ ((noreturn)) void main()
 		"blink",
 		blink_task_stack.size(),
 		reinterpret_cast<void*>(&blink_task_args),
-		1, // prio
+		PRIO_BLINK, // prio
 		blink_task_stack.data(),
 		&blink_task_buffer
 	);
@@ -226,7 +236,7 @@ __attribute__ ((noreturn)) void main()
 	logger.init_queue();
 	logger.log_sync("Created logger queue\r\n");
 	logger.log_sync("Creating logger task...\r\n");
-	logger.create_task("logger", 2);
+	logger.create_task("logger", PRIO_LOGGER);
 	logger.log_sync("Created logger task\r\n");
 
 	logger.log_sync("Initializing interrupts\r\n");
