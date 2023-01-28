@@ -153,6 +153,13 @@ void vApplicationGetIdleTaskMemory(StaticTask_t **tcbIdle, StackType_t **stackId
 	*stackSizeIdle = STACK_SIZE_IDLE;
 }
 
+extern "C"
+void vApplicationIdleHook(void)
+{
+	logger.log_sync("IDLE task started\r\n");
+	__WFI();
+}
+
 
 __attribute__ ((noreturn)) void main()
 {
