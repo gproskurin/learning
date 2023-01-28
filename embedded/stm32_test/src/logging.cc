@@ -50,7 +50,7 @@ void usart_logger_t::log_sync(const char* str) const
 
 void usart_logger_t::log_async(const char* static_str)
 {
-	xQueueSend(queue_handle_, static_str, 0);
+	xQueueSend(queue_handle_, &static_str, 0);
 	// TODO check error, queue overflow?
 }
 
