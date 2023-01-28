@@ -15,17 +15,17 @@ __attribute__((naked, noreturn)) void _reset(void)
 
 	// zero bss
 	//for (long *src = &_sbss; src < &_ebss; src++) *src = 0;
-	memset(&_sbss, 0, &_ebss - &_sbss);
+	memset(&_sbss, 0, (const char*)&_ebss - (const char *)&_sbss);
 
 	// copy data to sram
-	for (long *src = &_sdata, *dst = &_sidata; src < &_edata;) *src++ = *dst++;
+	//for (long *src = &_sdata, *dst = &_sidata; src < &_edata;) *src++ = *dst++;
+	memcpy(&_sdata, &_sidata, (const char*)&_edata - (const char*)&_sdata);
 
 	// copy text to sram
 	//for (long *src = &_stext_flash_to_sram, *dst = &_stext_sram; src < &_etext_flash_to_sram;)
 	//	*src++ = *dst++;
 
 	main();
-	for (;;);
 }
 
 
