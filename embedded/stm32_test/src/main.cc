@@ -17,6 +17,8 @@
 	#define LED_GPIO GPIOB
 	#define LED_PIN 12
 	#define LED_TIM TIM2
+	#define GREEN_LED_GPIO LED_GPIO
+	#define GREEN_LED_PIN LED_PIN
 
 	// USART1, tx(PA9)
 	#define USART_LOG USART1
@@ -27,6 +29,8 @@
 	#define LED_GPIO GPIOA
 	#define LED_PIN 5
 	#define LED_TIM TIM9
+	#define GREEN_LED_GPIO LED_GPIO
+	#define GREEN_LED_PIN LED_PIN
 
 	// USART1, tx(PA9)
 	#define USART_LOG USART1
@@ -236,28 +240,34 @@ struct blink_task_data_t {
 };
 
 struct blink_tasks_t {
+#ifdef TARGET_STM32H7A3
 	std::array<blink_task_data_t, 3> tasks = {
+#else
+	std::array<blink_task_data_t, 1> tasks = {
+#endif
 		blink_task_data_t(
 			"blink_green",
 			GREEN_LED_GPIO,
 			GREEN_LED_PIN,
 			configTICK_RATE_HZ/16,
 			configTICK_RATE_HZ - configTICK_RATE_HZ/16
-		),
-		blink_task_data_t(
+		)
+#ifdef TARGET_STM32H7A3
+		, blink_task_data_t(
 			"blink_yellow",
 			YELLOW_LED_GPIO,
 			YELLOW_LED_PIN,
 			configTICK_RATE_HZ/20,
 			configTICK_RATE_HZ/20
-		),
-		blink_task_data_t(
+		)
+		, blink_task_data_t(
 			"blink_red",
 			RED_LED_GPIO,
 			RED_LED_PIN,
 			configTICK_RATE_HZ/7,
 			configTICK_RATE_HZ/13
 		)
+#endif
 	};
 } blink_tasks;
 
