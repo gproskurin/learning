@@ -4,15 +4,40 @@
 #include <stdint.h>
 
 
-namespace stm32_lib {
-namespace gpio {
-
 namespace {
 	constexpr uint32_t mask1(int n) { return 1 << (n); }
 	constexpr uint32_t mask2(int n) { return 0b11 << ((n) * 2); }
 	constexpr uint32_t mask4(int n) { return 0b1111 << ((n) * 4); }
 }
 
+
+namespace stm32_lib {
+
+namespace rcc {
+
+#ifdef TARGET_STM32L152
+void init_clock()
+{
+	// tune MSI speed
+	RCC->ICSCR = (RCC->ICSCR & ~RCC_ICSCR_MSIRANGE_Msk) | RCC_ICSCR_MSIRANGE_6;
+
+#if 0
+	// switch on HSI
+	RCC->CR |= RCC_CR_HSION;
+	while (! (RCC->CR & RCC_CR_HSIRDY) ) {}
+
+	// select HSI as system clock
+	RCC->CFGR = (RCC->CFGR & ~RCC_CFGR_SWS_Msk) | RCC_CFGR_SWS_HSI;
+
+	// switch off MSI
+#endif
+}
+#endif
+
+} // namespace rcc
+
+
+namespace gpio {
 
 inline
 void set_state(GPIO_TypeDef* gpio, int reg, bool high)
@@ -86,7 +111,7 @@ void set_mode_af_lowspeed_pu(GPIO_TypeDef* gpio, int reg, int af_num)
 #endif
 }
 
+} // namespace gpio
+} // namespace stm32_lib
 
-}
-}
 

@@ -61,7 +61,8 @@
 #if defined (TARGET_STM32F103)
 #define CLOCK_SPEED 8000000
 #elif defined (TARGET_STM32L152)
-#define CLOCK_SPEED 2000000
+//#define CLOCK_SPEED 2097000
+#define CLOCK_SPEED 4194000
 #elif defined (TARGET_STM32H7A3)
 #define CLOCK_SPEED 64000000
 #endif
@@ -126,6 +127,9 @@ extern "C" __attribute__ ((interrupt)) void IntHandler_Timer()
 
 void bus_init()
 {
+#ifdef TARGET_STM32L152
+	stm32_lib::rcc::init_clock();
+#endif
 
 #if defined TARGET_STM32F103
 	// enable timer and port B
