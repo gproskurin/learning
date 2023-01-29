@@ -49,7 +49,7 @@ void set_mode_output_lowspeed_pushpull(GPIO_TypeDef* gpio, int reg)
 	constexpr uint32_t mode = 0b10; // output mode, max speed 2 MHz
 	constexpr uint32_t cnf = 0b00; // output push-pull
 	set_mode_cnf(gpio, reg, mode, cnf);
-#elif defined TARGET_STM32L152
+#else
 	const uint32_t mask_value = 0b01 << (reg * 2); // general-purpose output
 	gpio->MODER = (gpio->MODER & ~mask2(reg)) | mask_value;
 
@@ -67,7 +67,7 @@ void set_mode_af_lowspeed_pu(GPIO_TypeDef* gpio, int reg)
 	constexpr uint32_t mode = 0b10; // output mode, max speed 2 MHz
 	constexpr uint32_t cnf = 0b10; // af push-pull
 	set_mode_cnf(gpio, reg, mode, cnf);
-#elif defined TARGET_STM32L152
+#else
 void set_mode_af_lowspeed_pu(GPIO_TypeDef* gpio, int reg, int af_num)
 {
 	// MODER

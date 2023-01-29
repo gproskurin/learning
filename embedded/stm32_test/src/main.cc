@@ -33,14 +33,35 @@
 	#define USART_LOG_GPIO GPIOA
 	#define USART_LOG_PIN_TX 9
 	//#define USART_LOG_PIN_RX 10
+#elif defined TARGET_STM32H7A3
+	#define GREEN_LED_GPIO GPIOB
+	#define GREEN_LED_PIN 0
+	#define YELLOW_LED_GPIO GPIOE
+	#define YELLOW_LED_PIN 1
+	#define RED_LED_GPIO GPIOB
+	#define RED_LED_PIN 14
+
+	#define LED_GPIO YELLOW_LED_GPIO
+	#define LED_PIN YELLOW_LED_PIN
+
+	#define LED_TIM TIM3
+
+	// USART1, tx(PB6)
+	#define USART_LOG USART1
+	#define USART_LOG_GPIO GPIOB
+	#define USART_LOG_PIN_TX 6
 #endif
 
-#define USART_CON_BAUDRATE 115200
+
+// FIXME do not hardcode
 #if defined (TARGET_STM32F103)
-#define CLOCK_SPEED 8000000 // FIXME
+#define CLOCK_SPEED 8000000
 #elif defined (TARGET_STM32L152)
-#define CLOCK_SPEED 2000000 // FIXME
+#define CLOCK_SPEED 2000000
+#elif defined (TARGET_STM32H7A3)
+#define CLOCK_SPEED 64000000
 #endif
+#define USART_CON_BAUDRATE 115200
 
 
 usart_logger_t logger;
@@ -48,16 +69,22 @@ usart_logger_t logger;
 
 void usart_init(USART_TypeDef* const usart)
 {
+	usart->CR1 = 0; // ensure UE flag is reset
 #ifdef TARGET_STM32F103
 	stm32_lib::gpio::set_mode_af_lowspeed_pu(USART_LOG_GPIO, USART_LOG_PIN_TX);
 	const uint32_t div = CLOCK_SPEED / USART_CON_BAUDRATE;
 	usart->BRR = ((div / 16) << USART_BRR_DIV_Mantissa_Pos) | ((div % 16) << USART_BRR_DIV_Fraction_Pos);
+	usart->CR1 = USART_CR1_TE;
 #elif defined TARGET_STM32L152
 	stm32_lib::gpio::set_mode_af_lowspeed_pu(USART_LOG_GPIO, USART_LOG_PIN_TX, 7);
 	usart->BRR = CLOCK_SPEED / USART_CON_BAUDRATE;
-	//usart->CR3 = USART_CR3_DMAT;
+	usart->CR1 = USART_CR1_TE;
+#elif defined TARGET_STM32H7A3
+	stm32_lib::gpio::set_mode_af_lowspeed_pu(USART_LOG_GPIO, USART_LOG_PIN_TX, 7);
+	usart->BRR = CLOCK_SPEED / USART_CON_BAUDRATE;
+	usart->CR1 = USART_CR1_FIFOEN | USART_CR1_TE;
 #endif
-	usart->CR1 = USART_CR1_UE | USART_CR1_TE;
+	usart->CR1 |= USART_CR1_UE;
 }
 
 
@@ -124,6 +151,20 @@ void bus_init()
 	RCC->APB2ENR |= RCC_APB2ENR_TIM9EN_Msk;
 	RCC->APB2RSTR |= RCC_APB2RSTR_TIM9RST_Msk;
 	RCC->APB2RSTR &= ~RCC_APB2RSTR_TIM9RST_Msk;
+#elif defined TARGET_STM32H7A3
+	RCC->AHB4ENR |= RCC_AHB4ENR_GPIOBEN_Msk | RCC_AHB4ENR_GPIOEEN_Msk;
+	RCC->AHB4RSTR |= RCC_AHB4RSTR_GPIOBRST_Msk | RCC_AHB4RSTR_GPIOERST_Msk;
+	RCC->AHB4RSTR &= ~(RCC_AHB4RSTR_GPIOBRST_Msk | RCC_AHB4RSTR_GPIOERST_Msk);
+
+	// USART
+	RCC->APB2ENR |= RCC_APB2ENR_USART1EN_Msk;
+	RCC->APB2RSTR |= RCC_APB2RSTR_USART1RST_Msk;
+	RCC->APB2RSTR &= ~RCC_APB2RSTR_USART1RST_Msk;
+
+	// TIM3
+	//RCC->APB1LENR |= RCC_APB1LENR_TIM3EN_Msk;
+	//RCC->APB2RSTR |= RCC_APB1LRSTR_TIM9RST_Msk;
+	//RCC->APB2RSTR &= ~RCC_APB2RSTR_TIM9RST_Msk;
 #endif
 }
 
@@ -142,14 +183,20 @@ void nvic_init_tim()
 }
 
 
-void blink(int n)
+void do_blink(GPIO_TypeDef* const gpio, int reg, int n)
 {
 	while (n-- > 0) {
-		stm32_lib::gpio::set_state(LED_GPIO, LED_PIN, 1);
-		delay(50000);
-		stm32_lib::gpio::set_state(LED_GPIO, LED_PIN, 0);
-		delay(10000);
+		stm32_lib::gpio::set_state(gpio, reg, 1);
+		delay(500000);
+		stm32_lib::gpio::set_state(gpio, reg, 0);
+		delay(100000);
 	}
+}
+
+
+void blink(int n)
+{
+	return do_blink(LED_GPIO, LED_PIN, n);
 }
 
 
@@ -171,33 +218,82 @@ void vApplicationIdleHook(void)
 }
 
 
-// LED blinking task
-TaskHandle_t blink_task_handle = nullptr;
+// LED blinking tasks
 typedef std::array<StackType_t, 128> blink_task_stack_t;
-blink_task_stack_t blink_task_stack;
-StaticTask_t blink_task_buffer;
-struct blink_task_args_t {
-	GPIO_TypeDef* gpio;
-	int reg;
-} blink_task_args; // TODO move from globals?
+struct blink_task_data_t {
+	const char* const task_name;
+	GPIO_TypeDef* const gpio;
+	const int reg;
+	const TickType_t ticks_on;
+	const TickType_t ticks_off;
+	blink_task_data_t(const char* tname, GPIO_TypeDef* gp, int r, TickType_t ton, TickType_t toff)
+		: task_name(tname), gpio(gp), reg(r), ticks_on(ton), ticks_off(toff)
+	{}
+
+	blink_task_stack_t stack;
+	TaskHandle_t task_handle = nullptr;
+	StaticTask_t task_buffer;
+};
+
+struct blink_tasks_t {
+	std::array<blink_task_data_t, 3> tasks = {
+		blink_task_data_t(
+			"blink_green",
+			GREEN_LED_GPIO,
+			GREEN_LED_PIN,
+			configTICK_RATE_HZ/16,
+			configTICK_RATE_HZ - configTICK_RATE_HZ/16
+		),
+		blink_task_data_t(
+			"blink_yellow",
+			YELLOW_LED_GPIO,
+			YELLOW_LED_PIN,
+			configTICK_RATE_HZ/20,
+			configTICK_RATE_HZ/20
+		),
+		blink_task_data_t(
+			"blink_red",
+			RED_LED_GPIO,
+			RED_LED_PIN,
+			configTICK_RATE_HZ/7,
+			configTICK_RATE_HZ/13
+		)
+	};
+} blink_tasks;
+
+
 void blink_task_function(void* arg)
 {
-	blink_task_args_t* const args = reinterpret_cast<blink_task_args_t*>(arg);
-	constexpr TickType_t tm_on = configTICK_RATE_HZ * 3 / 4;
-	constexpr TickType_t tm_off = configTICK_RATE_HZ - tm_on;
+	const blink_task_data_t* const args = reinterpret_cast<blink_task_data_t*>(arg);
 	for(int i=0;;++i) {
-		const bool do_log = (i % 16 == 0);
+		const bool do_log = (i % 64 == 0);
 		if (do_log) {
 			logger.log_async("LED -> on\r\n");
 		}
 		stm32_lib::gpio::set_state(args->gpio, args->reg, true);
-		vTaskDelay(tm_on);
+		vTaskDelay(args->ticks_on);
 		if (do_log) {
 			logger.log_async("LED -> off\r\n");
 		}
 		stm32_lib::gpio::set_state(args->gpio, args->reg, false);
-		vTaskDelay(tm_off);
+		vTaskDelay(args->ticks_off);
 	}
+}
+
+
+void create_blink_task(blink_task_data_t& args)
+{
+	logger.log_sync("Creating blink task...\r\n");
+	args.task_handle = xTaskCreateStatic(
+		&blink_task_function,
+		args.task_name,
+		args.stack.size(),
+		reinterpret_cast<void*>(&args),
+		PRIO_BLINK,
+		args.stack.data(),
+		&args.task_buffer
+	);
+	logger.log_sync("Created blink task\r\n");
 }
 
 
@@ -206,38 +302,27 @@ __attribute__ ((noreturn)) void main()
 	// call constructors of global objects
 	new(&logger) usart_logger_t();
 	new(&idle_task_stack) idle_task_stack_t();
-	new(&blink_task_stack) blink_task_stack_t();
+	new(&blink_tasks) blink_tasks_t();
 
 	bus_init();
 	usart_init(USART_LOG);
 	logger.set_usart(USART_LOG);
 	logger.log_sync("\r\nLogger initialized (sync)\r\n");
 
-	logger.log_sync("Setting mode for LED\r\n");
-	stm32_lib::gpio::set_mode_output_lowspeed_pushpull(LED_GPIO, LED_PIN);
-	logger.log_sync("Switching off LED\r\n");
-	stm32_lib::gpio::set_state(LED_GPIO, LED_PIN, 0);
-
-	logger.log_sync("Creating blink task...\r\n");
-	blink_task_args.gpio = LED_GPIO;
-	blink_task_args.reg = LED_PIN;
-	blink_task_handle = xTaskCreateStatic(
-		&blink_task_function,
-		"blink",
-		blink_task_stack.size(),
-		reinterpret_cast<void*>(&blink_task_args),
-		PRIO_BLINK, // prio
-		blink_task_stack.data(),
-		&blink_task_buffer
-	);
-	logger.log_sync("Created blink task\r\n");
-
 	logger.log_sync("Creating logger queue...\r\n");
 	logger.init_queue();
 	logger.log_sync("Created logger queue\r\n");
+
 	logger.log_sync("Creating logger task...\r\n");
 	logger.create_task("logger", PRIO_LOGGER);
 	logger.log_sync("Created logger task\r\n");
+
+	logger.log_sync("Creating blink tasks...\r\n");
+	for (auto& bt : blink_tasks.tasks) {
+		stm32_lib::gpio::set_mode_output_lowspeed_pushpull(bt.gpio, bt.reg);
+		create_blink_task(bt);
+	}
+	logger.log_sync("Created blink tasks\r\n");
 
 	logger.log_sync("Initializing interrupts\r\n");
 	//nvic_init_tim();

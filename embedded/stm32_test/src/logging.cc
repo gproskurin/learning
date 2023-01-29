@@ -9,9 +9,13 @@ namespace {
 void usart_tx(USART_TypeDef* const usart, const char* s)
 {
 	while (*s) {
-		while (! (usart->SR & USART_SR_TXE)) {
-		}
+#ifdef TARGET_STM32H7A3
+		while (! (usart->ISR & USART_ISR_TXE_TXFNF)) {}
+		usart->TDR = *s;
+#else
+		while (! (usart->SR & USART_SR_TXE)) {}
 		usart->DR = *s;
+#endif
 		++s;
 	}
 }
