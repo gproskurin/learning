@@ -32,6 +32,10 @@
 	#define GREEN_LED_GPIO LED_GPIO
 	#define GREEN_LED_PIN LED_PIN
 
+	#define PWM_GPIO GPIOB
+	#define PWM_PIN 13
+	#define PWM_PIN_AF 3
+
 	// USART1, tx(PA9)
 	#define USART_LOG USART1
 	#define USART_LOG_GPIO GPIOA
@@ -103,6 +107,22 @@ void basic_timer_init(TIM_TypeDef* const tim, uint16_t prescaler, uint16_t arr)
 }
 
 
+void timer_init_output_pin(TIM_TypeDef* const tim, uint16_t prescaler, uint16_t arr, GPIO_TypeDef* gpio, int reg)
+{
+	stm32_lib::gpio::set_mode_af_hispeed_pushpull(gpio, reg, PWM_PIN_AF);
+	tim->CR1 = 0;
+	tim->PSC = prescaler;
+	tim->ARR = arr;
+	tim->CCR1 = arr / 5 * 4;
+	tim->CCMR1 = (tim->CCMR1 & ~(TIM_CCMR1_CC1S_Msk | TIM_CCMR1_OC1M_Msk))
+		| (0b00 << TIM_CCMR1_CC1S_Pos) // output channel
+		| (0b110 << TIM_CCMR1_OC1M_Pos) // PWM mode 1
+		| TIM_CCMR1_OC1FE // output compare fast
+		;
+	tim->CCER |= TIM_CCER_CC1E;
+	tim->CR1 |= TIM_CR1_CEN;
+}
+
 void delay(int val)
 {
 	for (volatile int i = 0; i<val; ++i) {
@@ -147,8 +167,8 @@ void bus_init()
 	RCC->APB1RSTR &= ~RCC_APB1RSTR_TIM2RST_Msk;
 
 #elif defined TARGET_STM32L152
-	// enable port A
-	RCC->AHBENR |= RCC_AHBENR_GPIOAEN_Msk;
+	// enable GPIOs
+	RCC->AHBENR |= RCC_AHBENR_GPIOAEN_Msk | RCC_AHBENR_GPIOBEN_Msk;
 
 	// USART
 	RCC->APB2ENR |= RCC_APB2ENR_USART1EN_Msk;
@@ -343,6 +363,10 @@ __attribute__ ((noreturn)) void main()
 
 	logger.log_sync("Initializing timer\r\n");
 	//basic_timer_init(LED_TIM, 2000-1, 1000-1);
+
+	logger.log_sync("Starting PWM timer...\r\n");
+	timer_init_output_pin(LED_TIM, 1, 100-1, PWM_GPIO, PWM_PIN);
+	logger.log_sync("Started PWM timer\r\n");
 
 	logger.log_sync("Starting FreeRTOS scheduler\r\n");
 	vTaskStartScheduler();
