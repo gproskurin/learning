@@ -67,6 +67,17 @@ void set_mode_cnf(GPIO_TypeDef* gpio, int reg, uint32_t mode, uint32_t cnf)
 #endif
 
 
+#ifndef TARGET_STM32F103
+inline
+void set_af(GPIO_TypeDef* gpio, int reg, int af_num)
+{
+	const auto reg_lo = (reg < 8) ? reg : (reg-8);
+	auto const afr = &gpio->AFR[ (reg<8) ? 0 : 1 ];
+	*afr = (*afr & ~mask4(reg_lo)) | (af_num << (reg_lo * 4));
+}
+#endif
+
+
 inline
 void set_mode_output_lowspeed_pushpull(GPIO_TypeDef* gpio, int reg)
 {
@@ -75,8 +86,7 @@ void set_mode_output_lowspeed_pushpull(GPIO_TypeDef* gpio, int reg)
 	constexpr uint32_t cnf = 0b00; // output push-pull
 	set_mode_cnf(gpio, reg, mode, cnf);
 #else
-	const uint32_t mask_value = 0b01 << (reg * 2); // general-purpose output
-	gpio->MODER = (gpio->MODER & ~mask2(reg)) | mask_value;
+	gpio->MODER = (gpio->MODER & ~mask2(reg)) | (0b01 << (reg * 2)); // general-purpose output
 
 	gpio->OTYPER &= ~mask1(reg); // 0 = push-pull
 	gpio->OSPEEDR &= ~mask2(reg) ; // 0b00 = low speed
@@ -92,24 +102,36 @@ void set_mode_af_lowspeed_pu(GPIO_TypeDef* gpio, int reg)
 	constexpr uint32_t mode = 0b10; // output mode, max speed 2 MHz
 	constexpr uint32_t cnf = 0b10; // af push-pull
 	set_mode_cnf(gpio, reg, mode, cnf);
+}
 #else
 void set_mode_af_lowspeed_pu(GPIO_TypeDef* gpio, int reg, int af_num)
 {
-	// MODER
-	const uint32_t mask_value = 0b10 << (reg * 2); // alternate function
-	gpio->MODER = (gpio->MODER & ~mask2(reg)) | mask_value;
-
-	// PUPD
-	const uint32_t pupd_value = 0b01 << (reg * 2); // pull-up
-	gpio->PUPDR = (gpio->PUPDR & ~mask2(reg)) | pupd_value;
-
-	// AF
-	const auto reg_lo = (reg < 8) ? reg : (reg-8);
-	const uint32_t af_mask_value = af_num << (reg_lo * 4);
-	auto const afr = &gpio->AFR[ (reg<8) ? 0 : 1 ];
-	*afr = (*afr & ~mask4(reg_lo)) | af_mask_value;
-#endif
+	gpio->MODER = (gpio->MODER & ~mask2(reg)) | (0b10 << (reg * 2)); // alternate function
+	gpio->PUPDR = (gpio->PUPDR & ~mask2(reg)) | (0b01 << (reg * 2)); // pull-up
+	set_af(gpio, reg, af_num);
 }
+#endif
+
+inline
+#ifdef TARGET_STM32F103
+TODO
+void set_mode_af_hispeed_pushpull(GPIO_TypeDef* gpio, int reg)
+{
+	constexpr uint32_t mode = 0b10; // output mode, max speed 2 MHz
+	constexpr uint32_t cnf = 0b10; // af push-pull
+	set_mode_cnf(gpio, reg, mode, cnf);
+}
+#else
+void set_mode_af_hispeed_pushpull(GPIO_TypeDef* gpio, int reg, int af_num)
+{
+	gpio->MODER = (gpio->MODER & ~mask2(reg)) | (0b10 << (reg * 2)); // alternate function
+	gpio->OTYPER = (gpio->OTYPER & ~mask1(reg)) | (0b0 << reg); // output push-pull
+	gpio->PUPDR = (gpio->PUPDR & ~mask2(reg)) | (0b00 << (reg * 2)); // no pupd
+	gpio->OSPEEDR = (gpio->OSPEEDR & ~mask2(reg)) | (0b11 << (reg * 2)); // very high speed
+	set_af(gpio, reg, af_num);
+}
+#endif
+
 
 } // namespace gpio
 } // namespace stm32_lib
