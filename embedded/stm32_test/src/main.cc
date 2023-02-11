@@ -49,6 +49,11 @@
 	#define RED_LED_GPIO GPIOB
 	#define RED_LED_PIN 14
 
+	#define PWM_GPIO GREEN_LED_GPIO
+	#define PWM_PIN GREEN_LED_PIN
+	#define PWM_PIN_AF 2
+	#define PWM_TIM TIM3
+
 	#define LED_GPIO YELLOW_LED_GPIO
 	#define LED_PIN YELLOW_LED_PIN
 
@@ -113,6 +118,15 @@ void timer_init_output_pin(TIM_TypeDef* const tim, uint16_t prescaler, uint16_t 
 	tim->CR1 = 0;
 	tim->PSC = prescaler;
 	tim->ARR = arr;
+#ifdef TARGET_STM32H7A3
+	tim->CCR3 = arr / 32;
+	tim->CCMR2 = (tim->CCMR2 & ~(TIM_CCMR2_CC3S_Msk | TIM_CCMR2_OC3M_Msk))
+		| (0b00 << TIM_CCMR2_CC3S_Pos) // output channel
+		| (0b0110 << TIM_CCMR2_OC3M_Pos) // PWM mode 1
+		| TIM_CCMR2_OC3FE // output compare fast
+		;
+	tim->CCER |= TIM_CCER_CC3E;
+#else
 	tim->CCR1 = arr / 5 * 4;
 	tim->CCMR1 = (tim->CCMR1 & ~(TIM_CCMR1_CC1S_Msk | TIM_CCMR1_OC1M_Msk))
 		| (0b00 << TIM_CCMR1_CC1S_Pos) // output channel
@@ -120,6 +134,7 @@ void timer_init_output_pin(TIM_TypeDef* const tim, uint16_t prescaler, uint16_t 
 		| TIM_CCMR1_OC1FE // output compare fast
 		;
 	tim->CCER |= TIM_CCER_CC1E;
+#endif
 	tim->CR1 |= TIM_CR1_CEN;
 }
 
@@ -193,9 +208,8 @@ void bus_init()
 	toggle_bits_10(&RCC->APB2RSTR, RCC_APB2RSTR_USART1RST_Msk);
 
 	// TIM3
-	//RCC->APB1LENR |= RCC_APB1LENR_TIM3EN_Msk;
-	//RCC->APB2RSTR |= RCC_APB1LRSTR_TIM9RST_Msk;
-	//RCC->APB2RSTR &= ~RCC_APB2RSTR_TIM9RST_Msk;
+	RCC->APB1LENR |= RCC_APB1LENR_TIM3EN_Msk;
+	toggle_bits_10(&RCC->APB1LRSTR, RCC_APB1LRSTR_TIM3RST_Msk);
 #endif
 }
 
@@ -367,7 +381,7 @@ __attribute__ ((noreturn)) void main()
 	//basic_timer_init(LED_TIM, 2000-1, 1000-1);
 
 	logger.log_sync("Starting PWM timer...\r\n");
-	timer_init_output_pin(LED_TIM, 1, 100-1, PWM_GPIO, PWM_PIN);
+	timer_init_output_pin(PWM_TIM, 64000-1, 1000-1, PWM_GPIO, PWM_PIN);
 	logger.log_sync("Started PWM timer\r\n");
 
 	logger.log_sync("Starting FreeRTOS scheduler\r\n");
