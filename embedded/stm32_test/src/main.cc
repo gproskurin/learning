@@ -145,6 +145,14 @@ extern "C" __attribute__ ((interrupt)) void IntHandler_Timer()
 }
 
 
+void toggle_bits_10(volatile uint32_t* const ptr, const uint32_t mask)
+{
+	const auto val = *ptr;
+	*ptr = val | mask; // set mask bits to 1
+	*ptr = val & ~mask; // reset mask bits to 0
+}
+
+
 void bus_init()
 {
 #ifdef TARGET_STM32L152
@@ -157,14 +165,11 @@ void bus_init()
 	RCC->APB1ENR |= RCC_APB1ENR_TIM2EN_Msk;
 
 	// USART
-	RCC->APB2ENR |= RCC_APB2ENR_IOPAEN_Msk;
-	RCC->APB2ENR |= RCC_APB2ENR_USART1EN_Msk;
-	RCC->APB2RSTR |= RCC_APB2RSTR_USART1RST_Msk;
-	RCC->APB2RSTR &= ~RCC_APB2RSTR_USART1RST_Msk;
+	RCC->APB2ENR |= RCC_APB2ENR_IOPAEN_Msk | RCC_APB2ENR_USART1EN_Msk;
+	toggle_bits_10(&RCC->APB2RSTR, RCC_APB2RSTR_USART1RST_Msk);
 
 	// reset TIM2
-	RCC->APB1RSTR |= RCC_APB1RSTR_TIM2RST_Msk;
-	RCC->APB1RSTR &= ~RCC_APB1RSTR_TIM2RST_Msk;
+	toggle_bits_10(&RCC->APB1RSTR, RCC_APB1RSTR_TIM2RST_Msk);
 
 #elif defined TARGET_STM32L152
 	// enable GPIOs
@@ -181,13 +186,11 @@ void bus_init()
 	RCC->APB2RSTR &= ~RCC_APB2RSTR_TIM9RST_Msk;
 #elif defined TARGET_STM32H7A3
 	RCC->AHB4ENR |= RCC_AHB4ENR_GPIOBEN_Msk | RCC_AHB4ENR_GPIOEEN_Msk;
-	RCC->AHB4RSTR |= RCC_AHB4RSTR_GPIOBRST_Msk | RCC_AHB4RSTR_GPIOERST_Msk;
-	RCC->AHB4RSTR &= ~(RCC_AHB4RSTR_GPIOBRST_Msk | RCC_AHB4RSTR_GPIOERST_Msk);
+	toggle_bits_10(&RCC->AHB4RSTR, RCC_AHB4RSTR_GPIOBRST_Msk | RCC_AHB4RSTR_GPIOERST_Msk);
 
 	// USART
 	RCC->APB2ENR |= RCC_APB2ENR_USART1EN_Msk;
-	RCC->APB2RSTR |= RCC_APB2RSTR_USART1RST_Msk;
-	RCC->APB2RSTR &= ~RCC_APB2RSTR_USART1RST_Msk;
+	toggle_bits_10(&RCC->APB2RSTR, RCC_APB2RSTR_USART1RST_Msk);
 
 	// TIM3
 	//RCC->APB1LENR |= RCC_APB1LENR_TIM3EN_Msk;
