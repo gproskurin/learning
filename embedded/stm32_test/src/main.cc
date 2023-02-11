@@ -268,19 +268,8 @@ struct blink_task_data_t {
 
 struct blink_tasks_t {
 #ifdef TARGET_STM32H7A3
-	std::array<blink_task_data_t, 3> tasks = {
-#else
-	std::array<blink_task_data_t, 1> tasks = {
-#endif
+	std::array<blink_task_data_t, 2> tasks = {
 		blink_task_data_t(
-			"blink_green",
-			GREEN_LED_GPIO,
-			GREEN_LED_PIN,
-			configTICK_RATE_HZ/16,
-			configTICK_RATE_HZ - configTICK_RATE_HZ/16
-		)
-#ifdef TARGET_STM32H7A3
-		, blink_task_data_t(
 			"blink_yellow",
 			YELLOW_LED_GPIO,
 			YELLOW_LED_PIN,
@@ -294,8 +283,18 @@ struct blink_tasks_t {
 			configTICK_RATE_HZ/7,
 			configTICK_RATE_HZ/13
 		)
-#endif
 	};
+#else
+	std::array<blink_task_data_t, 1> tasks = {
+		blink_task_data_t(
+			"blink_green",
+			GREEN_LED_GPIO,
+			GREEN_LED_PIN,
+			configTICK_RATE_HZ/16,
+			configTICK_RATE_HZ - configTICK_RATE_HZ/16
+		)
+	};
+#endif
 } blink_tasks;
 
 
