@@ -471,10 +471,10 @@ __attribute__ ((noreturn)) void main()
 	}
 	logger.log_sync("Created blink tasks\r\n");
 
-	logger.log_sync("Initializing interrupts\r\n");
+	//logger.log_sync("Initializing interrupts\r\n");
 	//nvic_init_tim();
 
-	logger.log_sync("Initializing timer\r\n");
+	//logger.log_sync("Initializing timer\r\n");
 	//basic_timer_init(LED_TIM, 2000-1, 1000-1);
 
 	logger.log_sync("Starting PWM timer...\r\n");
