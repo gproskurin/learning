@@ -10,6 +10,7 @@
 
 
 #define PRIO_BLINK 1
+#define PRIO_AD 1
 #define PRIO_LOGGER 2
 
 #if defined TARGET_STM32F103
@@ -63,6 +64,21 @@
 	#define USART_LOG USART1
 	#define USART_LOG_GPIO GPIOB
 	#define USART_LOG_PIN_TX 6
+
+	// ad5932 spi
+	#define AD_SPI SPI3
+	#define AD_SPI_MOSI_GPIO GPIOB
+	#define AD_SPI_MOSI_PIN 5
+	#define AD_SPI_MOSI_AF 7
+	#define AD_SPI_MISO_GPIO GPIOB
+	#define AD_SPI_MISO_PIN 4
+	#define AD_SPI_MISO_AF 6
+	#define AD_SPI_SCK_GPIO GPIOB
+	#define AD_SPI_SCK_PIN 3
+	#define AD_SPI_SCK_AF 6
+	#define AD_SPI_SS_GPIO GPIOA
+	#define AD_SPI_SS_PIN 4
+	#define AD_SPI_SS_AF 6
 #endif
 
 
@@ -141,6 +157,35 @@ void timer_init_output_pin(TIM_TypeDef* const tim, uint16_t prescaler, uint16_t 
 	tim->CR1 |= TIM_CR1_CEN;
 }
 
+
+void ad_spi_init()
+{
+	stm32_lib::spi::init_pins(
+		AD_SPI_MOSI_GPIO, AD_SPI_MOSI_PIN, AD_SPI_MOSI_AF,
+		AD_SPI_MISO_GPIO, AD_SPI_MISO_PIN, AD_SPI_MISO_AF,
+		AD_SPI_SCK_GPIO, AD_SPI_SCK_PIN, AD_SPI_SCK_AF,
+		AD_SPI_SS_GPIO, AD_SPI_SS_PIN, AD_SPI_SS_AF
+	);
+	// MODE = 2 (POL = 1, PHASE = 0) TODO check
+#ifdef TARGET_STM32F103
+	#error
+	AD_SPI->CR1 = (AD_SPI->CR1 & ~(SPI_CR1_CPHA_Msk)) | SPI_CR1_POL_Msk; // FIXME
+#elif defined TARGET_STM32H7A3
+	AD_SPI->CFG1 = (AD_SPI->CFG1 & ~(SPI_CFG1_MBR_Msk | SPI_CFG1_DSIZE_Msk))
+		| (0b111 << SPI_CFG1_MBR_Pos) // spi_master_clk/256
+		| (0b01111 << SPI_CFG1_DSIZE_Pos) // 16 bits
+		;
+	AD_SPI->CFG2 = (AD_SPI->CFG2 & ~(SPI_CFG2_CPHA_Msk | SPI_CFG2_MIDI_Msk))
+		| SPI_CFG2_CPOL_Msk
+		| SPI_CFG2_MASTER_Msk
+		| SPI_CFG2_SSOE_Msk
+		| (0b1111 << SPI_CFG2_MIDI_Pos) // FIXME delay
+		;
+	AD_SPI->CR1 |= SPI_CR1_SPE;
+#endif
+}
+
+
 void delay(int val)
 {
 	for (volatile int i = 0; i<val; ++i) {
@@ -203,16 +248,19 @@ void bus_init()
 	RCC->APB2RSTR |= RCC_APB2RSTR_TIM9RST_Msk;
 	RCC->APB2RSTR &= ~RCC_APB2RSTR_TIM9RST_Msk;
 #elif defined TARGET_STM32H7A3
-	RCC->AHB4ENR |= RCC_AHB4ENR_GPIOBEN_Msk | RCC_AHB4ENR_GPIOEEN_Msk;
-	toggle_bits_10(&RCC->AHB4RSTR, RCC_AHB4RSTR_GPIOBRST_Msk | RCC_AHB4RSTR_GPIOERST_Msk);
+	RCC->AHB4ENR |= RCC_AHB4ENR_GPIOAEN_Msk | RCC_AHB4ENR_GPIOBEN_Msk | RCC_AHB4ENR_GPIOEEN_Msk;
+	toggle_bits_10(
+		&RCC->AHB4RSTR,
+		RCC_AHB4RSTR_GPIOARST_Msk | RCC_AHB4RSTR_GPIOBRST_Msk | RCC_AHB4RSTR_GPIOERST_Msk
+	);
 
 	// USART
 	RCC->APB2ENR |= RCC_APB2ENR_USART1EN_Msk;
 	toggle_bits_10(&RCC->APB2RSTR, RCC_APB2RSTR_USART1RST_Msk);
 
-	// TIM3
-	RCC->APB1LENR |= RCC_APB1LENR_TIM3EN_Msk;
-	toggle_bits_10(&RCC->APB1LRSTR, RCC_APB1LRSTR_TIM3RST_Msk);
+	// TIM3 & SPI3
+	RCC->APB1LENR |= RCC_APB1LENR_TIM3EN_Msk | RCC_APB1LENR_SPI3EN_Msk;
+	toggle_bits_10(&RCC->APB1LRSTR, RCC_APB1LRSTR_TIM3RST_Msk | RCC_APB1LRSTR_SPI3RST_Msk);
 #endif
 }
 
@@ -349,12 +397,54 @@ void create_blink_task(blink_task_data_t& args)
 }
 
 
+struct ad_task_data_t {
+	const char* const task_name;
+	SPI_TypeDef* const spi;
+	ad_task_data_t(const char* tname, SPI_TypeDef* s)
+		: task_name(tname), spi(s)
+	{}
+
+	task_stack_t<128> stack;
+	TaskHandle_t task_handle = nullptr;
+	StaticTask_t task_buffer;
+};
+struct ad_task_t {
+	ad_task_data_t task;
+	ad_task_t(): task("ad5932", AD_SPI) {}
+};
+ad_task_t ad_task;
+
+void ad_task_function(void* arg)
+{
+	const ad_task_data_t* const args = reinterpret_cast<ad_task_data_t*>(arg);
+	for(int i=0;;++i) {
+		logger.log_async("AD task is working...\r\n");
+		vTaskDelay(configTICK_RATE_HZ * 16);
+	}
+}
+
+void create_ad_task(ad_task_data_t& args)
+{
+	logger.log_sync("Creating AD task...\r\n");
+	args.task_handle = xTaskCreateStatic(
+		&ad_task_function,
+		args.task_name,
+		args.stack.size(),
+		reinterpret_cast<void*>(&args),
+		PRIO_AD,
+		args.stack.data(),
+		&args.task_buffer
+	);
+	logger.log_sync("Created AD task\r\n");
+}
+
 __attribute__ ((noreturn)) void main()
 {
 	// call constructors of global objects
 	new(&logger) usart_logger_t();
 	new(&idle_task_stack) idle_task_stack_t();
 	new(&blink_tasks) blink_tasks_t();
+	new(&ad_task) ad_task_t();
 
 	bus_init();
 	usart_init(USART_LOG);
@@ -368,6 +458,11 @@ __attribute__ ((noreturn)) void main()
 	logger.log_sync("Creating logger task...\r\n");
 	logger.create_task("logger", PRIO_LOGGER);
 	logger.log_sync("Created logger task\r\n");
+
+	logger.log_sync("Initializing ad5932 SPI...\r\n");
+	ad_spi_init();
+	logger.log_sync("Initialized ad5932 SPI\r\n");
+	create_ad_task(ad_task.task);
 
 	logger.log_sync("Creating blink tasks...\r\n");
 	for (auto& bt : blink_tasks.tasks) {

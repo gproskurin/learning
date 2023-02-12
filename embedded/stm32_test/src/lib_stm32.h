@@ -133,7 +133,60 @@ void set_mode_af_hispeed_pushpull(GPIO_TypeDef* gpio, int reg, int af_num)
 #endif
 
 
+#ifndef TARGET_STM32F103
+namespace {
+void set_mode_af_hispeed_pushpull(GPIO_TypeDef* gpio, int reg, int af_num, uint32_t pupd)
+{
+	gpio->MODER = (gpio->MODER & ~mask2(reg)) | (0b10 << (reg * 2)); // alternate function
+	gpio->OTYPER = (gpio->OTYPER & ~mask1(reg)) | (0b0 << reg); // output push-pull
+	gpio->PUPDR = (gpio->PUPDR & ~mask2(reg)) | (pupd << (reg * 2));
+	gpio->OSPEEDR = (gpio->OSPEEDR & ~mask2(reg)) | (0b11 << (reg * 2)); // very high speed
+	set_af(gpio, reg, af_num);
+}
+}
+
+void set_mode_af_hispeed_pushpull_pullup(GPIO_TypeDef* gpio, int reg, int af_num)
+{
+	set_mode_af_hispeed_pushpull(gpio, reg, af_num, 0b01);
+}
+
+void set_mode_af_hispeed_pushpull_float(GPIO_TypeDef* gpio, int reg, int af_num)
+{
+	set_mode_af_hispeed_pushpull(gpio, reg, af_num, 0b00);
+}
+#endif
+
 } // namespace gpio
+
+
+namespace spi {
+
+void init_pins(
+		GPIO_TypeDef* gpio_mosi, int pin_mosi, int af_mosi,
+		GPIO_TypeDef* gpio_miso, int pin_miso, int af_miso,
+		GPIO_TypeDef* gpio_sck, int pin_sck, int af_sck,
+		GPIO_TypeDef* gpio_ss, int pin_ss, int af_ss
+	)
+{
+	gpio::set_mode_af_hispeed_pushpull_float(gpio_mosi, pin_mosi, af_mosi);
+	gpio::set_mode_af_hispeed_pushpull_pullup(gpio_miso, pin_miso, af_miso);
+	gpio::set_mode_af_hispeed_pushpull_float(gpio_sck, pin_sck, af_sck);
+	gpio::set_mode_af_hispeed_pushpull_pullup(gpio_ss, pin_ss, af_ss);
+}
+
+uint16_t write16(SPI_TypeDef* spi, uint16_t data)
+{
+	volatile uint16_t* const tx = reinterpret_cast<volatile uint16_t*>(&spi->TXDR);
+	*tx = data;
+	spi->CR1 |= SPI_CR1_CSTART_Msk;
+	volatile uint16_t* const rx = reinterpret_cast<volatile uint16_t*>(&spi->RXDR);
+	const uint16_t r = *rx;
+	return r;
+}
+
+
+} // namespace spi
+
 } // namespace stm32_lib
 
 
