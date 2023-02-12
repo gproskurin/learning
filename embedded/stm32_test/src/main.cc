@@ -78,6 +78,9 @@
 #define USART_CON_BAUDRATE 115200
 
 
+template <size_t StackSize>
+using task_stack_t = std::array<StackType_t, StackSize>;
+
 usart_logger_t logger;
 
 
@@ -246,7 +249,7 @@ void blink(int n)
 
 
 StaticTask_t xTaskBufferIdle;
-typedef std::array<StackType_t, 128> idle_task_stack_t;
+using idle_task_stack_t = task_stack_t<128>;
 idle_task_stack_t idle_task_stack;
 extern "C"
 void vApplicationGetIdleTaskMemory(StaticTask_t **tcbIdle, StackType_t **stackIdle, uint32_t *stackSizeIdle)
@@ -264,7 +267,6 @@ void vApplicationIdleHook(void)
 
 
 // LED blinking tasks
-typedef std::array<StackType_t, 128> blink_task_stack_t;
 struct blink_task_data_t {
 	const char* const task_name;
 	GPIO_TypeDef* const gpio;
@@ -275,7 +277,7 @@ struct blink_task_data_t {
 		: task_name(tname), gpio(gp), reg(r), ticks_on(ton), ticks_off(toff)
 	{}
 
-	blink_task_stack_t stack;
+	task_stack_t<128> stack;
 	TaskHandle_t task_handle = nullptr;
 	StaticTask_t task_buffer;
 };
