@@ -2,14 +2,17 @@
 #define FREERTOS_CONFIG_H
 
 #define configUSE_PREEMPTION				1
-#define configUSE_PORT_OPTIMISED_TASK_SELECTION		1
+#ifdef TARGET_STM32L072
+	#define configUSE_PORT_OPTIMISED_TASK_SELECTION		0
+#else
+	#define configUSE_PORT_OPTIMISED_TASK_SELECTION		1
+#endif
 #define configUSE_TICKLESS_IDLE				0
 
 #ifdef TARGET_STM32F103
 	#define configCPU_CLOCK_HZ			8000000
-#elif defined TARGET_STM32L152
-	//#define configCPU_CLOCK_HZ			2097000
-	#define configCPU_CLOCK_HZ			4194000
+#elif defined TARGET_STM32L072
+	#define configCPU_CLOCK_HZ			2048000
 #elif defined TARGET_STM32H7A3
 	#define configCPU_CLOCK_HZ			64000000
 #endif

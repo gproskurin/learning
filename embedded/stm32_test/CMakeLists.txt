@@ -7,14 +7,17 @@ set(CMAKE_VERBOSE_MAKEFILE ON)
 #set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/ld/stm32f103.ld)
 #set(TARGET_DEF "-DTARGET_STM32F103")
 #set(C_CXX_ARCH_FLAGS "-mcpu=cortex-m3 -mthumb")
+#set(FREERTOS_PORT "GCC_ARM_CM3")
 
-#set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/ld/stm32l152.ld)
-#set(TARGET_DEF "-DTARGET_STM32L152")
-#set(C_CXX_ARCH_FLAGS "-mcpu=cortex-m3 -mthumb")
+set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/ld/stm32l072.ld)
+set(TARGET_DEF "-DTARGET_STM32L072")
+set(C_CXX_ARCH_FLAGS "-mcpu=cortex-m0 -mthumb")
+set(FREERTOS_PORT "GCC_ARM_CM0")
 
-set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/ld/stm32h7a3.ld)
-set(TARGET_DEF "-DTARGET_STM32H7A3")
-set(C_CXX_ARCH_FLAGS "-mcpu=cortex-m7 -mthumb")
+#set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/ld/stm32h7a3.ld)
+#set(TARGET_DEF "-DTARGET_STM32H7A3")
+#set(C_CXX_ARCH_FLAGS "-mcpu=cortex-m7 -mthumb")
+#set(FREERTOS_PORT "GCC_ARM_CM3")
 
 #set(Boost_NO_SYSTEM_PATH ON)
 #set(BOOST_ROOT "/data/gpr/src/boost_1_81_0")
@@ -30,7 +33,7 @@ set(CMSIS_ARM_INCLUDE "${CMAKE_SOURCE_DIR}/../CMSIS_5/CMSIS/Core/Include")
 
 set(C_CXX_FLAGS " \
 	${C_CXX_ARCH_FLAGS} \
-	-g -ffreestanding -Werror -Wall -Wno-unused-but-set-variable -Wno-unused-variable \
+	-g -Og -ffreestanding -Werror -Wall -Wno-unused-but-set-variable -Wno-unused-variable \
 	${TARGET_DEF} \
 	-I${CMSIS_ROOT} \
 	-I${CMSIS_ARM_INCLUDE} \
@@ -45,7 +48,8 @@ add_library(freertos_config INTERFACE)
 target_include_directories(freertos_config SYSTEM
 	INTERFACE "${CMAKE_SOURCE_DIR}/src"
 )
-set(FREERTOS_PORT "GCC_ARM_CM3")
+#set(FREERTOS_PORT "GCC_ARM_CM3")
+#set(FREERTOS_PORT "GCC_ARM_CM0")
 set(FREERTOS_HEAP "1")
 add_subdirectory("${CMAKE_SOURCE_DIR}/../FreeRTOS-Kernel" "FreeRTOS")
 ###
@@ -67,7 +71,6 @@ add_executable(${FIRMWARE_ELF}
 	src/main.cc
 	src/logging.cc
 	src/ad5932.cc
-	#${CMSIS_ROOT}/cmsis_device_l1/Source/Templates/gcc/startup_stm32l152xe.s
 )
 
 target_link_libraries(${FIRMWARE_ELF}

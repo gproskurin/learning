@@ -32,7 +32,7 @@ extern void vPortSVCHandler(void);
 extern void xPortPendSVHandler(void);
 extern void xPortSysTickHandler(void);
 
-#if defined TARGET_STM32L152
+#if defined TARGET_STM32L072
 __attribute__((section(".vectors"))) void (*tab[])(void) =
 {
 	_estack,
