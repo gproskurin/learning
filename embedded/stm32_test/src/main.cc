@@ -5,6 +5,7 @@
 #include "task.h"
 
 #include <stdint.h>
+#include <string.h>
 #include <array>
 #include <new>
 
@@ -414,9 +415,21 @@ void blink_task_function(void* arg)
 }
 
 
+void str_cpy_3(char* dst, const char* s1, const char* s2, const char* s3)
+{
+	auto p = stpcpy(dst, s1);
+	p = stpcpy(p, s2);
+	stpcpy(p, s3);
+}
+
+
 void create_blink_task(blink_task_data_t& args)
 {
-	logger.log_sync("Creating blink task...\r\n");
+	char log_buf[64];
+
+	str_cpy_3(log_buf, "Creating blink task \"", args.task_name, "\" ...\r\n");
+	logger.log_sync(log_buf);
+
 	args.task_handle = xTaskCreateStatic(
 		&blink_task_function,
 		args.task_name,
@@ -426,7 +439,9 @@ void create_blink_task(blink_task_data_t& args)
 		args.stack.data(),
 		&args.task_buffer
 	);
-	logger.log_sync("Created blink task\r\n");
+
+	str_cpy_3(log_buf, "Created blink task \"", args.task_name, "\"\r\n");
+	logger.log_sync(log_buf);
 }
 
 

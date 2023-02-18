@@ -33,6 +33,7 @@ set(CMSIS_ARM_INCLUDE "${CMAKE_SOURCE_DIR}/../CMSIS_5/CMSIS/Core/Include")
 
 set(C_CXX_FLAGS " \
 	${C_CXX_ARCH_FLAGS} \
+	-D_POSIX_C_SOURCE=200809 \
 	-g -Og -ffreestanding -Werror -Wall -Wno-unused-but-set-variable -Wno-unused-variable \
 	${TARGET_DEF} \
 	-I${CMSIS_ROOT} \
