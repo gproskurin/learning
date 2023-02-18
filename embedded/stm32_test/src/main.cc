@@ -47,6 +47,21 @@
 	#define USART_LOG_PIN_TX 9
 	//#define USART_LOG_PIN_RX 10
 	#define USART_LOG_AF 4
+
+	// ad5932 spi
+	#define AD_SPI SPI1
+	#define AD_SPI_MOSI_GPIO GPIOA
+	#define AD_SPI_MOSI_PIN 7
+	#define AD_SPI_MOSI_AF 0
+	#define AD_SPI_MISO_GPIO GPIOA
+	#define AD_SPI_MISO_PIN 6
+	#define AD_SPI_MISO_AF 0
+	#define AD_SPI_SCK_GPIO GPIOB
+	#define AD_SPI_SCK_PIN 3
+	#define AD_SPI_SCK_AF 0
+	#define AD_SPI_SS_GPIO GPIOA
+	#define AD_SPI_SS_PIN 4
+	#define AD_SPI_SS_AF 0
 #elif defined TARGET_STM32H7A3
 	#define GREEN_LED_GPIO GPIOB
 	#define GREEN_LED_PIN 0
@@ -163,7 +178,6 @@ void timer_init_output_pin(TIM_TypeDef* const tim, uint16_t prescaler, uint16_t 
 }
 
 
-#ifdef TARGET_STM32H7A3
 void ad_spi_init()
 {
 	stm32_lib::spi::init_pins(
@@ -173,10 +187,9 @@ void ad_spi_init()
 		AD_SPI_SS_GPIO, AD_SPI_SS_PIN, AD_SPI_SS_AF
 	);
 	// MODE = 2 (POL = 1, PHASE = 0) TODO check
-#ifdef TARGET_STM32F103
-	#error
-	AD_SPI->CR1 = (AD_SPI->CR1 & ~(SPI_CR1_CPHA_Msk)) | SPI_CR1_POL_Msk; // FIXME
-#elif defined TARGET_STM32H7A3
+
+	//AD_SPI->CR1 = (AD_SPI->CR1 & ~(SPI_CR1_CPHA_Msk)) | SPI_CR1_POL_Msk; // FIXME
+#ifdef TARGET_STM32H7A3
 	AD_SPI->CFG1 = (AD_SPI->CFG1 & ~(SPI_CFG1_MBR_Msk | SPI_CFG1_DSIZE_Msk))
 		| (0b111 << SPI_CFG1_MBR_Pos) // spi_master_clk/256
 		| (0b01111 << SPI_CFG1_DSIZE_Pos) // 16 bits
@@ -188,9 +201,9 @@ void ad_spi_init()
 		| (0b1111 << SPI_CFG2_MIDI_Pos) // FIXME delay
 		;
 	AD_SPI->CR1 |= SPI_CR1_SPE;
+#elif defined TARGET_STM32L072
 #endif
 }
-#endif
 
 
 void delay(int val)
@@ -247,10 +260,9 @@ void bus_init()
 	// enable GPIOs
 	RCC->IOPENR |= RCC_IOPENR_IOPAEN_Msk | RCC_IOPENR_IOPBEN_Msk;
 
-	// USART
-	RCC->APB2ENR |= RCC_APB2ENR_USART1EN_Msk;
-	RCC->APB2RSTR |= RCC_APB2RSTR_USART1RST_Msk;
-	RCC->APB2RSTR &= ~RCC_APB2RSTR_USART1RST_Msk;
+	// USART & SPI1
+	RCC->APB2ENR |= RCC_APB2ENR_USART1EN_Msk | RCC_APB2ENR_SPI1EN_Msk;
+	toggle_bits_10(&RCC->APB2RSTR, RCC_APB2RSTR_USART1RST_Msk | RCC_APB2RSTR_SPI1RST_Msk);
 
 	// TIM2
 	RCC->APB1ENR |= RCC_APB1ENR_TIM2EN_Msk;
@@ -445,7 +457,6 @@ void create_blink_task(blink_task_data_t& args)
 }
 
 
-#ifdef TARGET_STM32H7A3
 struct ad_task_data_t {
 	const char* const task_name;
 	SPI_TypeDef* const spi;
@@ -486,7 +497,6 @@ void create_ad_task(ad_task_data_t& args)
 	);
 	logger.log_sync("Created AD task\r\n");
 }
-#endif
 
 __attribute__ ((noreturn)) void main()
 {
@@ -494,9 +504,7 @@ __attribute__ ((noreturn)) void main()
 	new(&logger) usart_logger_t();
 	new(&idle_task_stack) idle_task_stack_t();
 	new(&blink_tasks) blink_tasks_t();
-#ifdef TARGET_STM32H7A3
 	new(&ad_task) ad_task_t();
-#endif
 
 	bus_init();
 	usart_init(USART_LOG);
@@ -511,7 +519,7 @@ __attribute__ ((noreturn)) void main()
 	logger.create_task("logger", PRIO_LOGGER);
 	logger.log_sync("Created logger task\r\n");
 
-#ifdef TARGET_STM32H7A3
+#if defined(TARGET_STM32H7A3) || defined (TARGET_STM32L072)
 	logger.log_sync("Initializing ad5932 SPI...\r\n");
 	ad_spi_init();
 	logger.log_sync("Initialized ad5932 SPI\r\n");

@@ -161,7 +161,6 @@ void set_mode_af_hispeed_pushpull_float(GPIO_TypeDef* gpio, int reg, int af_num)
 
 namespace spi {
 
-#ifdef TARGET_STM32H7A3
 void init_pins(
 		GPIO_TypeDef* gpio_mosi, int pin_mosi, int af_mosi,
 		GPIO_TypeDef* gpio_miso, int pin_miso, int af_miso,
@@ -177,14 +176,17 @@ void init_pins(
 
 uint16_t write16(SPI_TypeDef* spi, uint16_t data)
 {
+#ifdef TARGET_STM32H7A3
 	volatile uint16_t* const tx = reinterpret_cast<volatile uint16_t*>(&spi->TXDR);
 	*tx = data;
 	spi->CR1 |= SPI_CR1_CSTART_Msk;
 	volatile uint16_t* const rx = reinterpret_cast<volatile uint16_t*>(&spi->RXDR);
 	const uint16_t r = *rx;
 	return r;
-}
+#else
+	return 0;
 #endif
+}
 
 
 } // namespace spi
