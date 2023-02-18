@@ -110,17 +110,18 @@ void usart_init(USART_TypeDef* const usart)
 	stm32_lib::gpio::set_mode_af_lowspeed_pu(USART_LOG_GPIO, USART_LOG_PIN_TX);
 	const uint32_t div = CLOCK_SPEED / USART_CON_BAUDRATE;
 	usart->BRR = ((div / 16) << USART_BRR_DIV_Mantissa_Pos) | ((div % 16) << USART_BRR_DIV_Fraction_Pos);
-	usart->CR1 = USART_CR1_TE;
+	constexpr uint32_t cr1 = USART_CR1_TE;
 #elif defined TARGET_STM32L072
 	stm32_lib::gpio::set_mode_af_lowspeed_pu(USART_LOG_GPIO, USART_LOG_PIN_TX, USART_LOG_AF);
 	usart->BRR = CLOCK_SPEED / USART_CON_BAUDRATE;
-	usart->CR1 = USART_CR1_TE;
+	constexpr uint32_t cr1 = USART_CR1_TE;
 #elif defined TARGET_STM32H7A3
 	stm32_lib::gpio::set_mode_af_lowspeed_pu(USART_LOG_GPIO, USART_LOG_PIN_TX, 7);
 	usart->BRR = CLOCK_SPEED / USART_CON_BAUDRATE;
-	usart->CR1 = USART_CR1_FIFOEN | USART_CR1_TE;
+	constexpr uint32_t cr1 = USART_CR1_FIFOEN | USART_CR1_TE;
 #endif
-	usart->CR1 |= USART_CR1_UE;
+	usart->CR1 = cr1;
+	usart->CR1 = cr1 | USART_CR1_UE;
 }
 
 
