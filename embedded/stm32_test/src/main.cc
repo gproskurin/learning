@@ -35,9 +35,9 @@
 	#define GREEN2_LED_GPIO GPIOA
 	#define GREEN2_LED_PIN 5
 
-	#define PWM_GPIO GPIOB
-	#define PWM_PIN 13
-	#define PWM_PIN_AF 3
+	#define PWM_GPIO GREEN2_LED_GPIO
+	#define PWM_PIN GREEN2_LED_PIN
+	#define PWM_PIN_AF 5
 	#define PWM_TIM TIM2
 
 	// USART1, tx(PA9)
@@ -357,20 +357,13 @@ struct blink_tasks_t {
 		)
 	};
 #elif defined TARGET_STM32L072
-	std::array<blink_task_data_t, 4> tasks = {
+	std::array<blink_task_data_t, 3> tasks = {
 		blink_task_data_t(
 			"blink_green1",
 			GREEN1_LED_GPIO,
 			GREEN1_LED_PIN,
 			configTICK_RATE_HZ/2,
 			configTICK_RATE_HZ/2
-		)
-		, blink_task_data_t(
-			"blink_green2",
-			GREEN2_LED_GPIO,
-			GREEN2_LED_PIN,
-			configTICK_RATE_HZ*3,
-			configTICK_RATE_HZ*2
 		)
 		, blink_task_data_t(
 			"blink_blue",
@@ -523,7 +516,7 @@ __attribute__ ((noreturn)) void main()
 	//basic_timer_init(LED_TIM, 2000-1, 1000-1);
 
 	logger.log_sync("Starting PWM timer...\r\n");
-	timer_init_output_pin(PWM_TIM, 64000-1, 1000-1, PWM_GPIO, PWM_PIN);
+	timer_init_output_pin(PWM_TIM, 6400-1, 100-1, PWM_GPIO, PWM_PIN);
 	logger.log_sync("Started PWM timer\r\n");
 
 	logger.log_sync("Starting FreeRTOS scheduler\r\n");
