@@ -12,7 +12,7 @@
 #ifdef TARGET_STM32F103
 	#define configCPU_CLOCK_HZ			8000000
 #elif defined TARGET_STM32L072
-	#define configCPU_CLOCK_HZ			2048000
+	#define configCPU_CLOCK_HZ			2100000
 #elif defined TARGET_STM32H7A3
 	#define configCPU_CLOCK_HZ			64000000
 #endif

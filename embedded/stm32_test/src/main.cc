@@ -28,12 +28,12 @@
 #elif defined TARGET_STM32L072
 	#define GREEN1_LED_GPIO GPIOB
 	#define GREEN1_LED_PIN 5
-	#define GREEN2_LED_GPIO GPIOA
-	#define GREEN2_LED_PIN 5
 	#define BLUE_LED_GPIO GPIOB
 	#define BLUE_LED_PIN 6
 	#define RED_LED_GPIO GPIOB
 	#define RED_LED_PIN 7
+	#define GREEN2_LED_GPIO GPIOA
+	#define GREEN2_LED_PIN 5
 
 	#define PWM_GPIO GPIOB
 	#define PWM_PIN 13
@@ -45,6 +45,7 @@
 	#define USART_LOG_GPIO GPIOA
 	#define USART_LOG_PIN_TX 9
 	//#define USART_LOG_PIN_RX 10
+	#define USART_LOG_AF 4
 #elif defined TARGET_STM32H7A3
 	#define GREEN_LED_GPIO GPIOB
 	#define GREEN_LED_PIN 0
@@ -89,7 +90,7 @@
 #if defined (TARGET_STM32F103)
 #define CLOCK_SPEED 8000000
 #elif defined (TARGET_STM32L072)
-#define CLOCK_SPEED 4194000
+#define CLOCK_SPEED 2100000
 #elif defined (TARGET_STM32H7A3)
 #define CLOCK_SPEED 64000000
 #endif
@@ -111,7 +112,7 @@ void usart_init(USART_TypeDef* const usart)
 	usart->BRR = ((div / 16) << USART_BRR_DIV_Mantissa_Pos) | ((div % 16) << USART_BRR_DIV_Fraction_Pos);
 	usart->CR1 = USART_CR1_TE;
 #elif defined TARGET_STM32L072
-	stm32_lib::gpio::set_mode_af_lowspeed_pu(USART_LOG_GPIO, USART_LOG_PIN_TX, 7);
+	stm32_lib::gpio::set_mode_af_lowspeed_pu(USART_LOG_GPIO, USART_LOG_PIN_TX, USART_LOG_AF);
 	usart->BRR = CLOCK_SPEED / USART_CON_BAUDRATE;
 	usart->CR1 = USART_CR1_TE;
 #elif defined TARGET_STM32H7A3
@@ -361,29 +362,29 @@ struct blink_tasks_t {
 			"blink_green1",
 			GREEN1_LED_GPIO,
 			GREEN1_LED_PIN,
-			configTICK_RATE_HZ,
+			configTICK_RATE_HZ/2,
 			configTICK_RATE_HZ/2
 		)
 		, blink_task_data_t(
 			"blink_green2",
 			GREEN2_LED_GPIO,
 			GREEN2_LED_PIN,
-			configTICK_RATE_HZ/2,
-			configTICK_RATE_HZ/4
+			configTICK_RATE_HZ*3,
+			configTICK_RATE_HZ*2
 		)
 		, blink_task_data_t(
 			"blink_blue",
 			BLUE_LED_GPIO,
 			BLUE_LED_PIN,
-			configTICK_RATE_HZ/20,
-			configTICK_RATE_HZ/20
+			configTICK_RATE_HZ/3,
+			configTICK_RATE_HZ/3
 		)
 		, blink_task_data_t(
 			"blink_red",
 			RED_LED_GPIO,
 			RED_LED_PIN,
-			configTICK_RATE_HZ/7,
-			configTICK_RATE_HZ/13
+			configTICK_RATE_HZ/32,
+			configTICK_RATE_HZ - configTICK_RATE_HZ/32
 		)
 	};
 #else
