@@ -2,10 +2,6 @@
 #include "ad5932.h"
 
 
-ad5932_t::ad5932_t()
-{
-}
-
 void ad5932_t::start()
 {
 	// configure
@@ -22,7 +18,7 @@ void ad5932_t::start()
 
 	// set frequency
 	int freq_lo, freq_hi;
-	ad5932_calc_delta_freq(500, X, &freq_lo, &freq_hi);
+	ad5932_calc_delta_freq(500, 0/*FIXME*/, &freq_lo, &freq_hi);
 	spi_.write16(ad5932_defs_t::REG_f_start_lo | freq_lo);
 	spi_.write16(ad5932_defs_t::REG_f_start_hi | freq_hi);
 
@@ -41,7 +37,7 @@ void ad5932_t::start()
 }
 
 
-ad5932_t::ctrl_pulse()
+void ad5932_t::ctrl_pulse()
 {
 }
 

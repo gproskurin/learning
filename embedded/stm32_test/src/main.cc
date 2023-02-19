@@ -16,88 +16,62 @@
 
 #if defined TARGET_STM32F103
 	// PB12
-	#define LED_GPIO GPIOB
-	#define LED_PIN 12
-	#define LED_TIM TIM2
-	#define GREEN_LED_GPIO LED_GPIO
-	#define GREEN_LED_PIN LED_PIN
+	const stm32_lib::gpio::gpio_pin_t pin_led(GPIOB, 12);
+	#define PWM_TIM TIM2
 
 	// USART1, tx(PA9)
 	#define USART_LOG USART1
-	#define USART_LOG_GPIO GPIOA
-	#define USART_LOG_PIN_TX 9
+	const stm32_lib::gpio::gpio_pin_t usart_log_pin_tx(GPIOA, 9);
 #elif defined TARGET_STM32L072
-	#define GREEN1_LED_GPIO GPIOB
-	#define GREEN1_LED_PIN 5
-	#define BLUE_LED_GPIO GPIOB
-	#define BLUE_LED_PIN 6
-	#define RED_LED_GPIO GPIOB
-	#define RED_LED_PIN 7
-	#define GREEN2_LED_GPIO GPIOA
-	#define GREEN2_LED_PIN 5
+	const stm32_lib::gpio::gpio_pin_t pin_led_green(GPIOB, 5);
+	const stm32_lib::gpio::gpio_pin_t pin_led_blue(GPIOB, 6);
+	const stm32_lib::gpio::gpio_pin_t pin_led_red(GPIOB, 7);
+	const stm32_lib::gpio::gpio_pin_t pin_led_green2(GPIOA, 5);
 
-	#define PWM_GPIO GREEN2_LED_GPIO
-	#define PWM_PIN GREEN2_LED_PIN
+	const stm32_lib::gpio::gpio_pin_t pin_pwm(pin_led_green2);
 	#define PWM_PIN_AF 5
 	#define PWM_TIM TIM2
 
 	// USART1, tx(PA9)
 	#define USART_LOG USART1
-	#define USART_LOG_GPIO GPIOA
-	#define USART_LOG_PIN_TX 9
+	const stm32_lib::gpio::gpio_pin_t usart_log_pin_tx(GPIOA, 9);
 	//#define USART_LOG_PIN_RX 10
 	#define USART_LOG_AF 4
 
 	// ad5932 spi
 	#define AD_SPI SPI1
-	#define AD_SPI_MOSI_GPIO GPIOA
-	#define AD_SPI_MOSI_PIN 7
+	const stm32_lib::gpio::gpio_pin_t ad_spi_mosi(GPIOA, 7);
 	#define AD_SPI_MOSI_AF 0
-	#define AD_SPI_MISO_GPIO GPIOA
-	#define AD_SPI_MISO_PIN 6
+	const stm32_lib::gpio::gpio_pin_t ad_spi_miso(GPIOA, 6);
 	#define AD_SPI_MISO_AF 0
-	#define AD_SPI_SCK_GPIO GPIOB
-	#define AD_SPI_SCK_PIN 3
+	const stm32_lib::gpio::gpio_pin_t ad_spi_sck(GPIOB, 3);
 	#define AD_SPI_SCK_AF 0
-	#define AD_SPI_SS_GPIO GPIOA
-	#define AD_SPI_SS_PIN 4
+	const stm32_lib::gpio::gpio_pin_t ad_spi_ss(GPIOA, 4);
 	#define AD_SPI_SS_AF 0
-#elif defined TARGET_STM32H7A3
-	#define GREEN_LED_GPIO GPIOB
-	#define GREEN_LED_PIN 0
-	#define YELLOW_LED_GPIO GPIOE
-	#define YELLOW_LED_PIN 1
-	#define RED_LED_GPIO GPIOB
-	#define RED_LED_PIN 14
 
-	#define PWM_GPIO GREEN_LED_GPIO
-	#define PWM_PIN GREEN_LED_PIN
+#elif defined TARGET_STM32H7A3
+	//const stm32_lib::gpio::gpio_pin_t pin_led_green(GPIOB, 0);
+	const stm32_lib::gpio::gpio_pin_t pin_led_yellow(GPIOE, 1);
+	const stm32_lib::gpio::gpio_pin_t pin_led_red(GPIOB, 14);
+
+	const stm32_lib::gpio::gpio_pin_t pin_pwm(GPIOB, 0);
 	#define PWM_PIN_AF 2
 	#define PWM_TIM TIM3
 
-	#define LED_GPIO YELLOW_LED_GPIO
-	#define LED_PIN YELLOW_LED_PIN
-
-	#define LED_TIM TIM3
-
 	// USART1, tx(PB6)
 	#define USART_LOG USART1
-	#define USART_LOG_GPIO GPIOB
-	#define USART_LOG_PIN_TX 6
+	#define USART_LOG_AF 7
+	const stm32_lib::gpio::gpio_pin_t usart_log_pin_tx(GPIOB, 6);
 
 	// ad5932 spi
 	#define AD_SPI SPI3
-	#define AD_SPI_MOSI_GPIO GPIOB
-	#define AD_SPI_MOSI_PIN 5
+	const stm32_lib::gpio::gpio_pin_t ad_spi_mosi(GPIOB, 5);
 	#define AD_SPI_MOSI_AF 7
-	#define AD_SPI_MISO_GPIO GPIOB
-	#define AD_SPI_MISO_PIN 4
+	const stm32_lib::gpio::gpio_pin_t ad_spi_miso(GPIOB, 4);
 	#define AD_SPI_MISO_AF 6
-	#define AD_SPI_SCK_GPIO GPIOB
-	#define AD_SPI_SCK_PIN 3
+	const stm32_lib::gpio::gpio_pin_t ad_spi_sck(GPIOB, 3);
 	#define AD_SPI_SCK_AF 6
-	#define AD_SPI_SS_GPIO GPIOA
-	#define AD_SPI_SS_PIN 4
+	const stm32_lib::gpio::gpio_pin_t ad_spi_ss(GPIOA, 4);
 	#define AD_SPI_SS_AF 6
 #endif
 
@@ -128,11 +102,11 @@ void usart_init(USART_TypeDef* const usart)
 	usart->BRR = ((div / 16) << USART_BRR_DIV_Mantissa_Pos) | ((div % 16) << USART_BRR_DIV_Fraction_Pos);
 	constexpr uint32_t cr1 = USART_CR1_TE;
 #elif defined TARGET_STM32L072
-	stm32_lib::gpio::set_mode_af_lowspeed_pu(USART_LOG_GPIO, USART_LOG_PIN_TX, USART_LOG_AF);
+	stm32_lib::gpio::set_mode_af_lowspeed_pu(usart_log_pin_tx, USART_LOG_AF);
 	usart->BRR = CLOCK_SPEED / USART_CON_BAUDRATE;
 	constexpr uint32_t cr1 = USART_CR1_TE;
 #elif defined TARGET_STM32H7A3
-	stm32_lib::gpio::set_mode_af_lowspeed_pu(USART_LOG_GPIO, USART_LOG_PIN_TX, 7);
+	stm32_lib::gpio::set_mode_af_lowspeed_pu(usart_log_pin_tx, USART_LOG_AF);
 	usart->BRR = CLOCK_SPEED / USART_CON_BAUDRATE;
 	constexpr uint32_t cr1 = USART_CR1_FIFOEN | USART_CR1_TE;
 #endif
@@ -151,9 +125,9 @@ void basic_timer_init(TIM_TypeDef* const tim, uint16_t prescaler, uint16_t arr)
 }
 
 
-void timer_init_output_pin(TIM_TypeDef* const tim, uint16_t prescaler, uint16_t arr, GPIO_TypeDef* gpio, int reg)
+void timer_init_output_pin(TIM_TypeDef* const tim, uint16_t prescaler, uint16_t arr, const stm32_lib::gpio::gpio_pin_t& pin)
 {
-	stm32_lib::gpio::set_mode_af_hispeed_pushpull(gpio, reg, PWM_PIN_AF);
+	stm32_lib::gpio::set_mode_af_hispeed_pushpull(pin, PWM_PIN_AF);
 	tim->CR1 = 0;
 	tim->PSC = prescaler;
 	tim->ARR = arr;
@@ -181,10 +155,10 @@ void timer_init_output_pin(TIM_TypeDef* const tim, uint16_t prescaler, uint16_t 
 void ad_spi_init()
 {
 	stm32_lib::spi::init_pins(
-		AD_SPI_MOSI_GPIO, AD_SPI_MOSI_PIN, AD_SPI_MOSI_AF,
-		AD_SPI_MISO_GPIO, AD_SPI_MISO_PIN, AD_SPI_MISO_AF,
-		AD_SPI_SCK_GPIO, AD_SPI_SCK_PIN, AD_SPI_SCK_AF,
-		AD_SPI_SS_GPIO, AD_SPI_SS_PIN, AD_SPI_SS_AF
+		ad_spi_mosi, AD_SPI_MOSI_AF,
+		ad_spi_miso, AD_SPI_MISO_AF,
+		ad_spi_sck, AD_SPI_SCK_AF,
+		ad_spi_ss, AD_SPI_SS_AF
 	);
 	// MODE = 2 (POL = 1, PHASE = 0) TODO check
 
@@ -299,12 +273,12 @@ void nvic_init_tim()
 }
 
 
-void do_blink(GPIO_TypeDef* const gpio, int reg, int n)
+void do_blink(const stm32_lib::gpio::gpio_pin_t& pin, int n)
 {
 	while (n-- > 0) {
-		stm32_lib::gpio::set_state(gpio, reg, 1);
+		stm32_lib::gpio::set_state(pin, 1);
 		delay(500000);
-		stm32_lib::gpio::set_state(gpio, reg, 0);
+		stm32_lib::gpio::set_state(pin, 0);
 		delay(100000);
 	}
 }
@@ -339,12 +313,11 @@ void vApplicationIdleHook(void)
 // LED blinking tasks
 struct blink_task_data_t {
 	const char* const task_name;
-	GPIO_TypeDef* const gpio;
-	const int reg;
+	const stm32_lib::gpio::gpio_pin_t pin;
 	const TickType_t ticks_on;
 	const TickType_t ticks_off;
-	blink_task_data_t(const char* tname, GPIO_TypeDef* gp, int r, TickType_t ton, TickType_t toff)
-		: task_name(tname), gpio(gp), reg(r), ticks_on(ton), ticks_off(toff)
+	blink_task_data_t(const char* tname, const stm32_lib::gpio::gpio_pin_t& p, TickType_t ton, TickType_t toff)
+		: task_name(tname), pin(p), ticks_on(ton), ticks_off(toff)
 	{}
 
 	task_stack_t<128> stack;
@@ -357,15 +330,13 @@ struct blink_tasks_t {
 	std::array<blink_task_data_t, 2> tasks = {
 		blink_task_data_t(
 			"blink_yellow",
-			YELLOW_LED_GPIO,
-			YELLOW_LED_PIN,
+			pin_led_yellow,
 			configTICK_RATE_HZ/20,
 			configTICK_RATE_HZ/20
 		)
 		, blink_task_data_t(
 			"blink_red",
-			RED_LED_GPIO,
-			RED_LED_PIN,
+			pin_led_red,
 			configTICK_RATE_HZ/7,
 			configTICK_RATE_HZ/13
 		)
@@ -373,23 +344,20 @@ struct blink_tasks_t {
 #elif defined TARGET_STM32L072
 	std::array<blink_task_data_t, 3> tasks = {
 		blink_task_data_t(
-			"blink_green1",
-			GREEN1_LED_GPIO,
-			GREEN1_LED_PIN,
+			"blink_green",
+			pin_led_green,
 			configTICK_RATE_HZ/2,
 			configTICK_RATE_HZ/2
 		)
 		, blink_task_data_t(
 			"blink_blue",
-			BLUE_LED_GPIO,
-			BLUE_LED_PIN,
+			pin_led_blue,
 			configTICK_RATE_HZ/3,
 			configTICK_RATE_HZ/3
 		)
 		, blink_task_data_t(
 			"blink_red",
-			RED_LED_GPIO,
-			RED_LED_PIN,
+			pin_led_red,
 			configTICK_RATE_HZ/32,
 			configTICK_RATE_HZ - configTICK_RATE_HZ/32
 		)
@@ -416,12 +384,12 @@ void blink_task_function(void* arg)
 		if (do_log) {
 			logger.log_async("LED -> on\r\n");
 		}
-		stm32_lib::gpio::set_state(args->gpio, args->reg, true);
+		stm32_lib::gpio::set_state(args->pin, true);
 		vTaskDelay(args->ticks_on);
 		if (do_log) {
 			logger.log_async("LED -> off\r\n");
 		}
-		stm32_lib::gpio::set_state(args->gpio, args->reg, false);
+		stm32_lib::gpio::set_state(args->pin, false);
 		vTaskDelay(args->ticks_off);
 	}
 }
@@ -528,7 +496,7 @@ __attribute__ ((noreturn)) void main()
 
 	logger.log_sync("Creating blink tasks...\r\n");
 	for (auto& bt : blink_tasks.tasks) {
-		stm32_lib::gpio::set_mode_output_lowspeed_pushpull(bt.gpio, bt.reg);
+		stm32_lib::gpio::set_mode_output_lowspeed_pushpull(bt.pin);
 		create_blink_task(bt);
 	}
 	logger.log_sync("Created blink tasks\r\n");
@@ -540,7 +508,7 @@ __attribute__ ((noreturn)) void main()
 	//basic_timer_init(LED_TIM, 2000-1, 1000-1);
 
 	logger.log_sync("Starting PWM timer...\r\n");
-	timer_init_output_pin(PWM_TIM, 6400-1, 100-1, PWM_GPIO, PWM_PIN);
+	timer_init_output_pin(PWM_TIM, 6400-1, 100-1, pin_pwm);
 	logger.log_sync("Started PWM timer\r\n");
 
 	logger.log_sync("Starting FreeRTOS scheduler\r\n");
