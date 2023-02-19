@@ -174,18 +174,43 @@ void init_pins(
 	gpio::set_mode_af_hispeed_pushpull_pullup(gpio_ss, pin_ss, af_ss);
 }
 
-uint16_t write16(SPI_TypeDef* spi, uint16_t data)
+
+class spi_t {
+	SPI_TypeDef* const spi_;
+	GPIO_TypeDef* const nss_gpio_;
+	int const nss_pin_;
+public:
+	spi_t(SPI_TypeDef* spi, GPIO_TypeDef* nss_gpio, int nss_pin);
+	uint16_t write16(uint16_t data);
+};
+
+inline
+spi_t::spi_t(SPI_TypeDef* spi, GPIO_TypeDef* nss_gpio, int nss_pin)
+	: spi_(spi)
+	, nss_gpio_(nss_gpio)
+	, nss_pin_(nss_pin)
 {
+}
+
+inline
+uint16_t spi_t::write16(uint16_t data)
+{
+	gpio::set_state(nss_gpio_, nss_pin_, 0);
+	// TODO wait a bit?
 #ifdef TARGET_STM32H7A3
 	volatile uint16_t* const tx = reinterpret_cast<volatile uint16_t*>(&spi->TXDR);
 	*tx = data;
 	spi->CR1 |= SPI_CR1_CSTART_Msk;
 	volatile uint16_t* const rx = reinterpret_cast<volatile uint16_t*>(&spi->RXDR);
 	const uint16_t r = *rx;
-	return r;
 #else
-	return 0;
+	while(! (spi_->SR & SPI_SR_TXE)) {}
+	spi_->DR = data;
+	while(! (spi_->SR & SPI_SR_RXNE)) {}
+	const uint16_t r = spi_->DR;
 #endif
+	gpio::set_state(nss_gpio_, nss_pin_, 1);
+	return r;
 }
 
 
