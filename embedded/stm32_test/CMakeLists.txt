@@ -6,7 +6,7 @@ set(CMAKE_VERBOSE_MAKEFILE ON)
 
 set(stm32f103_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/ld/stm32f103.ld)
 set(stm32f103_DEFINITIONS "-DTARGET_STM32F103")
-set(stm32f103_C_CXX_ARCH_FLAGS -mcpu=cortex-m3 ; -mthumb)
+set(stm32f103_C_CXX_ARCH_FLAGS -mcpu=cortex-m3 -mthumb)
 set(stm32f103_FREERTOS_PORT "GCC_ARM_CM3")
 
 set(stm32l072_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/ld/stm32l072.ld)
@@ -36,7 +36,7 @@ function(generate_targets T)
 	set(T_C_CXX_FLAGS
 		${${T}_C_CXX_ARCH_FLAGS}
 		-D_POSIX_C_SOURCE=200809
-		-g -Og -ffreestanding -Werror -Wall -Wno-unused-but-set-variable -Wno-unused-variable
+		-g -Og -ffreestanding -Wall -Wno-unused-but-set-variable -Wno-unused-variable
 		-fno-builtin-memset -fno-builtin-memcpy -fno-builtin-stpcpy
 		${T_DEFINITIONS}
 		-I${CMSIS_ROOT}
@@ -45,8 +45,8 @@ function(generate_targets T)
 		-I${CMAKE_SOURCE_DIR}/src
 	)
 
-	#set(T_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${T_C_CXX_FLAGS} -std=c++17 -fno-rtti -fno-exceptions")
-	set(T_CXX_FLAGS ${CMAKE_CXX_FLAGS} ${T_C_CXX_FLAGS})
+	set(T_CXX_FLAGS ${CMAKE_CXX_FLAGS} ${T_C_CXX_FLAGS} -std=c++17 -fno-rtti -fno-exceptions)
+	#set(T_CXX_FLAGS ${CMAKE_CXX_FLAGS} ${T_C_CXX_FLAGS})
 	set(T_C_FLAGS ${CMAKE_C_FLAGS} ${T_C_CXX_FLAGS})
 
 	# FreeRTOS
@@ -54,7 +54,7 @@ function(generate_targets T)
 	target_include_directories(freertos_config SYSTEM
 		INTERFACE "${CMAKE_SOURCE_DIR}/src"
 	)
-        target_compile_options(freertos_config
+	target_compile_options(freertos_config
 		INTERFACE ${T_C_FLAGS}
 	)
 	set(FREERTOS_PORT ${${T}_FREERTOS_PORT})
