@@ -12,12 +12,18 @@ _estack     = ORIGIN(dtcm) + LENGTH(dtcm);    /* stack points to end of DTCM */
 SECTIONS {
   .vectors  : {
     KEEP(*(.vectors))
-    . = ALIGN(0x400); /* skip remaining vectors. FIXME: better? */
+    . = 0x200; /* skip remaining vectors. FIXME: better? */
   } > flash1
 
-  . = ALIGN(4);
+  .init_array : {
+    _sinit_array = .;
+    KEEP (*(SORT_BY_INIT_PRIORITY(.init_array)))
+    KEEP (*(SORT_BY_INIT_PRIORITY(.init_array*)))
+    _einit_array = .;
+  } > flash1
 
   .text : {
+    *(.text)
     *(.text*)
     . = ALIGN(4);
   } > flash1

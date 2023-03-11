@@ -7,7 +7,6 @@
 #include <stdint.h>
 #include <string.h>
 #include <array>
-#include <new>
 
 
 #define PRIO_BLINK 1
@@ -468,12 +467,6 @@ void create_ad_task(ad_task_data_t& args)
 
 __attribute__ ((noreturn)) void main()
 {
-	// call constructors of global objects
-	new(&logger) usart_logger_t();
-	new(&idle_task_stack) idle_task_stack_t();
-	new(&blink_tasks) blink_tasks_t();
-	new(&ad_task) ad_task_t();
-
 	bus_init();
 	usart_init(USART_LOG);
 	logger.set_usart(USART_LOG);

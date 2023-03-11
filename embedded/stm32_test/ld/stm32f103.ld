@@ -8,12 +8,18 @@ _estack     = ORIGIN(sram) + LENGTH(sram);    /* stack points to end of SRAM */
 SECTIONS {
   .vectors  : {
     KEEP(*(.vectors))
-    . = 1k; /* skip remaining vectors. FIXME: better? */
+    . = 0x200; /* skip remaining vectors. FIXME: better? */
   } > flash
 
-  . = ALIGN(4);
+  .init_array : {
+    _sinit_array = .;
+    KEEP (*(SORT_BY_INIT_PRIORITY(.init_array)))
+    KEEP (*(SORT_BY_INIT_PRIORITY(.init_array*)))
+    _einit_array = .;
+  } > flash
 
   .text : {
+    *(.text)
     *(.text*)
     . = ALIGN(4);
   } > flash
