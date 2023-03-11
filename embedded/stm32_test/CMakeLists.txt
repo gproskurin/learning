@@ -37,6 +37,7 @@ function(generate_targets T)
 		${${T}_C_CXX_ARCH_FLAGS}
 		-D_POSIX_C_SOURCE=200809
 		-g -Og -ffreestanding -Werror -Wall -Wno-unused-but-set-variable -Wno-unused-variable
+		-fno-builtin-memset -fno-builtin-memcpy -fno-builtin-stpcpy
 		${T_DEFINITIONS}
 		-I${CMSIS_ROOT}
 		-I${CMSIS_ARM_INCLUDE}
@@ -66,18 +67,21 @@ function(generate_targets T)
 		src/main.cc
 		src/logging.cc
 		src/ad5932.cc
+		src/my_stdlib.c
 	)
 
 	target_link_libraries(${T_FIRMWARE_ELF}
 		freertos_kernel
 	)
 
-	set_target_properties(${T_FIRMWARE_ELF}
-		PROPERTIES LINK_OPTIONS
+	set(link_options
 		-T${T_LINKER_SCRIPT}
 		-nostartfiles
 		-ffreestanding
-		#-nostdlib"
+		-nostdlib
+	)
+	set_target_properties(${T_FIRMWARE_ELF}
+		PROPERTIES LINK_OPTIONS "${link_options}"
 	)
 
 	set_target_properties(${T_FIRMWARE_ELF}
