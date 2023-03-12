@@ -97,14 +97,7 @@
 #endif
 
 
-// FIXME do not hardcode
-#if defined (TARGET_STM32F103)
-#define CLOCK_SPEED 8000000
-#elif defined (TARGET_STM32L072)
-#define CLOCK_SPEED 2100000
-#elif defined (TARGET_STM32H7A3)
-#define CLOCK_SPEED 64000000
-#endif
+#define CLOCK_SPEED configCPU_CLOCK_HZ
 #define USART_CON_BAUDRATE 115200
 
 
