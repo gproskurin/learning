@@ -141,10 +141,11 @@ void basic_timer_init(TIM_TypeDef* const tim, uint16_t prescaler, uint16_t arr)
 
 void timer_init_output_pin(TIM_TypeDef* const tim, uint16_t prescaler, uint16_t arr, const stm32_lib::gpio::gpio_pin_t& pin)
 {
-	stm32_lib::gpio::set_mode_af_hispeed_pushpull(pin, PWM_PIN_AF);
 	tim->CR1 = 0;
+	stm32_lib::gpio::set_mode_af_hispeed_pushpull(pin, PWM_PIN_AF);
 	tim->PSC = prescaler;
 	tim->ARR = arr;
+	tim->CNT = 0;
 #ifdef TARGET_STM32H7A3
 	tim->CCR3 = arr / 32;
 	tim->CCMR2 = (tim->CCMR2 & ~(TIM_CCMR2_CC3S_Msk | TIM_CCMR2_OC3M_Msk))
