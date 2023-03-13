@@ -105,6 +105,72 @@ __attribute__((section(".vectors"))) void (*tab[])(void) =
 	0,
 	0 // &IntHandler_Timer // TIM6 59 = 16 + 43
 };
+#elif defined TARGET_STM32L432
+// FIXME
+__attribute__((section(".vectors"))) void (*tab[])(void) =
+{
+	_estack,
+	_reset,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	&vPortSVCHandler, // svc
+	0,
+	0,
+	&xPortPendSVHandler, // PendSV
+	&xPortSysTickHandler, // systick
+
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	&IntHandler_Timer, // TIM9
+	0,
+	0, // TIM11 43 = 27 + 16
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0 // &IntHandler_Timer // TIM6 59 = 16 + 43
+};
 #elif defined TARGET_STM32F103
 __attribute__((section(".vectors"))) void (*tab[])(void) =
 {

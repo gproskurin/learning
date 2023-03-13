@@ -14,6 +14,11 @@ set(stm32l072_DEFINITIONS "-DTARGET_STM32L072")
 set(stm32l072_C_CXX_ARCH_FLAGS -mcpu=cortex-m0 -mthumb)
 set(stm32l072_FREERTOS_PORT "GCC_ARM_CM0")
 
+set(stm32l432_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/ld/stm32l432.ld)
+set(stm32l432_DEFINITIONS "-DTARGET_STM32L432")
+set(stm32l432_C_CXX_ARCH_FLAGS -mcpu=cortex-m4 -mthumb)
+set(stm32l432_FREERTOS_PORT "GCC_ARM_CM3")
+
 set(stm32h7a3_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/ld/stm32h7a3.ld)
 set(stm32h7a3_DEFINITIONS "-DTARGET_STM32H7A3")
 set(stm32h7a3_C_CXX_ARCH_FLAGS -mcpu=cortex-m7 -mthumb)
@@ -106,7 +111,8 @@ endfunction()
 
 
 #generate_targets("stm32f103")
-generate_targets("stm32l072")
+#generate_targets("stm32l072")
 #generate_targets("stm32h7a3")
+generate_targets("stm32l432")
 
 ###

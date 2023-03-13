@@ -48,6 +48,28 @@
 	const stm32_lib::gpio::gpio_pin_t ad_spi_ss(GPIOA, 4);
 	#define AD_SPI_SS_AF 0
 
+#elif defined TARGET_STM32L432
+	const stm32_lib::gpio::gpio_pin_t pin_led_green(GPIOB, 3);
+
+	const stm32_lib::gpio::gpio_pin_t pin_pwm(pin_led_green);
+	#define PWM_PIN_AF 1
+	#define PWM_TIM TIM2
+
+	// USART1, tx(PB6)
+	#define USART_LOG USART2
+	#define USART_LOG_AF 7
+	const stm32_lib::gpio::gpio_pin_t usart_log_pin_tx(GPIOA, 2);
+
+	// ad5932 spi
+	#define AD_SPI SPI1
+	const stm32_lib::gpio::gpio_pin_t ad_spi_mosi(GPIOA, 7);
+	#define AD_SPI_MOSI_AF 5
+	const stm32_lib::gpio::gpio_pin_t ad_spi_miso(GPIOA, 6);
+	#define AD_SPI_MISO_AF 5
+	const stm32_lib::gpio::gpio_pin_t ad_spi_sck(GPIOA, 5);
+	#define AD_SPI_SCK_AF 5
+	const stm32_lib::gpio::gpio_pin_t ad_spi_ss(GPIOA, 4);
+	#define AD_SPI_SS_AF 5
 #elif defined TARGET_STM32H7A3
 	//const stm32_lib::gpio::gpio_pin_t pin_led_green(GPIOB, 0);
 	const stm32_lib::gpio::gpio_pin_t pin_led_yellow(GPIOE, 1);
@@ -100,7 +122,7 @@ void usart_init(USART_TypeDef* const usart)
 	const uint32_t div = CLOCK_SPEED / USART_CON_BAUDRATE;
 	usart->BRR = ((div / 16) << USART_BRR_DIV_Mantissa_Pos) | ((div % 16) << USART_BRR_DIV_Fraction_Pos);
 	constexpr uint32_t cr1 = USART_CR1_TE;
-#elif defined TARGET_STM32L072
+#elif defined TARGET_STM32L072 || defined TARGET_STM32L432
 	stm32_lib::gpio::set_mode_af_lowspeed_pu(usart_log_pin_tx, USART_LOG_AF);
 	usart->BRR = CLOCK_SPEED / USART_CON_BAUDRATE;
 	constexpr uint32_t cr1 = USART_CR1_TE;
@@ -138,6 +160,14 @@ void timer_init_output_pin(TIM_TypeDef* const tim, uint16_t prescaler, uint16_t 
 		| TIM_CCMR2_OC3FE // output compare fast
 		;
 	tim->CCER |= TIM_CCER_CC3E;
+#elif defined TARGET_STM32L432
+	tim->CCR2 = arr / 8;
+	tim->CCMR1 = (tim->CCMR1 & ~(TIM_CCMR1_CC2S_Msk | TIM_CCMR1_OC2M_Msk))
+		| (0b00 << TIM_CCMR1_CC2S_Pos) // output channel
+		| (TIM_CCMR1_OC2M_2 | TIM_CCMR1_OC2M_1) // 0110 = PWM mode 1
+		| TIM_CCMR1_OC2FE // output compare fast
+		;
+	tim->CCER |= TIM_CCER_CC2E;
 #else
 	tim->CCR1 = arr / 5 * 4;
 	tim->CCMR1 = (tim->CCMR1 & ~(TIM_CCMR1_CC1S_Msk | TIM_CCMR1_OC1M_Msk))
@@ -240,6 +270,18 @@ void bus_init()
 	// TIM2
 	RCC->APB1ENR |= RCC_APB1ENR_TIM2EN_Msk;
 	toggle_bits_10(&RCC->APB1RSTR, RCC_APB1RSTR_TIM2RST_Msk);
+#elif defined TARGET_STM32L432
+	// enable GPIOs
+	RCC->AHB2ENR |= RCC_AHB2ENR_GPIOAEN_Msk | RCC_AHB2ENR_GPIOBEN_Msk;
+	toggle_bits_10(&RCC->AHB2RSTR, RCC_AHB2RSTR_GPIOARST_Msk | RCC_AHB2RSTR_GPIOBRST_Msk);
+
+	// SPI1
+	RCC->APB2ENR |= RCC_APB2ENR_SPI1EN_Msk;
+	toggle_bits_10(&RCC->APB2RSTR, RCC_APB2RSTR_SPI1RST_Msk);
+
+	// TIM2 & USART2
+	RCC->APB1ENR1 |= RCC_APB1ENR1_TIM2EN_Msk | RCC_APB1ENR1_USART2EN_Msk;
+	toggle_bits_10(&RCC->APB1RSTR1, RCC_APB1RSTR1_TIM2RST_Msk | RCC_APB1RSTR1_USART2RST_Msk);
 #elif defined TARGET_STM32H7A3
 	RCC->AHB4ENR |= RCC_AHB4ENR_GPIOAEN_Msk | RCC_AHB4ENR_GPIOBEN_Msk | RCC_AHB4ENR_GPIOEEN_Msk;
 	toggle_bits_10(
@@ -365,10 +407,9 @@ struct blink_tasks_t {
 	std::array<blink_task_data_t, 1> tasks = {
 		blink_task_data_t(
 			"blink_green",
-			GREEN_LED_GPIO,
-			GREEN_LED_PIN,
-			configTICK_RATE_HZ/16,
-			configTICK_RATE_HZ - configTICK_RATE_HZ/16
+			pin_led_green,
+			configTICK_RATE_HZ/32,
+			configTICK_RATE_HZ/4
 		)
 	};
 #endif
@@ -480,7 +521,7 @@ __attribute__ ((noreturn)) void main()
 	logger.create_task("logger", PRIO_LOGGER);
 	logger.log_sync("Created logger task\r\n");
 
-#if defined(TARGET_STM32H7A3) || defined (TARGET_STM32L072)
+#if defined(TARGET_STM32H7A3) || defined (TARGET_STM32L072) || defined (TARGET_STM32L432)
 	logger.log_sync("Initializing ad5932 SPI...\r\n");
 	ad_spi_init();
 	logger.log_sync("Initialized ad5932 SPI\r\n");
