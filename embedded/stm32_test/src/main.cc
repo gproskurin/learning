@@ -55,7 +55,7 @@
 	#define PWM_PIN_AF 1
 	#define PWM_TIM TIM2
 
-	// USART1, tx(PB6)
+	// USART2
 	#define USART_LOG USART2
 	#define USART_LOG_AF 7
 	const stm32_lib::gpio::gpio_pin_t usart_log_pin_tx(GPIOA, 2);
@@ -110,20 +110,22 @@ usart_logger_t logger;
 void usart_init(USART_TypeDef* const usart)
 {
 	usart->CR1 = 0; // ensure UE flag is reset
+
+#ifdef TARGET_STM32H7A3
+	constexpr uint32_t cr1 = USART_CR1_FIFOEN | USART_CR1_TE;
+#else
+	constexpr uint32_t cr1 = USART_CR1_TE;
+#endif
+
 #ifdef TARGET_STM32F103
-	stm32_lib::gpio::set_mode_af_lowspeed_pu(USART_LOG_GPIO, USART_LOG_PIN_TX);
+	stm32_lib::gpio::set_mode_af_lowspeed_pu(usart_log_pin_tx);
 	const uint32_t div = CLOCK_SPEED / USART_CON_BAUDRATE;
 	usart->BRR = ((div / 16) << USART_BRR_DIV_Mantissa_Pos) | ((div % 16) << USART_BRR_DIV_Fraction_Pos);
-	constexpr uint32_t cr1 = USART_CR1_TE;
-#elif defined TARGET_STM32L072 || defined TARGET_STM32L432
+#else
 	stm32_lib::gpio::set_mode_af_lowspeed_pu(usart_log_pin_tx, USART_LOG_AF);
 	usart->BRR = CLOCK_SPEED / USART_CON_BAUDRATE;
-	constexpr uint32_t cr1 = USART_CR1_TE;
-#elif defined TARGET_STM32H7A3
-	stm32_lib::gpio::set_mode_af_lowspeed_pu(usart_log_pin_tx, USART_LOG_AF);
-	usart->BRR = CLOCK_SPEED / USART_CON_BAUDRATE;
-	constexpr uint32_t cr1 = USART_CR1_FIFOEN | USART_CR1_TE;
 #endif
+
 	usart->CR1 = cr1;
 	usart->CR1 = cr1 | USART_CR1_UE;
 }
