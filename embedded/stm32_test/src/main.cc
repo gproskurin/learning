@@ -505,6 +505,7 @@ void create_ad_task(ad_task_data_t& args)
 __attribute__ ((noreturn)) void main()
 {
 	bus_init();
+
 	usart_init(USART_LOG);
 	logger.set_usart(USART_LOG);
 	logger.log_sync("\r\nLogger initialized (sync)\r\n");
@@ -517,12 +518,10 @@ __attribute__ ((noreturn)) void main()
 	logger.create_task("logger", PRIO_LOGGER);
 	logger.log_sync("Created logger task\r\n");
 
-#if defined(TARGET_STM32H7A3) || defined (TARGET_STM32L072) || defined (TARGET_STM32L432)
 	logger.log_sync("Initializing ad5932 SPI...\r\n");
 	ad_spi_init();
 	logger.log_sync("Initialized ad5932 SPI\r\n");
 	create_ad_task(ad_task.task);
-#endif
 
 	logger.log_sync("Creating blink tasks...\r\n");
 	for (auto& bt : blink_tasks.tasks) {
