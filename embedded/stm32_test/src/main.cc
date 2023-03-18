@@ -14,13 +14,22 @@
 #define PRIO_LOGGER 2
 
 #if defined TARGET_STM32F103
-	// PB12
 	const stm32_lib::gpio::gpio_pin_t pin_led(GPIOB, 12);
+
+	const stm32_lib::gpio::gpio_pin_t pin_pwm(pin_led);
 	#define PWM_TIM TIM2
 
 	// USART1, tx(PA9)
 	#define USART_LOG USART1
 	const stm32_lib::gpio::gpio_pin_t usart_log_pin_tx(GPIOA, 9);
+
+	// ad5932 spi
+	#define AD_SPI SPI1
+	const stm32_lib::gpio::gpio_pin_t ad_spi_mosi(GPIOA, 7);
+	const stm32_lib::gpio::gpio_pin_t ad_spi_miso(GPIOA, 6);
+	const stm32_lib::gpio::gpio_pin_t ad_spi_sck(GPIOA, 5);
+	const stm32_lib::gpio::gpio_pin_t ad_spi_ss(GPIOA, 4);
+
 #elif defined TARGET_STM32L072
 	const stm32_lib::gpio::gpio_pin_t pin_led_green(GPIOB, 5);
 	const stm32_lib::gpio::gpio_pin_t pin_led_blue(GPIOB, 6);
@@ -144,7 +153,11 @@ void basic_timer_init(TIM_TypeDef* const tim, uint16_t prescaler, uint16_t arr)
 void timer_init_output_pin(TIM_TypeDef* const tim, uint16_t prescaler, uint16_t arr, const stm32_lib::gpio::gpio_pin_t& pin)
 {
 	tim->CR1 = 0;
+#ifdef TARGET_STM32F103
+	stm32_lib::gpio::set_mode_af_hispeed_pushpull(pin);
+#else
 	stm32_lib::gpio::set_mode_af_hispeed_pushpull(pin, PWM_PIN_AF);
+#endif
 	tim->PSC = prescaler;
 	tim->ARR = arr;
 	tim->CNT = 0;
@@ -179,12 +192,16 @@ void timer_init_output_pin(TIM_TypeDef* const tim, uint16_t prescaler, uint16_t 
 
 void ad_spi_init()
 {
+#ifdef TARGET_STM32F103
+	stm32_lib::spi::init_pins(ad_spi_mosi, ad_spi_miso, ad_spi_sck, ad_spi_ss);
+#else
 	stm32_lib::spi::init_pins(
 		ad_spi_mosi, AD_SPI_MOSI_AF,
 		ad_spi_miso, AD_SPI_MISO_AF,
 		ad_spi_sck, AD_SPI_SCK_AF,
 		ad_spi_ss, AD_SPI_SS_AF
 	);
+#endif
 	// MODE = 2 (POL = 1, PHASE = 0) TODO check
 
 	//AD_SPI->CR1 = (AD_SPI->CR1 & ~(SPI_CR1_CPHA_Msk)) | SPI_CR1_POL_Msk; // FIXME
@@ -363,7 +380,16 @@ struct blink_task_data_t {
 };
 
 struct blink_tasks_t {
-#ifdef TARGET_STM32H7A3
+#ifdef TARGET_STM32F103
+	std::array<blink_task_data_t, 1> tasks = {
+		blink_task_data_t(
+			"blink",
+			pin_led,
+			configTICK_RATE_HZ/8,
+			configTICK_RATE_HZ/16
+		)
+	};
+#elif defined TARGET_STM32H7A3
 	std::array<blink_task_data_t, 2> tasks = {
 		blink_task_data_t(
 			"blink_yellow",

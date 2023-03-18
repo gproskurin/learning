@@ -75,7 +75,7 @@ void set_mode_cnf(const gpio_pin_t& pin, uint32_t mode, uint32_t cnf)
 
 #ifndef TARGET_STM32F103
 inline
-void set_af(const gpio_pin_t& pin, int af_num)
+void set_af(const gpio_pin_t& pin, uint32_t af_num)
 {
 	const auto reg_lo = (pin.reg < 8) ? pin.reg : (pin.reg-8);
 	auto const afr = &pin.gpio->AFR[ (pin.reg<8) ? 0 : 1 ];
@@ -105,6 +105,7 @@ inline
 #ifdef TARGET_STM32F103
 void set_mode_af_lowspeed_pu(const gpio_pin_t& pin)
 {
+	// TODO pullup
 	constexpr uint32_t mode = 0b10; // output mode, max speed 2 MHz
 	constexpr uint32_t cnf = 0b10; // af push-pull
 	set_mode_cnf(pin, mode, cnf);
@@ -120,10 +121,9 @@ void set_mode_af_lowspeed_pu(const gpio_pin_t& pin, int af_num)
 
 inline
 #ifdef TARGET_STM32F103
-//TODO
 void set_mode_af_hispeed_pushpull(const gpio_pin_t& pin)
 {
-	constexpr uint32_t mode = 0b10; // output mode, max speed 2 MHz
+	constexpr uint32_t mode = 0b11; // output mode, max speed 50 MHz
 	constexpr uint32_t cnf = 0b10; // af push-pull
 	set_mode_cnf(pin, mode, cnf);
 }
@@ -139,7 +139,21 @@ void set_mode_af_hispeed_pushpull(const gpio_pin_t& pin, int af_num)
 #endif
 
 
-#ifndef TARGET_STM32F103
+#ifdef TARGET_STM32F103
+inline
+void set_mode_af_hispeed_pushpull_pullup(const gpio_pin_t& pin)
+{
+	// TODO
+	set_mode_af_hispeed_pushpull(pin);
+}
+
+inline
+void set_mode_af_hispeed_pushpull_float(const gpio_pin_t& pin)
+{
+	// TODO
+	set_mode_af_hispeed_pushpull(pin);
+}
+#else
 namespace {
 void set_mode_af_hispeed_pushpull(const gpio_pin_t& pin, int af_num, uint32_t pupd)
 {
@@ -170,6 +184,20 @@ void set_mode_af_hispeed_pushpull_float(const gpio_pin_t& pin, int af_num)
 namespace spi {
 
 inline
+#ifdef TARGET_STM32F103
+void init_pins(
+		const gpio::gpio_pin_t& mosi,
+		const gpio::gpio_pin_t& miso,
+		const gpio::gpio_pin_t& sck,
+		const gpio::gpio_pin_t& ss
+	)
+{
+	gpio::set_mode_af_hispeed_pushpull_float(mosi);
+	gpio::set_mode_af_hispeed_pushpull_pullup(miso);
+	gpio::set_mode_af_hispeed_pushpull_float(sck);
+	gpio::set_mode_af_hispeed_pushpull_pullup(ss);
+}
+#else
 void init_pins(
 		const gpio::gpio_pin_t& mosi, int af_mosi,
 		const gpio::gpio_pin_t& miso, int af_miso,
@@ -182,6 +210,7 @@ void init_pins(
 	gpio::set_mode_af_hispeed_pushpull_float(sck, af_sck);
 	gpio::set_mode_af_hispeed_pushpull_pullup(ss, af_ss);
 }
+#endif
 
 
 class spi_t {
