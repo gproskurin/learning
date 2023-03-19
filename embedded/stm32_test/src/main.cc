@@ -16,9 +16,6 @@
 #if defined TARGET_STM32F103
 	const stm32_lib::gpio::gpio_pin_t pin_led(GPIOB, 12);
 
-	const stm32_lib::gpio::gpio_pin_t pin_pwm(pin_led);
-	#define PWM_TIM TIM2
-
 	// USART1, tx(PA9)
 	#define USART_LOG USART1
 	const stm32_lib::gpio::gpio_pin_t usart_log_pin_tx(GPIOA, 9);
@@ -35,10 +32,6 @@
 	const stm32_lib::gpio::gpio_pin_t pin_led_blue(GPIOB, 6);
 	const stm32_lib::gpio::gpio_pin_t pin_led_red(GPIOB, 7);
 	const stm32_lib::gpio::gpio_pin_t pin_led_green2(GPIOA, 5);
-
-	const stm32_lib::gpio::gpio_pin_t pin_pwm(pin_led_green2);
-	#define PWM_PIN_AF 5
-	#define PWM_TIM TIM2
 
 	// USART1, tx(PA9)
 	#define USART_LOG USART1
@@ -60,10 +53,6 @@
 #elif defined TARGET_STM32L432
 	const stm32_lib::gpio::gpio_pin_t pin_led_green(GPIOB, 3);
 
-	const stm32_lib::gpio::gpio_pin_t pin_pwm(pin_led_green);
-	#define PWM_PIN_AF 1
-	#define PWM_TIM TIM2
-
 	// USART1
 	#define USART_LOG USART1
 	#define USART_LOG_AF 7
@@ -79,14 +68,15 @@
 	#define AD_SPI_SCK_AF 5
 	const stm32_lib::gpio::gpio_pin_t ad_spi_ss(GPIOA, 4);
 	#define AD_SPI_SS_AF 5
+
+	const stm32_lib::gpio::gpio_pin_t pin_ad_pwm_mclk(GPIOA, 2);
+	#define AD_PWM_MCLK_AF 14
+	#define TIM_AD_PWM_MCLK TIM15
+
 #elif defined TARGET_STM32H7A3
 	//const stm32_lib::gpio::gpio_pin_t pin_led_green(GPIOB, 0);
 	const stm32_lib::gpio::gpio_pin_t pin_led_yellow(GPIOE, 1);
 	const stm32_lib::gpio::gpio_pin_t pin_led_red(GPIOB, 14);
-
-	const stm32_lib::gpio::gpio_pin_t pin_pwm(GPIOB, 0);
-	#define PWM_PIN_AF 2
-	#define PWM_TIM TIM3
 
 	// USART1, tx(PB6)
 	#define USART_LOG USART1
@@ -150,19 +140,16 @@ void basic_timer_init(TIM_TypeDef* const tim, uint16_t prescaler, uint16_t arr)
 }
 
 
-void timer_init_output_pin(TIM_TypeDef* const tim, uint16_t prescaler, uint16_t arr, const stm32_lib::gpio::gpio_pin_t& pin)
+void ad_pwm_mclk_init(TIM_TypeDef* const tim, uint16_t prescaler, uint16_t arr)
 {
 	tim->CR1 = 0;
-#ifdef TARGET_STM32F103
-	stm32_lib::gpio::set_mode_af_hispeed_pushpull(pin);
-#else
-	stm32_lib::gpio::set_mode_af_hispeed_pushpull(pin, PWM_PIN_AF);
-#endif
 	tim->PSC = prescaler;
 	tim->ARR = arr;
 	tim->CNT = 0;
+	tim->BDTR |= TIM_BDTR_MOE_Msk;
+	const uint16_t ccr = arr / 2 + 1;
 #ifdef TARGET_STM32H7A3
-	tim->CCR3 = arr / 32;
+	tim->CCR3 = ccr;
 	tim->CCMR2 = (tim->CCMR2 & ~(TIM_CCMR2_CC3S_Msk | TIM_CCMR2_OC3M_Msk))
 		| (0b00 << TIM_CCMR2_CC3S_Pos) // output channel
 		| (0b0110 << TIM_CCMR2_OC3M_Pos) // PWM mode 1
@@ -170,15 +157,15 @@ void timer_init_output_pin(TIM_TypeDef* const tim, uint16_t prescaler, uint16_t 
 		;
 	tim->CCER |= TIM_CCER_CC3E;
 #elif defined TARGET_STM32L432
-	tim->CCR2 = arr / 8;
-	tim->CCMR1 = (tim->CCMR1 & ~(TIM_CCMR1_CC2S_Msk | TIM_CCMR1_OC2M_Msk))
-		| (0b00 << TIM_CCMR1_CC2S_Pos) // output channel
-		| (TIM_CCMR1_OC2M_2 | TIM_CCMR1_OC2M_1) // 0110 = PWM mode 1
-		| TIM_CCMR1_OC2FE // output compare fast
+	tim->CCR1 = ccr;
+	tim->CCMR1 = (tim->CCMR1 & ~(TIM_CCMR1_CC1S_Msk | TIM_CCMR1_OC1M_Msk))
+		| (0b00 << TIM_CCMR1_CC1S_Pos) // output channel
+		| (TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1) // 0110 = PWM mode 1
+		| TIM_CCMR1_OC1FE // output compare fast
 		;
-	tim->CCER |= TIM_CCER_CC2E;
+	tim->CCER |= TIM_CCER_CC1E;
 #else
-	tim->CCR1 = arr / 5 * 4;
+	tim->CCR1 = ccr;
 	tim->CCMR1 = (tim->CCMR1 & ~(TIM_CCMR1_CC1S_Msk | TIM_CCMR1_OC1M_Msk))
 		| (0b00 << TIM_CCMR1_CC1S_Pos) // output channel
 		| (0b110 << TIM_CCMR1_OC1M_Pos) // PWM mode 1
@@ -270,7 +257,7 @@ void bus_init()
 	toggle_bits_10(&RCC->APB2RSTR, RCC_APB2RSTR_USART1RST_Msk);
 
 	// reset TIM2
-	toggle_bits_10(&RCC->APB1RSTR, RCC_APB1RSTR_TIM2RST_Msk);
+	//toggle_bits_10(&RCC->APB1RSTR, RCC_APB1RSTR_TIM2RST_Msk);
 
 #elif defined TARGET_STM32L072
 	// enable GPIOs
@@ -283,21 +270,19 @@ void bus_init()
 	// TIM2
 	RCC->APB1ENR |= RCC_APB1ENR_TIM2EN_Msk;
 	toggle_bits_10(&RCC->APB1RSTR, RCC_APB1RSTR_TIM2RST_Msk);
+
 #elif defined TARGET_STM32L432
 	// enable GPIOs
 	RCC->AHB2ENR |= RCC_AHB2ENR_GPIOAEN_Msk | RCC_AHB2ENR_GPIOBEN_Msk;
 	toggle_bits_10(&RCC->AHB2RSTR, RCC_AHB2RSTR_GPIOARST_Msk | RCC_AHB2RSTR_GPIOBRST_Msk);
 
-	// SPI1 & USART1
-	RCC->APB2ENR |= RCC_APB2ENR_SPI1EN_Msk | RCC_APB2ENR_USART1EN_Msk;
+	// SPI1 & TIM15 & USART1
+	RCC->APB2ENR |= RCC_APB2ENR_SPI1EN_Msk | RCC_APB2ENR_TIM15EN_Msk | RCC_APB2ENR_USART1EN_Msk;
 	toggle_bits_10(
 		&RCC->APB2RSTR,
-		RCC_APB2RSTR_SPI1RST_Msk | RCC_APB2RSTR_USART1RST_Msk
+		RCC_APB2RSTR_SPI1RST_Msk | RCC_APB2RSTR_TIM15RST_Msk | RCC_APB2RSTR_USART1RST_Msk
 	);
 
-	// TIM2
-	RCC->APB1ENR1 |= RCC_APB1ENR1_TIM2EN_Msk;
-	toggle_bits_10(&RCC->APB1RSTR1, RCC_APB1RSTR1_TIM2RST_Msk);
 #elif defined TARGET_STM32H7A3
 	RCC->AHB4ENR |= RCC_AHB4ENR_GPIOAEN_Msk | RCC_AHB4ENR_GPIOBEN_Msk | RCC_AHB4ENR_GPIOEEN_Msk;
 	toggle_bits_10(
@@ -547,9 +532,15 @@ __attribute__ ((noreturn)) void main()
 	logger.create_task("logger", PRIO_LOGGER);
 	logger.log_sync("Created logger task\r\n");
 
-	logger.log_sync("Initializing ad5932 SPI...\r\n");
+	logger.log_sync("Initializing ad5932 periph...\r\n");
+#ifdef TARGET_STM32F103
+	stm32_lib::gpio::set_mode_af_lowspeed_pushpull(pin_ad_pwm_mclk);
+#else
+	stm32_lib::gpio::set_mode_af_lowspeed_pushpull(pin_ad_pwm_mclk, AD_PWM_MCLK_AF);
+#endif
+	ad_pwm_mclk_init(TIM_AD_PWM_MCLK, 0, CLOCK_SPEED/200000 - 1); // 200kHz
 	ad_spi_init();
-	logger.log_sync("Initialized ad5932 SPI\r\n");
+	logger.log_sync("Initialized ad5932 periph\r\n");
 	create_ad_task(ad_task.task);
 
 	logger.log_sync("Creating blink tasks...\r\n");
@@ -564,10 +555,6 @@ __attribute__ ((noreturn)) void main()
 
 	//logger.log_sync("Initializing timer\r\n");
 	//basic_timer_init(LED_TIM, 2000-1, 1000-1);
-
-	logger.log_sync("Starting PWM timer...\r\n");
-	timer_init_output_pin(PWM_TIM, 6400-1, 100-1, pin_pwm);
-	logger.log_sync("Started PWM timer\r\n");
 
 	logger.log_sync("Starting FreeRTOS scheduler\r\n");
 	vTaskStartScheduler();

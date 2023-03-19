@@ -39,10 +39,90 @@ void init_clock()
 
 namespace gpio {
 
+#ifndef TARGET_STM32F103
+enum class mode_t {
+	input = 0b00,
+	output = 0b01,
+	af = 0b10,
+	analog = 0b11
+};
+
+enum class otype_t {
+	push_pull = 0,
+	open_drain = 1
+};
+
+enum class speed_t {
+	bits_00 = 0b00,
+	bits_01 = 0b01,
+	bits_10 = 0b10,
+	bits_11 = 0b11
+};
+
+enum class pupd_t {
+	no_pupd = 0b00,
+	pu = 0b01,
+	pd = 0b10
+};
+
+struct af_t {
+	const uint32_t af_num;
+	explicit af_t(uint32_t af) : af_num(af) {}
+};
+#endif
+
 struct gpio_pin_t {
 	GPIO_TypeDef* gpio;
 	uint32_t reg;
 	gpio_pin_t(GPIO_TypeDef* g, uint32_t r) : gpio(g), reg(r) {}
+
+#ifndef TARGET_STM32F103
+	template <typename... Targs>
+	void set(mode_t m, Targs... args) const
+	{
+		set_mode(m);
+		set(args...);
+	}
+
+	template <typename... Targs>
+	void set(otype_t ot, Targs... args) const
+	{
+		gpio->OTYPER = (gpio->OTYPER & ~mask1(reg)) | (static_cast<uint32_t>(ot) << reg);
+		set(args...);
+	}
+
+	template <typename... Targs>
+	void set(speed_t s, Targs... args) const
+	{
+		gpio->OSPEEDR = (gpio->OSPEEDR & ~mask2(reg)) | (static_cast<uint32_t>(s) << (reg * 2));
+		set(args...);
+	}
+
+	template <typename... Targs>
+	void set(pupd_t p, Targs... args) const
+	{
+		gpio->PUPDR = (gpio->PUPDR & ~mask2(reg)) | (static_cast<uint32_t>(p) << (reg * 2));
+		set(args...);
+	}
+
+	template <typename... Targs>
+	void set(af_t af, Targs... args) const
+	{
+		const auto reg_lo = (reg < 8) ? reg : (reg-8);
+		auto const afr = &gpio->AFR[ (reg<8) ? 0 : 1 ];
+		*afr = (*afr & ~mask4(reg_lo)) | (af.af_num << (reg_lo * 4));
+		set_mode(mode_t::af);
+		set(args...);
+	}
+
+	void set() const {} // terminate arguments recursion
+
+private:
+	void set_mode(mode_t m) const
+	{
+		gpio->MODER = (gpio->MODER & ~mask2(reg)) | (static_cast<uint32_t>(m) << (reg * 2));
+	}
+#endif
 };
 
 inline
@@ -73,17 +153,6 @@ void set_mode_cnf(const gpio_pin_t& pin, uint32_t mode, uint32_t cnf)
 #endif
 
 
-#ifndef TARGET_STM32F103
-inline
-void set_af(const gpio_pin_t& pin, uint32_t af_num)
-{
-	const auto reg_lo = (pin.reg < 8) ? pin.reg : (pin.reg-8);
-	auto const afr = &pin.gpio->AFR[ (pin.reg<8) ? 0 : 1 ];
-	*afr = (*afr & ~mask4(reg_lo)) | (af_num << (reg_lo * 4));
-}
-#endif
-
-
 inline
 void set_mode_output_lowspeed_pushpull(const gpio_pin_t& pin)
 {
@@ -92,11 +161,7 @@ void set_mode_output_lowspeed_pushpull(const gpio_pin_t& pin)
 	constexpr uint32_t cnf = 0b00; // output push-pull
 	set_mode_cnf(pin, mode, cnf);
 #else
-	pin.gpio->MODER = (pin.gpio->MODER & ~mask2(pin.reg)) | (0b01 << (pin.reg * 2)); // general-purpose output
-
-	pin.gpio->OTYPER &= ~mask1(pin.reg); // 0 = push-pull
-	pin.gpio->OSPEEDR &= ~mask2(pin.reg) ; // 0b00 = low speed
-	pin.gpio->PUPDR &= ~mask2(pin.reg); // 0b00 = no pull up/down
+	pin.set(mode_t::output, otype_t::push_pull, speed_t::bits_00);
 #endif
 }
 
@@ -111,70 +176,24 @@ void set_mode_af_lowspeed_pu(const gpio_pin_t& pin)
 	set_mode_cnf(pin, mode, cnf);
 }
 #else
-void set_mode_af_lowspeed_pu(const gpio_pin_t& pin, int af_num)
+void set_mode_af_lowspeed_pu(const gpio_pin_t& pin, uint32_t af_num)
 {
-	pin.gpio->MODER = (pin.gpio->MODER & ~mask2(pin.reg)) | (0b10 << (pin.reg * 2)); // alternate function
-	pin.gpio->PUPDR = (pin.gpio->PUPDR & ~mask2(pin.reg)) | (0b01 << (pin.reg * 2)); // pull-up
-	set_af(pin, af_num);
-}
-#endif
-
-inline
-#ifdef TARGET_STM32F103
-void set_mode_af_hispeed_pushpull(const gpio_pin_t& pin)
-{
-	constexpr uint32_t mode = 0b11; // output mode, max speed 50 MHz
-	constexpr uint32_t cnf = 0b10; // af push-pull
-	set_mode_cnf(pin, mode, cnf);
-}
-#else
-void set_mode_af_hispeed_pushpull(const gpio_pin_t& pin, int af_num)
-{
-	pin.gpio->MODER = (pin.gpio->MODER & ~mask2(pin.reg)) | (0b10 << (pin.reg * 2)); // alternate function
-	pin.gpio->OTYPER = (pin.gpio->OTYPER & ~mask1(pin.reg)) | (0b0 << pin.reg); // output push-pull
-	pin.gpio->PUPDR = (pin.gpio->PUPDR & ~mask2(pin.reg)) | (0b00 << (pin.reg * 2)); // no pupd
-	pin.gpio->OSPEEDR = (pin.gpio->OSPEEDR & ~mask2(pin.reg)) | (0b11 << (pin.reg * 2)); // very high speed
-	set_af(pin, af_num);
+	pin.set(af_t(af_num), pupd_t::pu);
 }
 #endif
 
 
 #ifdef TARGET_STM32F103
 inline
-void set_mode_af_hispeed_pushpull_pullup(const gpio_pin_t& pin)
+void set_mode_af_lowspeed_pushpull(const gpio_pin_t& pin)
 {
 	// TODO
-	set_mode_af_hispeed_pushpull(pin);
-}
-
-inline
-void set_mode_af_hispeed_pushpull_float(const gpio_pin_t& pin)
-{
-	// TODO
-	set_mode_af_hispeed_pushpull(pin);
 }
 #else
-namespace {
-void set_mode_af_hispeed_pushpull(const gpio_pin_t& pin, int af_num, uint32_t pupd)
-{
-	pin.gpio->MODER = (pin.gpio->MODER & ~mask2(pin.reg)) | (0b10 << (pin.reg * 2)); // alternate function
-	pin.gpio->OTYPER = (pin.gpio->OTYPER & ~mask1(pin.reg)) | (0b0 << pin.reg); // output push-pull
-	pin.gpio->PUPDR = (pin.gpio->PUPDR & ~mask2(pin.reg)) | (pupd << (pin.reg * 2));
-	pin.gpio->OSPEEDR = (pin.gpio->OSPEEDR & ~mask2(pin.reg)) | (0b11 << (pin.reg * 2)); // very high speed
-	set_af(pin, af_num);
-}
-}
-
 inline
-void set_mode_af_hispeed_pushpull_pullup(const gpio_pin_t& pin, int af_num)
+void set_mode_af_lowspeed_pushpull(const gpio_pin_t& pin, uint32_t af_num)
 {
-	set_mode_af_hispeed_pushpull(pin, af_num, 0b01);
-}
-
-inline
-void set_mode_af_hispeed_pushpull_float(const gpio_pin_t& pin, int af_num)
-{
-	set_mode_af_hispeed_pushpull(pin, af_num, 0b00);
+	pin.set(af_t(af_num), otype_t::push_pull, speed_t::bits_00);
 }
 #endif
 
@@ -192,10 +211,7 @@ void init_pins(
 		const gpio::gpio_pin_t& ss
 	)
 {
-	gpio::set_mode_af_hispeed_pushpull_float(mosi);
-	gpio::set_mode_af_hispeed_pushpull_pullup(miso);
-	gpio::set_mode_af_hispeed_pushpull_float(sck);
-	gpio::set_mode_af_hispeed_pushpull_pullup(ss);
+	// TODO
 }
 #else
 void init_pins(
@@ -205,10 +221,11 @@ void init_pins(
 		const gpio::gpio_pin_t& ss, int af_ss
 	)
 {
-	gpio::set_mode_af_hispeed_pushpull_float(mosi, af_mosi);
-	gpio::set_mode_af_hispeed_pushpull_pullup(miso, af_miso);
-	gpio::set_mode_af_hispeed_pushpull_float(sck, af_sck);
-	gpio::set_mode_af_hispeed_pushpull_pullup(ss, af_ss);
+	using namespace gpio;
+	mosi.set(af_t(af_mosi), otype_t::push_pull, speed_t::bits_00);
+	miso.set(af_t(af_miso), pupd_t::no_pupd);
+	sck.set(af_t(af_sck), pupd_t::no_pupd);
+	ss.set(af_t(af_ss), pupd_t::pu, speed_t::bits_00);
 }
 #endif
 
