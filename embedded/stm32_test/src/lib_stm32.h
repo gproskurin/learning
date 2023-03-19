@@ -39,7 +39,25 @@ void init_clock()
 
 namespace gpio {
 
-#ifndef TARGET_STM32F103
+#ifdef TARGET_STM32F103
+enum class mode_t {
+	input = 0b00,
+	output_10mhz = 0b01,
+	output_2mhz = 0b10,
+	output_50mhz = 0b11
+};
+
+enum class cnf_t {
+	input_analog = 0b00,
+	input_float = 0b01,
+	input_pupd = 0b10,
+	input_reserved1 = 0b11,
+	output_pushpull = 0b00,
+	output_opendrain = 0b01,
+	output_af_pushpull = 0b10,
+	output_af_opendrain = 0b11
+};
+#else
 enum class mode_t {
 	input = 0b00,
 	output = 0b01,
@@ -72,11 +90,24 @@ struct af_t {
 #endif
 
 struct gpio_pin_t {
-	GPIO_TypeDef* gpio;
-	uint32_t reg;
+	GPIO_TypeDef* const gpio;
+	uint32_t const reg;
 	gpio_pin_t(GPIO_TypeDef* g, uint32_t r) : gpio(g), reg(r) {}
 
-#ifndef TARGET_STM32F103
+#ifdef TARGET_STM32F103
+	void set(mode_t m, cnf_t c) const
+	{
+		const uint32_t reg_lo = ((reg < 8) ? reg : reg - 8);
+		auto const cr = ((reg < 8) ? &gpio->CRL : &gpio->CRH);
+		*cr =
+			(*cr & ~mask4(reg_lo))
+			| (
+				((static_cast<uint32_t>(c) << 2) | static_cast<uint32_t>(m))
+				<<
+				(reg_lo * 4)
+			);
+	}
+#else
 	template <typename... Targs>
 	void set(mode_t m, Targs... args) const
 	{
@@ -115,9 +146,9 @@ struct gpio_pin_t {
 		set(args...);
 	}
 
+private:
 	void set() const {} // terminate arguments recursion
 
-private:
 	void set_mode(mode_t m) const
 	{
 		gpio->MODER = (gpio->MODER & ~mask2(reg)) | (static_cast<uint32_t>(m) << (reg * 2));
@@ -136,30 +167,11 @@ void set_state(const gpio_pin_t& pin, bool high)
 }
 
 
-#ifdef TARGET_STM32F103
-namespace {
-
-inline
-void set_mode_cnf(const gpio_pin_t& pin, uint32_t mode, uint32_t cnf)
-{
-	const uint32_t reg_lo = ((pin.reg < 8) ? pin.reg : pin.reg - 8);
-	const uint32_t bits = (cnf << 2) | mode;
-	const uint32_t mask_value = bits << (reg_lo * 4);
-	auto const cr = ((pin.reg < 8) ? &pin.gpio->CRL : &pin.gpio->CRH);
-	*cr = (*cr & ~mask4(reg_lo)) | mask_value;
-}
-
-} // namespace
-#endif
-
-
 inline
 void set_mode_output_lowspeed_pushpull(const gpio_pin_t& pin)
 {
 #ifdef TARGET_STM32F103
-	constexpr uint32_t mode = 0b10; // output mode, max speed 2 MHz
-	constexpr uint32_t cnf = 0b00; // output push-pull
-	set_mode_cnf(pin, mode, cnf);
+	pin.set(mode_t::output_2mhz, cnf_t::output_pushpull);
 #else
 	pin.set(mode_t::output, otype_t::push_pull, speed_t::bits_00);
 #endif
@@ -171,9 +183,7 @@ inline
 void set_mode_af_lowspeed_pu(const gpio_pin_t& pin)
 {
 	// TODO pullup
-	constexpr uint32_t mode = 0b10; // output mode, max speed 2 MHz
-	constexpr uint32_t cnf = 0b10; // af push-pull
-	set_mode_cnf(pin, mode, cnf);
+	pin.set(mode_t::output_2mhz, cnf_t::output_af_pushpull);
 }
 #else
 void set_mode_af_lowspeed_pu(const gpio_pin_t& pin, uint32_t af_num)
@@ -183,14 +193,13 @@ void set_mode_af_lowspeed_pu(const gpio_pin_t& pin, uint32_t af_num)
 #endif
 
 
-#ifdef TARGET_STM32F103
 inline
+#ifdef TARGET_STM32F103
 void set_mode_af_lowspeed_pushpull(const gpio_pin_t& pin)
 {
-	// TODO
+	pin.set(mode_t::output_2mhz, cnf_t::output_af_pushpull);
 }
 #else
-inline
 void set_mode_af_lowspeed_pushpull(const gpio_pin_t& pin, uint32_t af_num)
 {
 	pin.set(af_t(af_num), otype_t::push_pull, speed_t::bits_00);
@@ -211,7 +220,11 @@ void init_pins(
 		const gpio::gpio_pin_t& ss
 	)
 {
-	// TODO
+	using namespace gpio;
+	mosi.set(mode_t::output_2mhz, cnf_t::output_af_pushpull);
+	miso.set(mode_t::input, cnf_t::input_float);
+	sck.set(mode_t::output_2mhz, cnf_t::output_af_pushpull);
+	ss.set(mode_t::output_2mhz, cnf_t::output_pushpull);
 }
 #else
 void init_pins(
