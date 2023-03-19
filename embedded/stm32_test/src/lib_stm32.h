@@ -1,3 +1,6 @@
+#ifndef _gpr_lib_stm32_included_
+#define _gpr_lib_stm32_included_
+
 #include "cmsis_device.h"
 
 #include <stdbool.h>
@@ -284,4 +287,6 @@ uint16_t spi_t::write16(uint16_t data)
 
 } // namespace stm32_lib
 
+
+#endif
 
