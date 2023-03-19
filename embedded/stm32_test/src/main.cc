@@ -27,6 +27,9 @@
 	const stm32_lib::gpio::gpio_pin_t ad_spi_sck(GPIOA, 5);
 	const stm32_lib::gpio::gpio_pin_t ad_spi_ss(GPIOA, 4);
 
+	const stm32_lib::gpio::gpio_pin_t pin_ad_pwm_mclk(GPIOA, 2);
+	#define TIM_AD_PWM_MCLK TIM2
+
 #elif defined TARGET_STM32L072
 	const stm32_lib::gpio::gpio_pin_t pin_led_green(GPIOB, 5);
 	const stm32_lib::gpio::gpio_pin_t pin_led_blue(GPIOB, 6);
@@ -148,7 +151,16 @@ void ad_pwm_mclk_init(TIM_TypeDef* const tim, uint16_t prescaler, uint16_t arr)
 	tim->CNT = 0;
 	tim->BDTR |= TIM_BDTR_MOE_Msk;
 	const uint16_t ccr = arr / 2 + 1;
-#ifdef TARGET_STM32H7A3
+#ifdef TARGET_STM32F103
+	// TIM2_CH3
+	tim->CCR3 = ccr;
+	tim->CCMR2 = (tim->CCMR2 & ~(TIM_CCMR2_CC3S_Msk | TIM_CCMR2_OC3M_Msk))
+		| (0b00 << TIM_CCMR2_CC3S_Pos) // output channel
+		| (TIM_CCMR2_OC3M_2 | TIM_CCMR2_OC3M_1) // 0b100 = PWM mode 1
+		| TIM_CCMR2_OC3FE // output compare fast
+		;
+	tim->CCER |= TIM_CCER_CC3E;
+#elif defined TARGET_STM32H7A3
 	tim->CCR3 = ccr;
 	tim->CCMR2 = (tim->CCMR2 & ~(TIM_CCMR2_CC3S_Msk | TIM_CCMR2_OC3M_Msk))
 		| (0b00 << TIM_CCMR2_CC3S_Pos) // output channel
@@ -173,7 +185,7 @@ void ad_pwm_mclk_init(TIM_TypeDef* const tim, uint16_t prescaler, uint16_t arr)
 		;
 	tim->CCER |= TIM_CCER_CC1E;
 #endif
-	tim->CR1 |= TIM_CR1_CEN;
+	tim->CR1 = TIM_CR1_CEN;
 }
 
 
@@ -248,16 +260,16 @@ void bus_init()
 #endif
 
 #if defined TARGET_STM32F103
-	// enable timer and port B
-	RCC->APB2ENR |= RCC_APB2ENR_IOPBEN_Msk;
+	// GPIOs & USART
+	RCC->APB2ENR |= RCC_APB2ENR_IOPAEN_Msk | RCC_APB2ENR_IOPBEN_Msk | RCC_APB2ENR_USART1EN_Msk;
+	toggle_bits_10(
+		&RCC->APB2RSTR,
+		RCC_APB2RSTR_IOPARST_Msk | RCC_APB2RSTR_IOPBRST_Msk |RCC_APB2RSTR_USART1RST_Msk
+	);
+
+	// TIM2
 	RCC->APB1ENR |= RCC_APB1ENR_TIM2EN_Msk;
-
-	// USART
-	RCC->APB2ENR |= RCC_APB2ENR_IOPAEN_Msk | RCC_APB2ENR_USART1EN_Msk;
-	toggle_bits_10(&RCC->APB2RSTR, RCC_APB2RSTR_USART1RST_Msk);
-
-	// reset TIM2
-	//toggle_bits_10(&RCC->APB1RSTR, RCC_APB1RSTR_TIM2RST_Msk);
+	toggle_bits_10(&RCC->APB1RSTR, RCC_APB1RSTR_TIM2RST_Msk);
 
 #elif defined TARGET_STM32L072
 	// enable GPIOs
@@ -324,14 +336,6 @@ void do_blink(const stm32_lib::gpio::gpio_pin_t& pin, int n)
 		delay(100000);
 	}
 }
-
-
-#if 0
-void blink(int n)
-{
-	return do_blink(LED_GPIO, LED_PIN, n);
-}
-#endif
 
 
 StaticTask_t xTaskBufferIdle;
