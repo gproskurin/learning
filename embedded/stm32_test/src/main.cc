@@ -204,7 +204,24 @@ void ad_spi_init()
 	// MODE = 2 (POL = 1, PHASE = 0) TODO check
 
 	//AD_SPI->CR1 = (AD_SPI->CR1 & ~(SPI_CR1_CPHA_Msk)) | SPI_CR1_POL_Msk; // FIXME
-#ifdef TARGET_STM32H7A3
+
+#ifdef TARGET_STM32L432
+	AD_SPI->CR1 = 0;
+	constexpr uint32_t cr1 = ~(SPI_CR1_CPHA_Msk | SPI_CR1_BR_Msk)
+		| (0b111 << SPI_CR1_BR_Pos)
+		| SPI_CR1_BIDIMODE_Msk
+		| SPI_CR1_BIDIOE_Msk
+		| SPI_CR1_MSTR_Msk
+		| SPI_CR1_CPOL_Msk;
+	AD_SPI->CR1 = cr1;
+
+	AD_SPI->CR2 = ~(SPI_CR2_DS_Msk)
+		| (0b1111 << SPI_CR2_DS_Pos)
+		;
+
+	AD_SPI->CR1 = cr1 | SPI_CR1_SPE;
+
+#elif defined TARGET_STM32H7A3
 	AD_SPI->CFG1 = (AD_SPI->CFG1 & ~(SPI_CFG1_MBR_Msk | SPI_CFG1_DSIZE_Msk))
 		| (0b111 << SPI_CFG1_MBR_Pos) // spi_master_clk/256
 		| (0b01111 << SPI_CFG1_DSIZE_Pos) // 16 bits
