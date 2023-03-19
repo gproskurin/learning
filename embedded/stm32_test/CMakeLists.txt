@@ -1,7 +1,8 @@
+cmake_minimum_required(VERSION 3.25)
+
 include("cmake/arm-none-eabi.cmake")
 
 project(led_blinky C CXX)
-cmake_minimum_required(VERSION 3.25)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
 set(stm32f103_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/ld/stm32f103.ld)
@@ -11,7 +12,7 @@ set(stm32f103_FREERTOS_PORT "GCC_ARM_CM3")
 
 set(stm32l072_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/ld/stm32l072.ld)
 set(stm32l072_DEFINITIONS "-DTARGET_STM32L072")
-set(stm32l072_C_CXX_ARCH_FLAGS -mcpu=cortex-m0 -mthumb)
+set(stm32l072_C_CXX_ARCH_FLAGS -mcpu=cortex-m0plus -mthumb)
 set(stm32l072_FREERTOS_PORT "GCC_ARM_CM0")
 
 set(stm32l432_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/ld/stm32l432.ld)
