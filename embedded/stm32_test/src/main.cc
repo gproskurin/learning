@@ -215,7 +215,7 @@ void ad_spi_init()
 		| SPI_CR1_CPOL_Msk;
 	AD_SPI->CR1 = cr1;
 
-	AD_SPI->CR2 = ~(SPI_CR2_DS_Msk)
+	AD_SPI->CR2 = (AD_SPI->CR2 & ~(SPI_CR2_DS_Msk))
 		| (0b1111 << SPI_CR2_DS_Pos)
 		;
 
