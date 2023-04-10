@@ -6,6 +6,11 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "FreeRTOS.h"
+#include "task.h"
+
+#include "logging.h"
+extern usart_logger_t logger;
 
 namespace {
 	constexpr uint32_t mask1(int n) { return 1 << (n); }
@@ -231,17 +236,18 @@ void init_pins(
 }
 #else
 void init_pins(
-		const gpio::gpio_pin_t& mosi, int af_mosi,
-		const gpio::gpio_pin_t& miso, int af_miso,
-		const gpio::gpio_pin_t& sck, int af_sck,
-		const gpio::gpio_pin_t& ss, int af_ss
+		const gpio::gpio_pin_t& mosi, uint32_t af_mosi,
+		const gpio::gpio_pin_t& miso, uint32_t af_miso,
+		const gpio::gpio_pin_t& sck, uint32_t af_sck,
+		const gpio::gpio_pin_t& ss, uint32_t af_ss
 	)
 {
 	using namespace gpio;
-	mosi.set(af_t(af_mosi), otype_t::push_pull, speed_t::bits_00);
-	miso.set(af_t(af_miso), pupd_t::no_pupd);
-	sck.set(af_t(af_sck), pupd_t::no_pupd);
-	ss.set(af_t(af_ss), pupd_t::pu, speed_t::bits_00);
+	mosi.set(af_t(af_mosi), otype_t::push_pull, pupd_t::no_pupd, speed_t::bits_11);
+	//miso.set(af_t(af_miso), pupd_t::no_pupd, speed_t::bits_00);
+	sck.set(af_t(af_sck), pupd_t::no_pupd, speed_t::bits_11);
+	//ss.set(af_t(af_ss), pupd_t::pu, speed_t::bits_00);
+	ss.set(mode_t::output, otype_t::push_pull, pupd_t::pu, speed_t::bits_11);
 }
 #endif
 
@@ -265,6 +271,8 @@ inline
 uint16_t spi_t::write16(uint16_t data)
 {
 	gpio::set_state(pin_nss_, 0);
+	//vTaskDelay(1);
+	for (volatile int i=0; i<10; ++i) {}
 	// TODO wait a bit?
 #ifdef TARGET_STM32H7A3
 	volatile uint16_t* const tx = reinterpret_cast<volatile uint16_t*>(&spi_->TXDR);
@@ -275,6 +283,9 @@ uint16_t spi_t::write16(uint16_t data)
 #else
 	while(! (spi_->SR & SPI_SR_TXE)) {}
 	spi_->DR = data;
+	// FIXME need all this?
+	//while(! (spi_->SR & SPI_SR_TXE)) {}
+	//while(spi_->SR & SPI_SR_BSY) {}
 	while(! (spi_->SR & SPI_SR_RXNE)) {}
 	const uint16_t r = spi_->DR;
 #endif

@@ -1,5 +1,6 @@
 #include "lib_stm32.h"
 #include "logging.h"
+#include "ad5932.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -75,6 +76,7 @@
 	const stm32_lib::gpio::gpio_pin_t pin_ad_pwm_mclk(GPIOA, 2);
 	#define AD_PWM_MCLK_AF 14
 	#define TIM_AD_PWM_MCLK TIM15
+	const stm32_lib::gpio::gpio_pin_t pin_ad_ctrl(GPIOA, 3);
 
 #elif defined TARGET_STM32H7A3
 	//const stm32_lib::gpio::gpio_pin_t pin_led_green(GPIOB, 0);
@@ -207,15 +209,14 @@ void ad_spi_init()
 
 #ifdef TARGET_STM32L432
 	AD_SPI->CR1 = 0;
-	constexpr uint32_t cr1 = ~(SPI_CR1_CPHA_Msk | SPI_CR1_BR_Msk)
-		| (0b111 << SPI_CR1_BR_Pos)
-		| SPI_CR1_BIDIMODE_Msk
-		| SPI_CR1_BIDIOE_Msk
+	constexpr uint32_t cr1 =
+		(0b111 << SPI_CR1_BR_Pos)
 		| SPI_CR1_MSTR_Msk
 		| SPI_CR1_CPOL_Msk;
 	AD_SPI->CR1 = cr1;
 
 	AD_SPI->CR2 = (AD_SPI->CR2 & ~(SPI_CR2_DS_Msk))
+		| SPI_CR2_SSOE
 		| (0b1111 << SPI_CR2_DS_Pos)
 		;
 
@@ -516,6 +517,8 @@ ad_task_t ad_task;
 void ad_task_function(void* arg)
 {
 	const ad_task_data_t* const args = reinterpret_cast<ad_task_data_t*>(arg);
+	ad5932_t ad(pin_ad_pwm_mclk, pin_ad_ctrl, AD_SPI, ad_spi_ss);
+	ad.start();
 	for(int i=0;;++i) {
 		logger.log_async("AD task is working...\r\n");
 		vTaskDelay(configTICK_RATE_HZ * 16);
@@ -560,7 +563,10 @@ __attribute__ ((noreturn)) void main()
 	stm32_lib::gpio::set_mode_af_lowspeed_pushpull(pin_ad_pwm_mclk, AD_PWM_MCLK_AF);
 #endif
 	ad_pwm_mclk_init(TIM_AD_PWM_MCLK, 0, CLOCK_SPEED/200000 - 1); // 200kHz
+	stm32_lib::gpio::set_mode_output_lowspeed_pushpull(pin_ad_ctrl);
+	stm32_lib::gpio::set_state(pin_ad_ctrl, 0);
 	ad_spi_init();
+	stm32_lib::gpio::set_state(ad_spi_ss, 1);
 	logger.log_sync("Initialized ad5932 periph\r\n");
 	create_ad_task(ad_task.task);
 

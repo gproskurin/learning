@@ -1,6 +1,13 @@
 #include "ad5932_defs.h"
 #include "ad5932.h"
 
+#include "FreeRTOS.h"
+#include "task.h"
+
+#include "FreeRTOSConfig.h"
+
+#include "logging.h"
+extern usart_logger_t logger;
 
 void ad5932_t::start()
 {
@@ -39,5 +46,9 @@ void ad5932_t::start()
 
 void ad5932_t::ctrl_pulse()
 {
+	stm32_lib::gpio::set_state(pin_ctrl_, 1);
+	//vTaskDelay(1); // FIXME: portable, >2 mclk periods
+	for (volatile int i=0; i<100; ++i) {}
+	stm32_lib::gpio::set_state(pin_ctrl_, 0);
 }
 
