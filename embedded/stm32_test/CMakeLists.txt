@@ -25,6 +25,16 @@ set(stm32h7a3_DEFINITIONS "-DTARGET_STM32H7A3")
 set(stm32h7a3_C_CXX_ARCH_FLAGS -mcpu=cortex-m7 -mthumb)
 set(stm32h7a3_FREERTOS_PORT "GCC_ARM_CM3")
 
+set(stm32h745cm4_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/ld/stm32h745_cm4.ld)
+set(stm32h745cm4_DEFINITIONS -DTARGET_STM32H745_CM4 -DCORE_CM4)
+set(stm32h745cm4_C_CXX_ARCH_FLAGS -mcpu=cortex-m4 -mthumb)
+set(stm32h745cm4_FREERTOS_PORT "GCC_ARM_CM3")
+
+set(stm32h745cm7_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/ld/stm32h745_cm7.ld)
+set(stm32h745cm7_DEFINITIONS -DTARGET_STM32H745_CM7 -DCORE_CM7)
+set(stm32h745cm7_C_CXX_ARCH_FLAGS -mcpu=cortex-m7 -mthumb)
+set(stm32h745cm7_FREERTOS_PORT "GCC_ARM_CM3")
+
 set(FIRMWARE_ELF ${PROJECT_NAME}.elf)
 set(FIRMWARE_BIN ${PROJECT_NAME}.bin)
 #set(FIRMWARE_IHEX ${PROJECT_NAME}.ihex)
@@ -114,6 +124,8 @@ endfunction()
 #generate_targets("stm32f103")
 #generate_targets("stm32l072")
 #generate_targets("stm32h7a3")
-generate_targets("stm32l432")
+#generate_targets("stm32h745cm4")
+generate_targets("stm32h745cm7")
+#generate_targets("stm32l432")
 
 ###

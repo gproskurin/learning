@@ -274,7 +274,7 @@ uint16_t spi_t::write16(uint16_t data)
 	//vTaskDelay(1);
 	for (volatile int i=0; i<10; ++i) {}
 	// TODO wait a bit?
-#ifdef TARGET_STM32H7A3
+#if defined TARGET_STM32H745_CM4 || defined TARGET_STM32H745_CM7
 	volatile uint16_t* const tx = reinterpret_cast<volatile uint16_t*>(&spi_->TXDR);
 	*tx = data;
 	spi_->CR1 |= SPI_CR1_CSTART_Msk;

@@ -78,7 +78,28 @@
 	#define TIM_AD_PWM_MCLK TIM15
 	const stm32_lib::gpio::gpio_pin_t pin_ad_ctrl(GPIOA, 3);
 
-#elif defined TARGET_STM32H7A3
+#elif defined TARGET_STM32H745_CM4
+	//const stm32_lib::gpio::gpio_pin_t pin_led_green(GPIOB, 0);
+	const stm32_lib::gpio::gpio_pin_t pin_led_yellow(GPIOE, 1);
+	const stm32_lib::gpio::gpio_pin_t pin_led_red(GPIOB, 14);
+
+	// USART1, tx(PB6)
+	#define USART_LOG USART1
+	#define USART_LOG_AF 7
+	const stm32_lib::gpio::gpio_pin_t usart_log_pin_tx(GPIOB, 6);
+
+	// ad5932 spi
+	#define AD_SPI SPI3
+	const stm32_lib::gpio::gpio_pin_t ad_spi_mosi(GPIOB, 5);
+	#define AD_SPI_MOSI_AF 7
+	const stm32_lib::gpio::gpio_pin_t ad_spi_miso(GPIOB, 4);
+	#define AD_SPI_MISO_AF 6
+	const stm32_lib::gpio::gpio_pin_t ad_spi_sck(GPIOB, 3);
+	#define AD_SPI_SCK_AF 6
+	const stm32_lib::gpio::gpio_pin_t ad_spi_ss(GPIOA, 4);
+	#define AD_SPI_SS_AF 6
+
+#elif defined TARGET_STM32H745_CM7
 	//const stm32_lib::gpio::gpio_pin_t pin_led_green(GPIOB, 0);
 	const stm32_lib::gpio::gpio_pin_t pin_led_yellow(GPIOE, 1);
 	const stm32_lib::gpio::gpio_pin_t pin_led_red(GPIOB, 14);
@@ -115,7 +136,7 @@ void usart_init(USART_TypeDef* const usart)
 {
 	usart->CR1 = 0; // ensure UE flag is reset
 
-#ifdef TARGET_STM32H7A3
+#if defined TARGET_STM32H745_CM7 || defined TARGET_STM32H745_CM4
 	constexpr uint32_t cr1 = USART_CR1_FIFOEN | USART_CR1_TE;
 #else
 	constexpr uint32_t cr1 = USART_CR1_TE;

@@ -17,6 +17,10 @@
 	#define configCPU_CLOCK_HZ			4000000
 #elif defined TARGET_STM32H7A3
 	#define configCPU_CLOCK_HZ			64000000
+#elif defined TARGET_STM32H745_CM4
+	#define configCPU_CLOCK_HZ			64000000 // FIXME
+#elif defined TARGET_STM32H745_CM7
+	#define configCPU_CLOCK_HZ			64000000 // FIXME
 #endif
 
 //#define configSYSTICK_CLOCK_HZ			1000000
