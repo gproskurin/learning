@@ -269,7 +269,7 @@ uint16_t spi_t::write16(uint16_t data)
 {
 	gpio::set_state(pin_nss_, 0);
 	//vTaskDelay(1);
-	for (volatile int i=0; i<10; ++i) {}
+	for (volatile int i=0; i<256; ++i) {}
 	// TODO wait a bit?
 #if defined TARGET_STM32H745_CM4 || defined TARGET_STM32H745_CM7
 	volatile uint16_t* const tx = reinterpret_cast<volatile uint16_t*>(&spi_->TXDR);
@@ -286,7 +286,9 @@ uint16_t spi_t::write16(uint16_t data)
 	while(! (spi_->SR & SPI_SR_RXNE)) {}
 	const uint16_t r = spi_->DR;
 #endif
+	for (volatile int i=0; i<256; ++i) {}
 	gpio::set_state(pin_nss_, 1);
+	for (volatile int i=0; i<256; ++i) {}
 	return r;
 }
 
