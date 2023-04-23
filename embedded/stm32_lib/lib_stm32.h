@@ -240,11 +240,11 @@ void init_pins(
 	)
 {
 	using namespace gpio;
-	mosi.set(af_t(af_mosi), otype_t::push_pull, pupd_t::no_pupd, speed_t::bits_11);
+	mosi.set(af_t(af_mosi), otype_t::push_pull, pupd_t::no_pupd, speed_t::bits_00);
 	//miso.set(af_t(af_miso), pupd_t::no_pupd, speed_t::bits_00);
-	sck.set(af_t(af_sck), pupd_t::no_pupd, speed_t::bits_11);
+	sck.set(af_t(af_sck), pupd_t::no_pupd, speed_t::bits_00);
 	//ss.set(af_t(af_ss), pupd_t::pu, speed_t::bits_00);
-	ss.set(mode_t::output, otype_t::push_pull, pupd_t::pu, speed_t::bits_11);
+	ss.set(mode_t::output, otype_t::push_pull, pupd_t::pu, speed_t::bits_00);
 }
 #endif
 
