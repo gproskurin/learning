@@ -78,47 +78,6 @@
 	#define TIM_AD_PWM_MCLK TIM15
 	const stm32_lib::gpio::gpio_pin_t pin_ad_ctrl(GPIOA, 3);
 
-#elif defined TARGET_STM32H745_CM4
-	//const stm32_lib::gpio::gpio_pin_t pin_led_green(GPIOB, 0);
-	const stm32_lib::gpio::gpio_pin_t pin_led_yellow(GPIOE, 1);
-	const stm32_lib::gpio::gpio_pin_t pin_led_red(GPIOB, 14);
-
-	// USART1, tx(PB6)
-	#define USART_LOG USART1
-	#define USART_LOG_AF 7
-	const stm32_lib::gpio::gpio_pin_t usart_log_pin_tx(GPIOB, 6);
-
-	// ad5932 spi
-	#define AD_SPI SPI3
-	const stm32_lib::gpio::gpio_pin_t ad_spi_mosi(GPIOB, 5);
-	#define AD_SPI_MOSI_AF 7
-	const stm32_lib::gpio::gpio_pin_t ad_spi_miso(GPIOB, 4);
-	#define AD_SPI_MISO_AF 6
-	const stm32_lib::gpio::gpio_pin_t ad_spi_sck(GPIOB, 3);
-	#define AD_SPI_SCK_AF 6
-	const stm32_lib::gpio::gpio_pin_t ad_spi_ss(GPIOA, 4);
-	#define AD_SPI_SS_AF 6
-
-#elif defined TARGET_STM32H745_CM7
-	//const stm32_lib::gpio::gpio_pin_t pin_led_green(GPIOB, 0);
-	const stm32_lib::gpio::gpio_pin_t pin_led_yellow(GPIOE, 1);
-	const stm32_lib::gpio::gpio_pin_t pin_led_red(GPIOB, 14);
-
-	// USART1, tx(PB6)
-	#define USART_LOG USART1
-	#define USART_LOG_AF 7
-	const stm32_lib::gpio::gpio_pin_t usart_log_pin_tx(GPIOB, 6);
-
-	// ad5932 spi
-	#define AD_SPI SPI3
-	const stm32_lib::gpio::gpio_pin_t ad_spi_mosi(GPIOB, 5);
-	#define AD_SPI_MOSI_AF 7
-	const stm32_lib::gpio::gpio_pin_t ad_spi_miso(GPIOB, 4);
-	#define AD_SPI_MISO_AF 6
-	const stm32_lib::gpio::gpio_pin_t ad_spi_sck(GPIOB, 3);
-	#define AD_SPI_SCK_AF 6
-	const stm32_lib::gpio::gpio_pin_t ad_spi_ss(GPIOA, 4);
-	#define AD_SPI_SS_AF 6
 #endif
 
 
@@ -136,11 +95,7 @@ void usart_init(USART_TypeDef* const usart)
 {
 	usart->CR1 = 0; // ensure UE flag is reset
 
-#if defined TARGET_STM32H745_CM7 || defined TARGET_STM32H745_CM4
-	constexpr uint32_t cr1 = USART_CR1_FIFOEN | USART_CR1_TE;
-#else
 	constexpr uint32_t cr1 = USART_CR1_TE;
-#endif
 
 #ifdef TARGET_STM32F103
 	stm32_lib::gpio::set_mode_af_lowspeed_pu(usart_log_pin_tx);
@@ -180,14 +135,6 @@ void ad_pwm_mclk_init(TIM_TypeDef* const tim, uint16_t prescaler, uint16_t arr)
 	tim->CCMR2 = (tim->CCMR2 & ~(TIM_CCMR2_CC3S_Msk | TIM_CCMR2_OC3M_Msk))
 		| (0b00 << TIM_CCMR2_CC3S_Pos) // output channel
 		| (TIM_CCMR2_OC3M_2 | TIM_CCMR2_OC3M_1) // 0b100 = PWM mode 1
-		| TIM_CCMR2_OC3FE // output compare fast
-		;
-	tim->CCER |= TIM_CCER_CC3E;
-#elif defined TARGET_STM32H7A3
-	tim->CCR3 = ccr;
-	tim->CCMR2 = (tim->CCMR2 & ~(TIM_CCMR2_CC3S_Msk | TIM_CCMR2_OC3M_Msk))
-		| (0b00 << TIM_CCMR2_CC3S_Pos) // output channel
-		| (0b0110 << TIM_CCMR2_OC3M_Pos) // PWM mode 1
 		| TIM_CCMR2_OC3FE // output compare fast
 		;
 	tim->CCER |= TIM_CCER_CC3E;
@@ -243,18 +190,6 @@ void ad_spi_init()
 
 	AD_SPI->CR1 = cr1 | SPI_CR1_SPE;
 
-#elif defined TARGET_STM32H7A3
-	AD_SPI->CFG1 = (AD_SPI->CFG1 & ~(SPI_CFG1_MBR_Msk | SPI_CFG1_DSIZE_Msk))
-		| (0b111 << SPI_CFG1_MBR_Pos) // spi_master_clk/256
-		| (0b01111 << SPI_CFG1_DSIZE_Pos) // 16 bits
-		;
-	AD_SPI->CFG2 = (AD_SPI->CFG2 & ~(SPI_CFG2_CPHA_Msk | SPI_CFG2_MIDI_Msk))
-		| SPI_CFG2_CPOL_Msk
-		| SPI_CFG2_MASTER_Msk
-		| SPI_CFG2_SSOE_Msk
-		| (0b1111 << SPI_CFG2_MIDI_Pos) // FIXME delay
-		;
-	AD_SPI->CR1 |= SPI_CR1_SPE;
 #elif defined TARGET_STM32L072
 #endif
 }
@@ -333,35 +268,6 @@ void bus_init()
 		&RCC->APB2RSTR,
 		RCC_APB2RSTR_SPI1RST_Msk | RCC_APB2RSTR_TIM15RST_Msk | RCC_APB2RSTR_USART1RST_Msk
 	);
-
-#elif defined TARGET_STM32H7A3
-	RCC->AHB4ENR |= RCC_AHB4ENR_GPIOAEN_Msk | RCC_AHB4ENR_GPIOBEN_Msk | RCC_AHB4ENR_GPIOEEN_Msk;
-	toggle_bits_10(
-		&RCC->AHB4RSTR,
-		RCC_AHB4RSTR_GPIOARST_Msk | RCC_AHB4RSTR_GPIOBRST_Msk | RCC_AHB4RSTR_GPIOERST_Msk
-	);
-
-	// USART
-	RCC->APB2ENR |= RCC_APB2ENR_USART1EN_Msk;
-	toggle_bits_10(&RCC->APB2RSTR, RCC_APB2RSTR_USART1RST_Msk);
-
-	// TIM3 & SPI3
-	RCC->APB1LENR |= RCC_APB1LENR_TIM3EN_Msk | RCC_APB1LENR_SPI3EN_Msk;
-	toggle_bits_10(&RCC->APB1LRSTR, RCC_APB1LRSTR_TIM3RST_Msk | RCC_APB1LRSTR_SPI3RST_Msk);
-#endif
-}
-
-
-void nvic_init_tim()
-{
-	// enable interrupt
-#if defined TARGET_STM32F103
-	NVIC_SetPriority(TIM2_IRQn, 3);
-	NVIC_EnableIRQ(TIM2_IRQn);
-#elif defined TARGET_STM32L152
-	//NVIC_SetVector(TIM9_IRQn, (uint32_t) &IntHandler_Timer);
-	NVIC_SetPriority(TIM9_IRQn, 3);
-	NVIC_EnableIRQ(TIM9_IRQn);
 #endif
 }
 
@@ -418,21 +324,6 @@ struct blink_tasks_t {
 			pin_led,
 			configTICK_RATE_HZ/8,
 			configTICK_RATE_HZ/16
-		)
-	};
-#elif defined TARGET_STM32H7A3
-	std::array<blink_task_data_t, 2> tasks = {
-		blink_task_data_t(
-			"blink_yellow",
-			pin_led_yellow,
-			configTICK_RATE_HZ/20,
-			configTICK_RATE_HZ/20
-		)
-		, blink_task_data_t(
-			"blink_red",
-			pin_led_red,
-			configTICK_RATE_HZ/7,
-			configTICK_RATE_HZ/13
 		)
 	};
 #elif defined TARGET_STM32L072
