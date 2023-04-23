@@ -3,6 +3,11 @@
 
 #include <stdint.h>
 
+struct ad5932_freq_pair_t {
+	uint16_t lo_12;
+	uint16_t hi_12;
+};
+
 
 enum ad5932_defs_t {
 	REG_Creg_ADDR = 0b0000 << 12,
@@ -36,15 +41,14 @@ enum ad5932_defs_t {
 
 
 inline
-void ad5932_calc_delta_freq(const uint64_t desired_freq, uint64_t mclk_freq, uint16_t* const hi, uint16_t* const lo)
+ad5932_freq_pair_t ad5932_calc_delta_freq(const uint64_t desired_freq, uint64_t mclk_freq)
 {
-	constexpr uint64_t pow24 = (1 << 24); // 2^24
-	constexpr uint64_t pow12 = (1 << 12); // 2^12
-	const uint64_t res = pow24 * desired_freq / mclk_freq;
-	const uint64_t res_lo = res & (pow12 - 1);
-	const uint64_t res_hi = (res >> 12) & (pow12 - 1);
-	*hi = res_hi;
-	*lo = res_lo;
+	const uint64_t res = (desired_freq << 24U) / mclk_freq;
+	return ad5932_freq_pair_t{
+		.lo_12 = static_cast<uint16_t>(res & 0xFFF),
+		.hi_12 = static_cast<uint16_t>((res >> 12) & 0xFFF)
+	};
+
 }
 
 

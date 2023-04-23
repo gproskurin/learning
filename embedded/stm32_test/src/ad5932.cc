@@ -24,10 +24,9 @@ void ad5932_t::start()
 	);
 
 	// set frequency
-	int freq_lo, freq_hi;
-	ad5932_calc_delta_freq(500, 0/*FIXME*/, &freq_lo, &freq_hi);
-	spi_.write16(ad5932_defs_t::REG_f_start_lo | freq_lo);
-	spi_.write16(ad5932_defs_t::REG_f_start_hi | freq_hi);
+	const ad5932_freq_pair_t freq = ad5932_calc_delta_freq(220, 200000/*FIXME*/);
+	spi_.write16(ad5932_defs_t::REG_f_start_lo | freq.lo_12);
+	spi_.write16(ad5932_defs_t::REG_f_start_hi | freq.hi_12);
 
 	spi_.write16(ad5932_defs_t::REG_Nincr | 4095);
 
