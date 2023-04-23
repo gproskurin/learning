@@ -6,9 +6,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "FreeRTOS.h"
-#include "task.h"
-
 #include "logging.h"
 extern usart_logger_t logger;
 

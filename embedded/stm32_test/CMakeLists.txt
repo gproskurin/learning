@@ -42,6 +42,8 @@ set(FIRMWARE_BIN ${PROJECT_NAME}.bin)
 set(CMSIS_ROOT "${CMAKE_SOURCE_DIR}/..")
 set(CMSIS_ARM_INCLUDE "${CMAKE_SOURCE_DIR}/../CMSIS_5/CMSIS/Core/Include")
 
+set(STM32_LIB_ROOT "${CMAKE_SOURCE_DIR}/../stm32_lib")
+
 
 function(generate_targets T)
 	set(T_FIRMWARE_ELF "${T}_${FIRMWARE_ELF}")
@@ -57,6 +59,7 @@ function(generate_targets T)
 		${T_DEFINITIONS}
 		-I${CMSIS_ROOT}
 		-I${CMSIS_ARM_INCLUDE}
+		-I${STM32_LIB_ROOT}
 		-I${CMAKE_SOURCE_DIR}/../FreeRTOS-Kernel/include
 		-I${CMAKE_SOURCE_DIR}/src
 	)
@@ -81,13 +84,14 @@ function(generate_targets T)
 	add_executable(${T_FIRMWARE_ELF}
 		src/startup.c
 		src/main.cc
-		src/logging.cc
+		${STM32_LIB_ROOT}/logging.cc
 		src/ad5932.cc
-		src/my_stdlib.c
+		${STM32_LIB_ROOT}/my_stdlib.c
 	)
 
 	target_link_libraries(${T_FIRMWARE_ELF}
 		freertos_kernel
+		c
 	)
 
 	set(link_options
