@@ -100,9 +100,9 @@ void do_blink(const stm32_lib::gpio::gpio_pin_t& pin, int n)
 {
 	while (n-- > 0) {
 		stm32_lib::gpio::set_state(pin, 1);
-		delay(500000);
+		delay(1000000);
 		stm32_lib::gpio::set_state(pin, 0);
-		delay(100000);
+		delay(1000000);
 	}
 }
 
@@ -141,19 +141,22 @@ struct blink_task_data_t {
 };
 
 struct blink_tasks_t {
-#if defined TARGET_STM32H745_CM7 || defined TARGET_STM32H745_CM4
-	std::array<blink_task_data_t, 2> tasks = {
+#if defined TARGET_STM32H745_CM7
+	std::array<blink_task_data_t, 1> tasks = {
+		blink_task_data_t(
+			"blink_green",
+			pin_led_green,
+			configTICK_RATE_HZ/2,
+			configTICK_RATE_HZ/2
+		)
+	};
+#elif defined TARGET_STM32H745_CM4
+	std::array<blink_task_data_t, 1> tasks = {
 		blink_task_data_t(
 			"blink_red",
 			pin_led_red,
 			configTICK_RATE_HZ/2,
 			configTICK_RATE_HZ/2
-		)
-		, blink_task_data_t(
-			"blink_green",
-			pin_led_green,
-			configTICK_RATE_HZ/8,
-			configTICK_RATE_HZ/4
 		)
 	};
 #endif
@@ -211,13 +214,13 @@ void create_blink_task(blink_task_data_t& args)
 
 __attribute__ ((noreturn)) void main()
 {
+	// TODO init periph on one cpu, another should wait
+#if defined TARGET_STM32H745_CM7
 	bus_init();
-        stm32_lib::gpio::set_mode_output_lowspeed_pushpull(pin_led_green);
-        stm32_lib::gpio::set_mode_output_lowspeed_pushpull(pin_led_red);
-        while (1) {
-                do_blink(pin_led_red, 10);
-                do_blink(pin_led_green, 10);
-        }
+#endif
+#if defined TARGET_STM32H745_CM4
+	delay(1000000);
+#endif
 
 	usart_init(USART_LOG);
 	logger.set_usart(USART_LOG);

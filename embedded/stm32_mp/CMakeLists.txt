@@ -5,26 +5,6 @@ include("cmake/arm-none-eabi.cmake")
 project(led_blinky C CXX)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
-set(stm32f103_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/ld/stm32f103.ld)
-set(stm32f103_DEFINITIONS "-DTARGET_STM32F103")
-set(stm32f103_C_CXX_ARCH_FLAGS -mcpu=cortex-m3 -mthumb)
-set(stm32f103_FREERTOS_PORT "GCC_ARM_CM3")
-
-set(stm32l072_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/ld/stm32l072.ld)
-set(stm32l072_DEFINITIONS "-DTARGET_STM32L072")
-set(stm32l072_C_CXX_ARCH_FLAGS -mcpu=cortex-m0plus -mthumb)
-set(stm32l072_FREERTOS_PORT "GCC_ARM_CM0")
-
-set(stm32l432_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/ld/stm32l432.ld)
-set(stm32l432_DEFINITIONS "-DTARGET_STM32L432")
-set(stm32l432_C_CXX_ARCH_FLAGS -mcpu=cortex-m4 -mthumb)
-set(stm32l432_FREERTOS_PORT "GCC_ARM_CM3")
-
-set(stm32h7a3_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/ld/stm32h7a3.ld)
-set(stm32h7a3_DEFINITIONS "-DTARGET_STM32H7A3")
-set(stm32h7a3_C_CXX_ARCH_FLAGS -mcpu=cortex-m7 -mthumb)
-set(stm32h7a3_FREERTOS_PORT "GCC_ARM_CM3")
-
 set(stm32h745cm4_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/ld/stm32h745_cm4.ld)
 set(stm32h745cm4_DEFINITIONS -DTARGET_STM32H745_CM4 -DCORE_CM4)
 set(stm32h745cm4_C_CXX_ARCH_FLAGS -mcpu=cortex-m4 -mthumb)

@@ -39,7 +39,7 @@ extern void vPortSVCHandler(void);
 extern void xPortPendSVHandler(void);
 extern void xPortSysTickHandler(void);
 
-#if defined TARGET_STM32H745_CM7
+//#if defined TARGET_STM32H745_CM7
 __attribute__((section(".vectors"))) void (*tab[])(void) =
 {
 	_estack,
@@ -90,4 +90,4 @@ __attribute__((section(".vectors"))) void (*tab[])(void) =
 	0,
 	0 //&IntHandler_Timer // TIM3
 };
-#endif
+//#endif
