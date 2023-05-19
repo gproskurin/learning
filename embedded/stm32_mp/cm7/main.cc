@@ -105,7 +105,20 @@ void str_cpy_3(char* dst, const char* s1, const char* s2, const char* s3)
 
 __attribute__ ((noreturn)) void main()
 {
-	// TODO init periph on one cpu, another should wait
+#if 0
+	// clear event
+	__SEV();
+	for (volatile int i=0; i<1000000; ++i) {}
+	__WFE();
+	for (volatile int i=0; i<1000000; ++i) {}
+
+        if (1) {
+                __WFE(); // wait for "START" event from CM4
+
+                __SEV(); // wakeup CM4
+                __WFE(); // clear our wakeup event
+        }
+#endif
 	periph_init();
 
 	usart_init(USART_LOG);

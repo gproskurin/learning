@@ -83,8 +83,28 @@ void str_cpy_3(char* dst, const char* s1, const char* s2, const char* s3)
 
 __attribute__ ((noreturn)) void main()
 {
-	// wait for another cpu to init periph
-	for(volatile int i=0; i<100000; ++i) {}
+#if 0
+	// clear event
+	__SEV();
+	for (volatile int i=0; i<1000000; ++i) {}
+	__WFE();
+	for (volatile int i=0; i<1000000; ++i) {}
+
+	// goto STOP mode and wait for CM7 to init periph and wakeup us
+	if (1) {
+		__SEV(); // signal "START" event to CM7
+		__WFE(); // clear pending events
+
+		//PWR->CR1 &= ~PWR_CR1_LPDS;
+		//PWR->CPU2CR &= ~PWR_CPUCR_PDDS_D2_Msk; // keep STOP mode when in DEEPSLEEP
+		//SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
+		//__DSB();
+		//__ISB();
+		//__WFE(); // sleep
+		//SCB->SCR &= ~SCB_SCR_SLEEPDEEP_Msk;
+	}
+#endif
+	for (volatile int i=0; i<1000000; ++i) {} // wait for other core to init periph
 
 	usart_init(USART_LOG);
 	logger.set_usart(USART_LOG);
