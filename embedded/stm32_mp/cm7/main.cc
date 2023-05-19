@@ -88,8 +88,8 @@ struct blink_tasks_t {
 		freertos_utils::blink_task_data_t(
 			"blink_green",
 			pin_led_green,
-			configTICK_RATE_HZ/2,
-			configTICK_RATE_HZ/2
+			configTICK_RATE_HZ/10,
+			configTICK_RATE_HZ/10*2
 		)
 	};
 } blink_tasks;
