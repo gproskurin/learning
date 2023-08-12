@@ -10,7 +10,7 @@
 #endif
 
 //#define configSYSTICK_CLOCK_HZ			1000000
-#define configTICK_RATE_HZ				100
+#define configTICK_RATE_HZ				1000
 #define configMAX_PRIORITIES				5
 #define configMINIMAL_STACK_SIZE			128
 #define configMAX_TASK_NAME_LEN				16
