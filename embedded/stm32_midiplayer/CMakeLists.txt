@@ -59,6 +59,7 @@ function(generate_targets T)
 	add_executable(${T_FIRMWARE_ELF}
 		src/startup.c
 		src/main.cc
+		src/player.cc
 		${STM32_LIB_ROOT}/logging.cc
 		${STM32_LIB_ROOT}/my_stdlib.c
 	)

@@ -1,3 +1,5 @@
+#include "player.h"
+
 #include "lib_stm32.h"
 #include "logging.h"
 
@@ -10,8 +12,9 @@
 
 
 #define PRIO_BLINK 1
+#define PRIO_SENDER 1
 #define PRIO_LOGGER 2
-#define PRIO_PLAY 3
+#define PRIO_PLAYER 3
 
 #if defined TARGET_STM32L432
 	const stm32_lib::gpio::gpio_pin_t pin_led_green(GPIOB, 3);
@@ -68,16 +71,6 @@ void tim_pwm_init(TIM_TypeDef* const tim)
 	tim->CCER |= TIM_CCER_CC1E;
 #endif
 	//tim->CR1 = TIM_CR1_CEN;
-}
-
-
-void basic_timer_init(TIM_TypeDef* const tim, uint16_t prescaler, uint16_t arr)
-{
-	tim->PSC = prescaler;
-	tim->ARR = arr;
-	tim->CCR1 = arr / 5 * 4;
-	tim->DIER |= TIM_DIER_UIE | TIM_DIER_CC1IE; // enable hardware interrupt
-	tim->CR1 = (tim->CR1 & ~(TIM_CR1_UDIS | TIM_CR1_OPM)) | TIM_CR1_CEN;
 }
 
 
@@ -187,158 +180,9 @@ void blink_task_function(void* arg)
 }
 
 
-// Play task
-struct play_task_data_t {
-	play_task_data_t() {}
-
-	task_stack_t<128> stack;
-	TaskHandle_t task_handle = nullptr;
-	StaticTask_t task_buffer;
-} play_task_data;
-
-
-namespace notes {
-	enum note_sym_t {
-		C0 = 0,
-		C0s, D0f = C0s,
-		D0,
-		D0s, E0f = D0s,
-		E0,
-		F0,
-		F0s, G0f = F0s,
-		G0,
-		G0s, A0f = G0s,
-		A0,
-		A0s,B0f = A0s,
-		B0,
-
-		C1,
-		C1s, D1f = C1s,
-		D1,
-		D1s, E1f = D1s,
-		E1,
-		F1,
-		F1s, G1f = F1s,
-		G1,
-		G1s, A1f = G1s,
-		A1,
-		A1s, B1f = A1s,
-		B1,
-
-		C2,
-		C2s, D2f = C2s,
-		D2,
-		D2s, E2f = D2s,
-		E2,
-		F2,
-		F2s, G2f = F2s,
-		G2,
-		G2s, A2f = G2s,
-		A2,
-		A2s, B2f = A2s,
-		B2,
-
-		C3,
-		C3s, D3f = C3s,
-		D3,
-		D3s, E3f = D3s,
-		E3,
-		F3,
-		F3s, G3f = F3s,
-		G3,
-		G3s, A3f = G3s,
-		A3,
-		A3s, B3f = A3s,
-		B3,
-
-		C4,
-		C4s, D4f = C4s,
-		D4,
-		D4s, E4f = D4s,
-		E4,
-		F4,
-		F4s, G4f = F4s,
-		G4,
-		G4s, A4f = G4s,
-		A4,
-		A4s, B4f = A4s,
-		B4,
-
-		C5,
-		C5s, D5f = C5s,
-		D5,
-		D5s, E5f = D5s,
-		E5,
-		F5,
-		F5s, G5f = F5s,
-		G5,
-		G5s, A5f = G5s,
-		A5,
-		A5s, B5f = A5s,
-		B5,
-
-		C6,
-		C6s, D6f = C6s,
-		D6,
-		D6s, E6f = D6s,
-		E6,
-		F6,
-		F6s, G6f = F6s,
-		G6,
-		G6s, A6f = G6s,
-		A6,
-		A6s, B6f = A6s,
-		B6,
-
-		C7,
-		C7s, D7f = C7s,
-		D7,
-		D7s, E7f = D7s,
-		E7,
-		F7,
-		F7s, G7f = F7s,
-		G7,
-		G7s, A7f = G7s,
-		A7,
-		A7s, B7f = A7s,
-		B7,
-
-		C8,
-		C8s, D8f = C8s,
-		D8,
-		D8s, E8f = D8s,
-		E8,
-		F8,
-		F8s, G8f = F8s,
-		G8,
-		G8s, A8f = G8s,
-		A8,
-		A8s, B8f = A8s,
-		B8
-	};
-	const std::array<uint32_t, 12*9> freq100 = {
-		1635, 1732, 1835, 1945, 2060, 2183, 2312, 2450, 2596, 2750, 2914, 3087,
-		3270, 3465, 3671, 3889, 4120, 4365, 4625, 4900, 5191, 5500, 5827, 6174,
-		6541, 6930, 7342, 7778, 8241, 8731, 9250, 9800, 10383, 11000, 11654, 12347,
-		13081, 13859, 14683, 15556, 16481, 17461, 18500, 19600, 20765, 22000, 23308, 24694,
-		26163, 27718, 29366, 31113, 32963, 34923, 36999, 39200, 41530, 44000, 46616, 49388,
-		52325, 55437, 58733, 62225, 65925, 69846, 73999, 78399, 83061, 88000, 93233, 98777,
-		104650, 110873, 117466, 124451, 131851, 139691, 147998, 156798, 166122, 176000, 186466, 197553,
-		209300, 221746, 234932, 248902, 263702, 279383, 295996, 313596, 332244, 352000, 372931, 395107,
-		418601, 443492, 469863, 497803, 527404, 558765, 591991, 627193, 664488, 704000, 745862, 790213
-	};
-	enum duration_t {
-		l1 = 64,
-		l2 = 32,
-		l2d = 48,
-		l4 = 16,
-		l8 = 8,
-		l16 = 4
-	};
-};
 struct note_t {
-	size_t note;
-	uint8_t duration;
+	notes::sym_t note;
+	notes::duration_t duration;
 };
 using namespace notes;
 const std::array<note_t, 66> music{
@@ -364,7 +208,7 @@ const std::array<note_t, 66> music{
 	note_t{E5f, l16},
 	note_t{D5, l16},
 	note_t{E5f, l16},
-	note_t{D5, l2d-(4*l16)},
+	note_t{D5, notes::duration_t(l2d-(4*l16))},
 
 	// 5
 	note_t{E5f, l4},
@@ -392,7 +236,7 @@ const std::array<note_t, 66> music{
 	note_t{B4f,l16},
 	note_t{A4,l16},
 	note_t{B4f,l16},
-	note_t{A4,l2d - 4*l16},
+	note_t{A4,static_cast<notes::duration_t>(l2d - 4*l16)},
 
 	// 9
 	note_t{B5f, l4},
@@ -416,7 +260,7 @@ const std::array<note_t, 66> music{
 	note_t{E5f, l16},
 	note_t{D5, l16},
 	note_t{E5f, l16},
-	note_t{D5, l2d-4*l16},
+	note_t{D5, static_cast<notes::duration_t>(l2d-4*l16)},
 
 	// 13
 	note_t{F5, l4},
@@ -440,41 +284,8 @@ const std::array<note_t, 66> music{
 	// 16
 	note_t{B4f, l2d}
 };
-
-void play_task_function(void*)
-{
-	TIM_PWM->CR1 &= ~(TIM_CR1_CEN);
-	const auto fade = configTICK_RATE_HZ/100;
-	for(;;) {
-		for (const auto& m : music) {
-			// on
-			const auto note_idx = m.note;
-			const uint16_t arr = uint32_t(CLOCK_SPEED)/(notes::freq100[note_idx]/100) - 1;
-			TIM_PWM->ARR = arr;
-			TIM_PWM->CCR1 = arr / 2 + 1;
-			TIM_PWM->CR1 |= TIM_CR1_CEN;
-			vTaskDelay(configTICK_RATE_HZ/64 * m.duration - fade);
-
-			// off
-			TIM_PWM->CR1 &= ~(TIM_CR1_CEN);
-			vTaskDelay(fade);
-		}
-		vTaskDelay(configTICK_RATE_HZ*3);
-	}
-}
-
-void create_task_play()
-{
-	xTaskCreateStatic(
-		&play_task_function,
-		"play",
-		play_task_data.stack.size(),
-		NULL, // param
-		PRIO_PLAY,
-		play_task_data.stack.data(),
-		&play_task_data.task_buffer
-	);
-}
+const std::array<notes::sym_t, 8> Cmaj{C4, D4, E4, F4, G4, A4, B4, C5};
+const std::array<notes::sym_t, 8> Am{A4, B4, C5, D5, E5, F5, G5, A5};
 
 void str_cpy_3(char* dst, const char* s1, const char* s2, const char* s3)
 {
@@ -506,6 +317,56 @@ void create_blink_task(blink_task_data_t& args)
 }
 
 
+struct sender_task_data_t {
+	std::array<StackType_t, 128> stack;
+	TaskHandle_t task_handle = nullptr;
+	StaticTask_t task_buffer;
+} sender_task_data;
+
+struct sender_task_args_t {
+	QueueHandle_t player_queue_handle;
+} sender_task_args;
+
+void sender_task_function(void* arg)
+{
+	sender_task_args_t* const args = reinterpret_cast<sender_task_args_t*>(arg);
+	for (;;) {
+		for (const auto& n : Cmaj) {
+			player::enqueue_note(args->player_queue_handle, n, notes::duration_t::l4);
+			vTaskDelay(configTICK_RATE_HZ/4);
+		}
+		vTaskDelay(configTICK_RATE_HZ);
+
+		for (const auto& n : Am) {
+			player::enqueue_note(args->player_queue_handle, n, notes::duration_t::l4);
+			vTaskDelay(configTICK_RATE_HZ/4);
+		}
+		vTaskDelay(configTICK_RATE_HZ*3);
+
+		for (const auto& n : music) {
+			player::enqueue_note(args->player_queue_handle, n.note, n.duration);
+			vTaskDelay(configTICK_RATE_HZ/50*n.duration);
+		}
+		vTaskDelay(configTICK_RATE_HZ*3);
+	}
+}
+
+void create_task_sender(QueueHandle_t player_queue_handle)
+{
+	sender_task_args.player_queue_handle = player_queue_handle;
+
+	sender_task_data.task_handle = xTaskCreateStatic(
+		&sender_task_function,
+		"sender",
+		sender_task_data.stack.size(),
+		reinterpret_cast<void*>(&sender_task_args),
+		PRIO_SENDER,
+		sender_task_data.stack.data(),
+		&sender_task_data.task_buffer
+	);
+}
+
+
 __attribute__ ((noreturn)) void main()
 {
 	bus_init();
@@ -532,7 +393,17 @@ __attribute__ ((noreturn)) void main()
 	}
 	logger.log_sync("Created blink tasks\r\n");
 
-	create_task_play();
+	logger.log_sync("Creating player queue...\r\n");
+	QueueHandle_t player_queue_handle = player::create_queue();
+	logger.log_sync("Created player queue\r\n");
+
+	logger.log_sync("Creating player task...\r\n");
+	player::create_task("player", PRIO_PLAYER, player_queue_handle);
+	logger.log_sync("Created player task\r\n");
+
+	logger.log_sync("Creating sender task...\r\n");
+	create_task_sender(player_queue_handle);
+	logger.log_sync("Created sender task\r\n");
 
 	//logger.log_sync("Initializing interrupts\r\n");
 	//nvic_init_tim();
