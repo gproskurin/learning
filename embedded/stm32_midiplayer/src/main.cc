@@ -321,30 +321,27 @@ struct sender_task_data_t {
 	std::array<StackType_t, 128> stack;
 	TaskHandle_t task_handle = nullptr;
 	StaticTask_t task_buffer;
+
+	QueueHandle_t arg_player_queue_handle = nullptr;
 } sender_task_data;
 
-struct sender_task_args_t {
-	QueueHandle_t player_queue_handle;
-} sender_task_args;
-
-void sender_task_function(void* arg)
+void sender_task_function(void*)
 {
-	sender_task_args_t* const args = reinterpret_cast<sender_task_args_t*>(arg);
 	for (;;) {
 		for (const auto& n : Cmaj) {
-			player::enqueue_note(args->player_queue_handle, n, notes::duration_t::l4);
+			player::enqueue_note(sender_task_data.arg_player_queue_handle, n, notes::duration_t::l4);
 			vTaskDelay(configTICK_RATE_HZ/4);
 		}
 		vTaskDelay(configTICK_RATE_HZ);
 
 		for (const auto& n : Am) {
-			player::enqueue_note(args->player_queue_handle, n, notes::duration_t::l4);
+			player::enqueue_note(sender_task_data.arg_player_queue_handle, n, notes::duration_t::l4);
 			vTaskDelay(configTICK_RATE_HZ/4);
 		}
 		vTaskDelay(configTICK_RATE_HZ*3);
 
 		for (const auto& n : music) {
-			player::enqueue_note(args->player_queue_handle, n.note, n.duration);
+			player::enqueue_note(sender_task_data.arg_player_queue_handle, n.note, n.duration);
 			vTaskDelay(configTICK_RATE_HZ/50*n.duration);
 		}
 		vTaskDelay(configTICK_RATE_HZ*3);
@@ -353,13 +350,12 @@ void sender_task_function(void* arg)
 
 void create_task_sender(QueueHandle_t player_queue_handle)
 {
-	sender_task_args.player_queue_handle = player_queue_handle;
-
+	sender_task_data.arg_player_queue_handle = player_queue_handle;
 	sender_task_data.task_handle = xTaskCreateStatic(
 		&sender_task_function,
 		"sender",
 		sender_task_data.stack.size(),
-		reinterpret_cast<void*>(&sender_task_args),
+		nullptr,
 		PRIO_SENDER,
 		sender_task_data.stack.data(),
 		&sender_task_data.task_buffer

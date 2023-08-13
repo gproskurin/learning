@@ -59,11 +59,9 @@ struct play_task_data_t {
 	std::array<StackType_t, 128> stack;
 	TaskHandle_t task_handle = nullptr;
 	StaticTask_t task_buffer;
-} play_task_data;
 
-struct task_args_t {
-	QueueHandle_t queue_handle;
-} task_args;
+	QueueHandle_t arg_queue_handle = nullptr;
+} play_task_data;
 
 
 #define TIM_PWM TIM15
@@ -81,12 +79,11 @@ void play_note(notes::sym_t n, notes::duration_t d)
 }
 
 
-void play_task_function(void* arg)
+void play_task_function(void*)
 {
-	task_args_t* const args = static_cast<task_args_t*>(arg);
 	for(;;) {
 		queue_item_t item;
-		if (xQueueReceive(args->queue_handle, &item, configTICK_RATE_HZ/*1sec*/) == pdTRUE) {
+		if (xQueueReceive(play_task_data.arg_queue_handle, &item, configTICK_RATE_HZ/*1sec*/) == pdTRUE) {
 			notes::sym_t n;
 			notes::duration_t d;
 			queue_item_decode(item, n, d);
@@ -98,12 +95,12 @@ void play_task_function(void* arg)
 
 void player::create_task(const char* task_name, UBaseType_t prio, QueueHandle_t queue_handle)
 {
-	task_args.queue_handle = queue_handle;
+	play_task_data.arg_queue_handle = queue_handle;
 	xTaskCreateStatic(
 		&play_task_function,
 		task_name,
 		play_task_data.stack.size(),
-		&task_args,
+		nullptr,
 		prio,
 		play_task_data.stack.data(),
 		&play_task_data.task_buffer
