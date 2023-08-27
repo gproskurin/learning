@@ -211,6 +211,17 @@ void set_mode_af_lowspeed_pushpull(const gpio_pin_t& pin, uint32_t af_num)
 }
 #endif
 
+inline
+void set_mode_output_analog(const gpio_pin_t& pin)
+{
+#ifdef TARGET_STM32F103
+#error "TODO"
+#else
+	pin.set(mode_t::analog);
+#endif
+}
+
+
 } // namespace gpio
 
 
