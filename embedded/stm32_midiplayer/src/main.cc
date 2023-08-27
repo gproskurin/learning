@@ -96,8 +96,7 @@ void bus_init()
 
 
 StaticTask_t xTaskBufferIdle;
-using idle_task_stack_t = task_stack_t<128>;
-idle_task_stack_t idle_task_stack;
+task_stack_t<128> idle_task_stack;
 extern "C"
 void vApplicationGetIdleTaskMemory(StaticTask_t **tcbIdle, StackType_t **stackIdle, uint32_t *stackSizeIdle)
 {
