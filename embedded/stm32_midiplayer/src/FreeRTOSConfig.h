@@ -6,7 +6,7 @@
 #define configUSE_TICKLESS_IDLE				1
 
 #if defined TARGET_STM32L432
-	#define configCPU_CLOCK_HZ			4000000
+	#define configCPU_CLOCK_HZ			48000000
 #endif
 
 //#define configSYSTICK_CLOCK_HZ			1000000

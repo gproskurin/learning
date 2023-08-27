@@ -102,7 +102,15 @@ void toggle_bits_10(volatile uint32_t* const ptr, const uint32_t mask)
 void bus_init()
 {
 #if defined TARGET_STM32L432
-	// enable GPIOs
+	// flash
+	FLASH->ACR = (FLASH->ACR & ~FLASH_ACR_LATENCY_Msk) | FLASH_ACR_LATENCY_2WS;
+
+	// clock
+	//while (!(RCC->CR & RCC_CR_MSIRDY)) {} // wait for MSI to be ready
+	RCC->CR = (RCC->CR & ~RCC_CR_MSIRANGE_Msk) | RCC_CR_MSIRANGE_11;
+	RCC->CR |= RCC_CR_MSIRGSEL;
+
+	// GPIOs
 	RCC->AHB2ENR |= RCC_AHB2ENR_GPIOAEN_Msk | RCC_AHB2ENR_GPIOBEN_Msk;
 	toggle_bits_10(&RCC->AHB2RSTR, RCC_AHB2RSTR_GPIOARST_Msk | RCC_AHB2RSTR_GPIOBRST_Msk);
 
