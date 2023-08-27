@@ -24,10 +24,8 @@
 	#define USART_LOG_AF 7
 	const stm32_lib::gpio::gpio_pin_t usart_log_pin_tx(GPIOB, 6);
 
-	// TIM15, PWM
-	const stm32_lib::gpio::gpio_pin_t pin_pwm(GPIOA, 2);
-	#define TIM_PWM_AF 14
-	#define TIM_PWM TIM15
+	// TIM_DAC
+	//#define TIM_DAC TIM6
 #endif
 
 
@@ -57,40 +55,6 @@ void usart_init(USART_TypeDef* const usart)
 }
 
 
-void tim_pwm_init(TIM_TypeDef* const tim)
-{
-	tim->CR1 = 0;
-	tim->CNT = 0;
-	tim->BDTR |= TIM_BDTR_MOE_Msk;
-#if defined TARGET_STM32L432
-	tim->CCMR1 = (tim->CCMR1 & ~(TIM_CCMR1_CC1S_Msk | TIM_CCMR1_OC1M_Msk))
-		| (0b00 << TIM_CCMR1_CC1S_Pos) // output channel
-		| (TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1) // 0110 = PWM mode 1
-		| TIM_CCMR1_OC1FE // output compare fast
-		;
-	tim->CCER |= TIM_CCER_CC1E;
-#endif
-	//tim->CR1 = TIM_CR1_CEN;
-}
-
-
-extern "C" __attribute__ ((interrupt)) void IntHandler_Timer()
-{
-#if 0
-	const uint32_t sr = LED_TIM->SR;
-	if (sr & TIM_SR_UIF) {
-		// new cycle starts, led on
-		LED_TIM->SR = ~TIM_SR_UIF;
-		stm32_lib::gpio::set_state(LED_GPIO, LED_PIN, 1);
-	} else if (sr & TIM_SR_CC1IF) {
-		// compare event triggered, part of cycle finished, led off
-		LED_TIM->SR = ~TIM_SR_CC1IF;
-		stm32_lib::gpio::set_state(LED_GPIO, LED_PIN, 0);
-	}
-#endif
-}
-
-
 void toggle_bits_10(volatile uint32_t* const ptr, const uint32_t mask)
 {
 	const auto val = *ptr;
@@ -114,11 +78,18 @@ void bus_init()
 	RCC->AHB2ENR |= RCC_AHB2ENR_GPIOAEN_Msk | RCC_AHB2ENR_GPIOBEN_Msk;
 	toggle_bits_10(&RCC->AHB2RSTR, RCC_AHB2RSTR_GPIOARST_Msk | RCC_AHB2RSTR_GPIOBRST_Msk);
 
-	// USART1 & TIM15
-	RCC->APB2ENR |= RCC_APB2ENR_TIM15EN_Msk | RCC_APB2ENR_USART1EN_Msk;
+	// DAC1 & TIM6
+	RCC->APB1ENR1 |= RCC_APB1ENR1_DAC1EN_Msk | RCC_APB1ENR1_TIM6EN_Msk;
+	toggle_bits_10(
+		&RCC->APB1RSTR1,
+		RCC_APB1RSTR1_DAC1RST_Msk | RCC_APB1RSTR1_TIM6RST_Msk
+	);
+
+	// USART1
+	RCC->APB2ENR |= RCC_APB2ENR_USART1EN_Msk;
 	toggle_bits_10(
 		&RCC->APB2RSTR,
-		RCC_APB2RSTR_TIM15RST_Msk | RCC_APB2RSTR_USART1RST_Msk
+		RCC_APB2RSTR_USART1RST_Msk
 	);
 #endif
 }
@@ -177,12 +148,12 @@ void blink_task_function(void* arg)
 		if (do_log) {
 			logger.log_async("LED -> on\r\n");
 		}
-		stm32_lib::gpio::set_state(args->pin, true);
+		//stm32_lib::gpio::set_state(args->pin, true);
 		vTaskDelay(args->ticks_on);
 		if (do_log) {
 			logger.log_async("LED -> off\r\n");
 		}
-		stm32_lib::gpio::set_state(args->pin, false);
+		//stm32_lib::gpio::set_state(args->pin, false);
 		vTaskDelay(args->ticks_off);
 	}
 }
@@ -335,19 +306,28 @@ struct sender_task_data_t {
 
 void sender_task_function(void*)
 {
+	player::set_instrument_sin();
+	bool instr = true;
 	for (;;) {
+
+#if 1
+		player::set_instrument_sin();
 		for (const auto& n : Cmaj) {
 			player::enqueue_note(sender_task_data.arg_player_queue_handle, n, notes::duration_t::l4);
 			vTaskDelay(configTICK_RATE_HZ/4);
 		}
 		vTaskDelay(configTICK_RATE_HZ);
 
+		player::set_instrument_sq();
 		for (const auto& n : Am) {
 			player::enqueue_note(sender_task_data.arg_player_queue_handle, n, notes::duration_t::l4);
 			vTaskDelay(configTICK_RATE_HZ/4);
 		}
 		vTaskDelay(configTICK_RATE_HZ*3);
+#endif
 
+		instr = !instr;
+		if (instr) { player::set_instrument_sq(); } else { player::set_instrument_sin(); }
 		for (const auto& n : music) {
 			player::enqueue_note(sender_task_data.arg_player_queue_handle, n.note, n.duration);
 			vTaskDelay(configTICK_RATE_HZ/50*n.duration);
@@ -386,9 +366,6 @@ __attribute__ ((noreturn)) void main()
 	logger.log_sync("Creating logger task...\r\n");
 	logger.create_task("logger", PRIO_LOGGER);
 	logger.log_sync("Created logger task\r\n");
-
-	stm32_lib::gpio::set_mode_af_lowspeed_pushpull(pin_pwm, TIM_PWM_AF);
-	tim_pwm_init(TIM_PWM);
 
 	logger.log_sync("Creating blink tasks...\r\n");
 	for (auto& bt : blink_tasks.tasks) {

@@ -5,7 +5,7 @@
 
 extern void main();
 extern void _estack(void);
-extern void IntHandler_Timer();
+extern void IntHandler_Timer6();
 
 
 __attribute__((naked, noreturn)) void _reset(void)
@@ -42,7 +42,7 @@ extern void xPortSysTickHandler(void);
 
 #if defined TARGET_STM32L432
 // FIXME
-__attribute__((section(".vectors"))) void (*tab[])(void) =
+__attribute__((section(".vectors"))) void (*tab[16 + 84])(void) =
 {
 	_estack,
 	_reset,
@@ -86,9 +86,6 @@ __attribute__((section(".vectors"))) void (*tab[])(void) =
 	0,
 	0,
 	0,
-	&IntHandler_Timer, // TIM9
-	0,
-	0, // TIM11 43 = 27 + 16
 	0,
 	0,
 	0,
@@ -104,6 +101,20 @@ __attribute__((section(".vectors"))) void (*tab[])(void) =
 	0,
 	0,
 	0,
-	0 // &IntHandler_Timer // TIM6 59 = 16 + 43
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	&IntHandler_Timer6 // TIM6
 };
 #endif

@@ -144,6 +144,8 @@ namespace player {
 QueueHandle_t create_queue();
 void create_task(const char* task_name, UBaseType_t prio, QueueHandle_t queue);
 void enqueue_note(QueueHandle_t, notes::sym_t, notes::duration_t);
+void set_instrument_sq();
+void set_instrument_sin();
 
 }
 
