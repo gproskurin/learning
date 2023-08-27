@@ -125,7 +125,7 @@ namespace notes {
 		A8s, B8f = A8s,
 		B8
 	};
-        static_assert(sym_t::B8 <= 255);
+	static_assert(sym_t::B8 <= 255);
 
 	enum duration_t {
 		l1 = 64,

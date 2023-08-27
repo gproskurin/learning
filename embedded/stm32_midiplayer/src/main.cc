@@ -162,8 +162,8 @@ struct blink_tasks_t {
 		blink_task_data_t(
 			"blink_green",
 			pin_led_green,
-			configTICK_RATE_HZ,
-			configTICK_RATE_HZ*2
+			configTICK_RATE_HZ/8,
+			configTICK_RATE_HZ*3/8
 		)
 	};
 } blink_tasks;
