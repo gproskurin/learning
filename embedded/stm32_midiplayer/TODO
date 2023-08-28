@@ -1,0 +1,3 @@
+- timer initiates DMA, -> DAC
+ - DMA batch mode, underflow interrupt, ...
+
