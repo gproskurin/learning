@@ -1,9 +1,0 @@
-[submodule "embedded/cmsis_device_l1"]
-	path = embedded/cmsis_device_l1
-	url = https://github.com/STMicroelectronics/cmsis_device_l1
-[submodule "embedded/CMSIS_5"]
-	path = embedded/CMSIS_5
-	url = https://github.com/ARM-software/CMSIS_5
-[submodule "embedded/cmsis_device_f1"]
-	path = embedded/cmsis_device_f1
-	url = https://github.com/STMicroelectronics/cmsis_device_f1
