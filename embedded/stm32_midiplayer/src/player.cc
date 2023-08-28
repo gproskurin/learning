@@ -2,17 +2,12 @@
 
 #include "cmsis_device.h"
 #include "lib_stm32.h"
+#include "logging.h"
 
 #include <array>
+#include <limits>
 
-
-enum instrument_t {
-	none,
-	sin,
-	sq
-};
-volatile instrument_t g_instrument = none;
-instrument_t g_def_instrument = sin;
+extern usart_logger_t logger;
 
 #define DDS_FREQ 41943
 #define DDS_FREQ_MUL_100 4194304 // DDS_FREQ*100 rounded to power of 2, to allow it be multiplied FIXME

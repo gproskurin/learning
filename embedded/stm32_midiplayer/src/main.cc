@@ -161,107 +161,122 @@ void blink_task_function(void* arg)
 struct note_t {
 	notes::sym_t note;
 	notes::duration_t duration;
+
+	note_t() : duration(static_cast<notes::duration_t>(0)) {}
+	note_t(notes::sym_t n, notes::duration_t d) : note(n), duration(d) {}
 };
+
+using notes_t = std::array<note_t, 5>;
+
+struct beat_t {
+	notes::duration_t duration;
+	notes_t notes;
+
+	beat_t(notes::duration_t d, const notes_t& nn) : duration(d), notes(nn) {}
+};
+
 using namespace notes;
-const std::array<note_t, 66> music{
+const std::array<beat_t, 67> music{
 	// 1
-	note_t{B5f, l4},
-	note_t{A5, l4},
-	note_t{G5, l4},
+	beat_t{l4, notes_t{note_t{B5f, l4}, note_t{G3, l2d}}},
+	beat_t{l4, notes_t{note_t{A5, l4}}},
+	beat_t{l4, notes_t{note_t{G5, l4}}},
 
 	// 2
-	note_t{A5, l4},
-	note_t{D5, l4},
-	note_t{D5, l4},
+	beat_t{l4, notes_t{note_t{A5, l4}, note_t{F3, l2d}}},
+	beat_t{l4, notes_t{note_t{D5, l4}}},
+	beat_t{l4, notes_t{note_t{D5, l4}}},
 
 	// 3
-	note_t{G5, l4},
-	note_t{G4, l8},
-	note_t{A4, l8},
-	note_t{B4f, l8},
-	note_t{C5, l8},
+	beat_t{l4, notes_t{note_t{G5, l4}, {E3f, l2d}}},
+	beat_t{l8, notes_t{note_t{G4, l8}}},
+	beat_t{l8, notes_t{note_t{A4, l8}}},
+	beat_t{l8, notes_t{note_t{B4f, l8}}},
+	beat_t{l8, notes_t{note_t{C5, l8}}},
 
 	// 4
-	note_t{D5, l16},
-	note_t{E5f, l16},
-	note_t{D5, l16},
-	note_t{E5f, l16},
-	note_t{D5, notes::duration_t(l2d-(4*l16))},
+	beat_t{l4, notes_t{note_t{D3, l4}, note_t{D5, l2d}}},
+	beat_t{l8, notes_t{note_t{D4, l8}}},
+	beat_t{l8, notes_t{note_t{C5, l8}}},
+	beat_t{l8, notes_t{note_t{B3f, l8}}},
+	beat_t{l8, notes_t{note_t{A3, l8}}},
 
 	// 5
-	note_t{E5f, l4},
-	note_t{F5, l8},
-	note_t{E5f, l8},
-	note_t{D5, l8},
-	note_t{C5, l8},
+	beat_t{l4, notes_t{note_t{E5f, l4}, note_t{B3f, l2}, note_t{G3, l2}}},
+	beat_t{l8, notes_t{note_t{F5, l8}}},
+	beat_t{l8, notes_t{note_t{E5f, l8}}},
+	beat_t{l8, notes_t{note_t{D5, l8}, note_t{A3, l4}}},
+	beat_t{l8, notes_t{note_t{C5, l8}}},
 
 	// 6
-	note_t{D5,l4},
-	note_t{E5f,l8},
-	note_t{D5,l8},
-	note_t{C5,l8},
-	note_t{B4f,l8},
+	beat_t{l4, notes_t{note_t{D5,l4}, note_t{B3f, l2}}},
+	beat_t{l8, notes_t{note_t{E5f,l8}}},
+	beat_t{l8, notes_t{note_t{D5,l8}}},
+	beat_t{l8, notes_t{note_t{C5,l8}, note_t{G3,l8}}},
+	beat_t{l8, notes_t{note_t{B4f,l8}}},
 
 	// 7
-	note_t{C5,l4},
-	note_t{D5,l8},
-	note_t{C5,l8},
-	note_t{B4f,l8},
-	note_t{C5,l8},
+	beat_t{l4, notes_t{note_t{C5,l4}, note_t{A3,l4}}},
+	beat_t{l8, notes_t{note_t{D5,l8}, note_t{F3s,l4}}},
+	beat_t{l8, notes_t{note_t{C5,l8}}},
+	beat_t{l8, notes_t{note_t{B4f,l8}, note_t{G3,l4}}},
+	beat_t{l8, notes_t{note_t{C5,l8}}},
 
 	// 8
-	note_t{A4,l16},
-	note_t{B4f,l16},
-	note_t{A4,l16},
-	note_t{B4f,l16},
-	note_t{A4,static_cast<notes::duration_t>(l2d - 4*l16)},
+	beat_t{l4, notes_t{note_t{A4,l2d}, note_t{D3, l4}}},
+	beat_t{l8, notes_t{note_t{D4,l8}}},
+	beat_t{l8, notes_t{note_t{C4,l8}}},
+	beat_t{l8, notes_t{note_t{B3f,l8}}},
+	beat_t{l8, notes_t{note_t{A3,l8}}},
 
 	// 9
-	note_t{B5f, l4},
-	note_t{A5, l4},
-	note_t{G5, l4},
+	beat_t{l4, notes_t{note_t{B5f, l4}, note_t{G3,l2d}}},
+	beat_t{l4, notes_t{note_t{A5, l4}}},
+	beat_t{l4, notes_t{note_t{G5, l4}}},
 
 	// 10
-	note_t{A5, l4},
-	note_t{D5, l4},
-	note_t{D5, l4},
+	beat_t{l4, notes_t{note_t{A5, l4}, note_t{F3,l2d}}},
+	beat_t{l4, notes_t{note_t{D5, l4}}},
+	beat_t{l4, notes_t{note_t{D5, l4}}},
 
 	// 11
-	note_t{G5, l4},
-	note_t{G4, l8},
-	note_t{A4, l8},
-	note_t{B4f, l8},
-	note_t{C5, l8},
+	beat_t{l4, notes_t{note_t{G5, l4}, note_t{E3f,l2d}}},
+	beat_t{l8, notes_t{note_t{G4, l8}}},
+	beat_t{l8, notes_t{note_t{A4, l8}}},
+	beat_t{l8, notes_t{note_t{B4f, l8}}},
+	beat_t{l8, notes_t{note_t{C5, l8}}},
 
 	// 12
-	note_t{D5, l16},
-	note_t{E5f, l16},
-	note_t{D5, l16},
-	note_t{E5f, l16},
-	note_t{D5, static_cast<notes::duration_t>(l2d-4*l16)},
+	beat_t{l4, notes_t{note_t{D5, l2d}, note_t{D3,l4}}},
+	beat_t{l8, notes_t{note_t{D4, l8}}},
+	beat_t{l8, notes_t{note_t{C4, l8}}},
+	beat_t{l8, notes_t{note_t{B4, l8}}},
+	beat_t{l8, notes_t{note_t{A4, l8}}},
 
 	// 13
-	note_t{F5, l4},
-	note_t{G5, l8},
-	note_t{F5, l8},
-	note_t{E5f, l8},
-	note_t{D5, l8},
+	beat_t{l4, notes_t{note_t{F5, l4}, note_t{D4,l2}, note_t{B4,l2}}},
+	beat_t{l8, notes_t{note_t{G5, l8}}},
+	beat_t{l8, notes_t{note_t{F5, l8}}},
+	beat_t{l8, notes_t{note_t{E5f, l8}, note_t{G3,l4}}},
+	beat_t{l8, notes_t{note_t{D5, l8}}},
 
 	// 14
-	note_t{E5f, l4},
-	note_t{F5, l8},
-	note_t{E5f, l8},
-	note_t{D5, l8},
-	note_t{C5, l8},
+	beat_t{l4, notes_t{note_t{E5f, l4}, note_t{C4, l4}}},
+	beat_t{l8, notes_t{note_t{F5, l8}, note_t{A3, l4}}},
+	beat_t{l8, notes_t{note_t{E5f, l8}}},
+	beat_t{l8, notes_t{note_t{D5, l8}, note_t{F3,l4}}},
+	beat_t{l8, notes_t{note_t{C5, l8}}},
 
 	// 15
-	note_t{D5, l4},
-	note_t{G5, l4},
-	note_t{C5, l4},
+	beat_t{l4, notes_t{note_t{D5, l4}, note_t{B3f,l4}}},
+	beat_t{l4, notes_t{note_t{G5, l4}, note_t{E3f,l4}}},
+	beat_t{l4, notes_t{note_t{C5, l4}, note_t{F3,l4}, note_t{A3,l4}}},
 
 	// 16
-	note_t{B4f, l2d}
+	beat_t{l4, notes_t{note_t{B4f, l2d}, note_t{F4, l2d}, note_t{D4, l2d}, note_t{B3f,l4}}},
+	beat_t{l2, notes_t{note_t{B2f, l2}}}
 };
+
 const std::array<notes::sym_t, 8> Cmaj{C4, D4, E4, F4, G4, A4, B4, C5};
 const std::array<notes::sym_t, 8> Am{A4, B4, C5, D5, E5, F5, G5, A5};
 
@@ -305,33 +320,44 @@ struct sender_task_data_t {
 
 void sender_task_function(void*)
 {
-	player::set_instrument_sin();
-	bool instr = true;
+#if 0
 	for (;;) {
+		player::enqueue_note(sender_task_data.arg_player_queue_handle, notes::sym_t::A4, notes::duration_t::l2, notes::instrument_t::sin12);
+		vTaskDelay(configTICK_RATE_HZ);
+		player::enqueue_note(sender_task_data.arg_player_queue_handle, notes::sym_t::B4, notes::duration_t::l2, notes::instrument_t::sin12);
+		vTaskDelay(configTICK_RATE_HZ/2);
+	}
+#endif
 
-#if 1
-		player::set_instrument_sin();
+	for (;;) {
+#if 0
 		for (const auto& n : Cmaj) {
-			player::enqueue_note(sender_task_data.arg_player_queue_handle, n, notes::duration_t::l4);
+			player::enqueue_note(sender_task_data.arg_player_queue_handle, n, notes::duration_t::l4, notes::instrument_t::sin12);
 			vTaskDelay(configTICK_RATE_HZ/4);
 		}
 		vTaskDelay(configTICK_RATE_HZ);
+#endif
 
-		player::set_instrument_sq();
 		for (const auto& n : Am) {
-			player::enqueue_note(sender_task_data.arg_player_queue_handle, n, notes::duration_t::l4);
+			player::enqueue_note(sender_task_data.arg_player_queue_handle, n, notes::duration_t::l4, notes::instrument_t::sin12);
 			vTaskDelay(configTICK_RATE_HZ/4);
 		}
 		vTaskDelay(configTICK_RATE_HZ*3);
-#endif
 
-		instr = !instr;
-		if (instr) { player::set_instrument_sq(); } else { player::set_instrument_sin(); }
-		for (const auto& n : music) {
-			player::enqueue_note(sender_task_data.arg_player_queue_handle, n.note, n.duration);
-			vTaskDelay(configTICK_RATE_HZ/50*n.duration);
+		for (const auto& beat : music) {
+			for (const auto& n : beat.notes) {
+				if (n.duration) {
+					player::enqueue_note(
+						sender_task_data.arg_player_queue_handle,
+						n.note,
+						n.duration,
+						notes::instrument_t::sq
+					);
+				}
+			}
+			vTaskDelay(configTICK_RATE_HZ/32*beat.duration);
 		}
-		vTaskDelay(configTICK_RATE_HZ*3);
+		vTaskDelay(configTICK_RATE_HZ*2);
 	}
 }
 

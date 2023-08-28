@@ -136,6 +136,10 @@ namespace notes {
 		l16 = 4
 	};
 
+	enum instrument_t {
+		sq, sin3, sin4, sin5, sin10, sin12
+	};
+
 } // namespace notes
 
 
@@ -143,9 +147,7 @@ namespace player {
 
 QueueHandle_t create_queue();
 void create_task(const char* task_name, UBaseType_t prio, QueueHandle_t queue);
-void enqueue_note(QueueHandle_t, notes::sym_t, notes::duration_t);
-void set_instrument_sq();
-void set_instrument_sin();
+void enqueue_note(QueueHandle_t, notes::sym_t, notes::duration_t, notes::instrument_t);
 
 }
 
