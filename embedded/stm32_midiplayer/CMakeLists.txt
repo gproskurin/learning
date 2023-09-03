@@ -19,6 +19,14 @@ set(CMSIS_ARM_INCLUDE "${CMAKE_SOURCE_DIR}/../CMSIS_5/CMSIS/Core/Include")
 
 set(STM32_LIB_ROOT "${CMAKE_SOURCE_DIR}/../stm32_lib")
 
+set(LOOKUP_TABLES_DIR "${CMAKE_BINARY_DIR}/lookup_tables")
+set(LOOKUP_TABLES_FILE "${LOOKUP_TABLES_DIR}/lookup_tables.cc.h")
+add_custom_command(
+	OUTPUT "${LOOKUP_TABLES_FILE}"
+	COMMAND "mkdir" ARGS "-p" "--" "${LOOKUP_TABLES_DIR}"
+	COMMAND "sh" ARGS "-c" "${CMAKE_SOURCE_DIR}/lookup_gen.py" ">" "${LOOKUP_TABLES_FILE}"
+	DEPENDS "${CMAKE_SOURCE_DIR}/lookup_gen.py"
+)
 
 function(generate_targets T)
 	set(T_FIRMWARE_ELF "${T}_${FIRMWARE_ELF}")
@@ -59,9 +67,13 @@ function(generate_targets T)
 	add_executable(${T_FIRMWARE_ELF}
 		src/startup.c
 		src/main.cc
-		src/player.cc
+		src/player.cc ${LOOKUP_TABLES_FILE}
 		${STM32_LIB_ROOT}/logging.cc
 		${STM32_LIB_ROOT}/my_stdlib.c
+	)
+
+	set_source_files_properties("src/player.cc"
+		PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_BINARY_DIR}/lookup_tables"
 	)
 
 	target_link_libraries(${T_FIRMWARE_ELF}
