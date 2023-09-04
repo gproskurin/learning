@@ -9,8 +9,7 @@
 
 extern usart_logger_t logger;
 
-#define DDS_FREQ 41943
-#define DDS_FREQ_MUL_100 4194304 // DDS_FREQ*100 rounded to power of 2, to allow it be multiplied FIXME
+#define DDS_FREQ 48000 // keep in sync with python generator
 
 const stm32_lib::gpio::gpio_pin_t pin_dac(GPIOA, 4);
 
@@ -204,10 +203,15 @@ extern "C" __attribute__ ((interrupt)) void IntHandler_Timer6()
 #define TIM_DAC TIM6
 void dac_init()
 {
+	// ensure there is no truncation in calculation
+	static_assert((CLOCK_SPEED % DDS_FREQ) == 0);
+	constexpr uint16_t arr = CLOCK_SPEED / DDS_FREQ - 1;
+	static_assert((uint64_t(arr) + 1) * uint64_t(DDS_FREQ) == uint64_t(CLOCK_SPEED));
+
 	TIM_DAC->CR1 = 0;
 	TIM_DAC->DIER |= TIM_DIER_UIE;
 	TIM_DAC->PSC = 0;
-	TIM_DAC->ARR = uint32_t(CLOCK_SPEED)/DDS_FREQ - 1;
+	TIM_DAC->ARR = arr;
 	TIM_DAC->CR1 = TIM_CR1_CEN;
 	NVIC_SetPriority(TIM6_IRQn, 3); // TODO
 	NVIC_EnableIRQ(TIM6_IRQn);
@@ -232,13 +236,10 @@ void stop_note(void* pv, uint32_t ul)
 void play_note(notes::sym_t n, notes::duration_t d, notes::instrument_t instr, note_id_t note_id)
 {
 	constexpr auto fade = DDS_FREQ/512;
-
-	const uint32_t inc = (uint64_t(1ULL << 32) * uint64_t(freq100[n])) / uint64_t(DDS_FREQ_MUL_100);
 	const uint32_t dds_ticks = DDS_FREQ*d/64 - fade;
 
-	//vTaskDelay(1); // remove?
 	const auto voice_idx = find_free_voice();
-	g_voices[voice_idx].set(g_instr_info[instr].lookup_func, inc, dds_ticks, note_id);
+	g_voices[voice_idx].set(g_instr_info[instr].lookup_func, dds_notes_incs[n], dds_ticks, note_id);
 }
 
 

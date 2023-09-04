@@ -1,14 +1,15 @@
 - timer initiates DMA, -> DAC
  - DMA batch mode, underflow interrupt, ...
  - not share resources
-- autogenerate
- - lookup tables
- - freq table
++ autogenerate
+ + lookup tables
+ + freq table
 - add volume change for note (attack, ...)
 - more precise frequency
- - better calculation without simplification
+ + better calculation without simplification
  - use external oscillator
 - run from SRAM, flash off
 - use DSP
 - sin lookup tables: shrink size / 4
+- adjustable tempo
 
