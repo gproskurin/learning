@@ -10,8 +10,10 @@
 extern usart_logger_t logger;
 
 #define DDS_FREQ 48000 // keep in sync with python generator
+#define TIM_DAC TIM6
 
 const stm32_lib::gpio::gpio_pin_t pin_dac(GPIOA, 4);
+const stm32_lib::gpio::gpio_pin_t pin_led_green(GPIOB, 3);
 
 typedef uint16_t dds_value_t;
 #include "lookup_tables.cc.h"
@@ -23,6 +25,14 @@ typedef dds_value_t (*lookup_func_t)(uint32_t);
 struct instr_info_t {
 	const lookup_func_t lookup_func;
 	instr_info_t(lookup_func_t f) : lookup_func(f) {}
+};
+
+
+enum player_nf_t : uint32_t {
+	nf_ht = 1UL << 0,
+	nf_tc = 1UL << 1,
+	nf_te = 1UL << 2,
+	nf_note = 1UL << 3
 };
 
 
@@ -161,67 +171,55 @@ void queue_item_decode(queue_item_t item, notes::sym_t& n, notes::duration_t& d,
 }
 
 
-void player::enqueue_note(QueueHandle_t queue_handle, notes::sym_t n, notes::duration_t d, notes::instrument_t instr)
-{
-	const queue_item_t item = queue_item_encode(n, d, instr);
-	xQueueSend(queue_handle, &item, 0);
-}
-
-
-struct queue_data_t {
-	std::array<queue_item_t, 16> buffer;
-	StaticQueue_t q;
-} queue_data;
-
-QueueHandle_t player::create_queue()
-{
-	return xQueueCreateStatic(
-		queue_data.buffer.size(),
-		sizeof(queue_item_t),
-		reinterpret_cast<uint8_t*>(queue_data.buffer.data()),
-		&queue_data.q
-	);
-}
-
-
-struct play_task_data_t {
+struct player_task_data_t {
 	std::array<StackType_t, 128> stack;
 	TaskHandle_t task_handle = nullptr;
 	StaticTask_t task_buffer;
 
-	QueueHandle_t arg_queue_handle = nullptr;
-} play_task_data;
+	std::array<queue_item_t, 16> queue_buffer;
+	StaticQueue_t queue_q;
+	QueueHandle_t queue_handle = nullptr;
+
+	uint32_t next_note_id = 1;
+	std::array<uint16_t, 1024> dma_buffer{0};
+} player_task_data;
 
 
-#define TIM_DAC TIM6
-extern "C" __attribute__ ((interrupt)) void IntHandler_Timer6()
+void player::enqueue_note(notes::sym_t n, notes::duration_t d, notes::instrument_t instr)
 {
-	const auto sr = TIM_DAC->SR;
-	if (!(sr & TIM_SR_UIF)) {
-		return;
-	}
-	TIM_DAC->SR = sr & ~TIM_SR_UIF;
+	const queue_item_t item = queue_item_encode(n, d, instr);
 
-	uint32_t value = 0;
-	uint8_t voices_count = 0;
-	for (auto& v : g_voices) {
-		if (v.is_busy()) {
-			++voices_count;
-			value += uint32_t(v.tick());
-		}
+	// player task waits on notification, notes queue in checked only when appropriate notification arrives
+	xQueueSend(player_task_data.queue_handle, &item, 0);
+	xTaskNotify(player_task_data.task_handle, player_nf_t::nf_note, eSetBits);
+}
+
+
+extern "C" __attribute__ ((interrupt)) void IntHandler_Dma1Ch3()
+{
+	uint32_t events = 0;
+	const auto isr = DMA1->ISR;
+	if (isr & DMA_ISR_HTIF3) {
+		events |= player_nf_t::nf_ht;
 	}
-	if (voices_count == 0) {
-		return;
+	if (isr & DMA_ISR_TCIF3) {
+		events |= player_nf_t::nf_tc;
 	}
-	value /= voices_count;
-	DAC->DHR12R1 = value >> 4; // MSB 16bit -> 12bit
-	//DAC->DHR12R1 = value >> 5;
+	if (isr & DMA_ISR_TEIF3) {
+		events |= player_nf_t::nf_te;
+	}
+	if (events) {
+		DMA1->IFCR = DMA_IFCR_CHTIF3 | DMA_IFCR_CTCIF3 | DMA_IFCR_CTEIF3; // clear flags
+
+		BaseType_t yield = pdFALSE;
+		xTaskNotifyFromISR(player_task_data.task_handle, events, eSetBits, &yield);
+		portYIELD_FROM_ISR(yield);
+	}
 }
 
 
 #define CLOCK_SPEED configCPU_CLOCK_HZ
 
-#define TIM_DAC TIM6
 void dac_init()
 {
 	// ensure there is no truncation in calculation
@@ -230,69 +228,204 @@ void dac_init()
 	static_assert((uint64_t(arr) + 1) * uint64_t(DDS_FREQ) == uint64_t(CLOCK_SPEED));
 
 	TIM_DAC->CR1 = 0;
-	TIM_DAC->DIER |= TIM_DIER_UIE;
+	TIM_DAC->DIER = TIM_DIER_UDE;
+	TIM_DAC->CR2 = (0b010 << TIM_CR2_MMS_Pos);
 	TIM_DAC->PSC = 0;
 	TIM_DAC->ARR = arr;
-	TIM_DAC->CR1 = TIM_CR1_CEN;
-	NVIC_SetPriority(TIM6_IRQn, 3); // TODO
-	NVIC_EnableIRQ(TIM6_IRQn);
+
+	NVIC_SetPriority(DMA1_Channel3_IRQn, 3);
+	NVIC_EnableIRQ(DMA1_Channel3_IRQn);
 
 	stm32_lib::gpio::set_mode_output_analog(pin_dac);
 
 	DAC->CR = 0;
 	DAC->MCR = (DAC->MCR & ~DAC_MCR_MODE1_Msk) | (0b000 << DAC_MCR_MODE1_Pos); // buffer
-	DAC->CR = DAC_CR_EN1_Msk;
+	DAC->CR =
+		(/*TIM6*/0b000 << DAC_CR_TSEL1_Pos)
+		| DAC_CR_EN1
+		;
+
+	// init DMA
+	DMA1_Channel3->CCR = 0;
+	DMA1_Channel3->CCR =
+		(0b10 << DMA_CCR_PL_Pos) // priority
+		| (0b01 << DMA_CCR_MSIZE_Pos) // 16bit
+		| (0b01 << DMA_CCR_PSIZE_Pos)
+		| DMA_CCR_MINC
+		| DMA_CCR_CIRC
+		| DMA_CCR_DIR
+		| DMA_CCR_HTIE
+		| DMA_CCR_TCIE
+		| DMA_CCR_TEIE
+		;
+	DMA1_CSELR->CSELR = (DMA1_CSELR->CSELR & ~DMA_CSELR_C3S_Msk) | (/*TIM6&DAC1*/0b0110 << DMA_CSELR_C3S_Pos);
+
+	// src
+	DMA1_Channel3->CMAR = reinterpret_cast<uint32_t>(player_task_data.dma_buffer.data());
+	DMA1_Channel3->CNDTR = player_task_data.dma_buffer.size();
+	// dst
+	DMA1_Channel3->CPAR = reinterpret_cast<uint32_t>(&DAC1->DHR12L1);
+
+	// enable
+	DMA1_Channel3->CCR |= DMA_CCR_EN;
+	//TIM_DAC->CR1 = TIM_CR1_CEN;
+	//DAC->CR |= DAC_CR_EN1;
 }
 
 
-void stop_note(void* pv, uint32_t ul)
+void timer_start()
 {
-	logger.log_async("Player: stopping note\r\n");
-	const note_id_t note_id = ul;
-	voice_t* const vp = reinterpret_cast<voice_t*>(pv);
-	vp->maybe_reset(note_id);
+	stm32_lib::gpio::set_state(pin_led_green, 1);
+	TIM_DAC->CR1 |= TIM_CR1_CEN;
+	DAC->CR |= DAC_CR_TEN1;
+}
+
+void timer_stop()
+{
+	DAC->CR &= ~DAC_CR_TEN1;
+	TIM_DAC->CR1 &= ~TIM_CR1_CEN;
+	stm32_lib::gpio::set_state(pin_led_green, 0);
 }
 
 
 void play_note(notes::sym_t n, notes::duration_t d, notes::instrument_t instr, note_id_t note_id)
 {
-	constexpr auto fade = DDS_FREQ/512;
-	const uint32_t dds_ticks = DDS_FREQ*d/64 - fade;
+	constexpr uint32_t fade = DDS_FREQ/512;
+	const uint32_t dds_ticks = uint32_t(DDS_FREQ)*d/64 - fade;
 
 	const auto voice_idx = find_free_voice();
 	g_voices[voice_idx].set(g_instr_info[instr].lookup_func, dds_notes_incs[n], dds_ticks, note_id);
 }
 
 
-void play_task_function(void*)
+void drain_notes_queue()
 {
-	uint32_t note_id = 1;
-	for(;;) {
-		queue_item_t item;
-		if (xQueueReceive(play_task_data.arg_queue_handle, &item, configTICK_RATE_HZ/*1sec*/) == pdTRUE) {
-			notes::sym_t n;
-			notes::duration_t d;
-			notes::instrument_t instr;
-			queue_item_decode(item, n, d, instr);
-			play_note(n, d, instr, note_id);
-			++note_id;
-		}
+	queue_item_t item;
+	while (xQueueReceive(player_task_data.queue_handle, &item, 0/*poll*/) == pdTRUE) {
+		notes::sym_t n;
+		notes::duration_t d;
+		notes::instrument_t instr;
+		queue_item_decode(item, n, d, instr);
+		play_note(n, d, instr, player_task_data.next_note_id);
+		++player_task_data.next_note_id; // TODO handle wrap
 	}
 }
 
 
-void player::create_task(const char* task_name, UBaseType_t prio, QueueHandle_t queue_handle)
+void player_task_function(void*); // FIXME
+void player::create_task(const char* task_name, UBaseType_t prio)
 {
 	dac_init();
-	play_task_data.arg_queue_handle = queue_handle;
-	xTaskCreateStatic(
-		&play_task_function,
+	player_task_data.queue_handle = xQueueCreateStatic(
+		player_task_data.queue_buffer.size(),
+		sizeof(queue_item_t),
+		reinterpret_cast<uint8_t*>(player_task_data.queue_buffer.data()),
+		&player_task_data.queue_q
+	);
+	player_task_data.task_handle = xTaskCreateStatic(
+		&player_task_function,
 		task_name,
-		play_task_data.stack.size(),
+		player_task_data.stack.size(),
 		nullptr,
 		prio,
-		play_task_data.stack.data(),
-		&play_task_data.task_buffer
+		player_task_data.stack.data(),
+		&player_task_data.task_buffer
 	);
+}
+
+
+namespace dmafill_fsm {
+	enum state_t {
+		dma_empty, dma_full, dma_halfdone
+	};
+
+	bool fill_buffer_impl(size_t idx_begin, size_t idx_end)
+	{
+		for (size_t i=idx_begin; i<idx_end; ++i) {
+			uint8_t voices_count = 0;
+			uint32_t value = 0;
+			for (auto& v : g_voices) {
+				if (v.is_busy()) {
+					value += uint32_t(v.tick());
+					++voices_count;
+				}
+			}
+			if (voices_count == 0) {
+				// all voices are silent
+				// fill remaining part with previous value (if any) or with middle value
+				const dds_value_t fill = (i != idx_begin) ? player_task_data.dma_buffer[i-1] : 32768;
+				for (size_t j=i; j<idx_end; ++j) {
+					// TODO
+					//player_task_data.dma_buffer[j] = fill;
+				}
+				return false;
+			}
+			player_task_data.dma_buffer[i] = static_cast<uint16_t>(value / voices_count);
+		}
+		return true;
+	}
+
+	inline
+	bool action_fill_bottom_half()
+	{
+		return fill_buffer_impl(0, player_task_data.dma_buffer.size()/2);
+	}
+
+	inline
+	bool action_fill_top_half()
+	{
+		return fill_buffer_impl(player_task_data.dma_buffer.size()/2, player_task_data.dma_buffer.size());
+	}
+
+	inline
+	bool action_fill()
+	{
+		return fill_buffer_impl(0, player_task_data.dma_buffer.size());
+	}
+}
+
+void player_task_function(void*)
+{
+	using namespace dmafill_fsm;
+
+	state_t state = dma_empty;
+	for(;;) {
+		uint32_t events = 0;
+		if (xTaskNotifyWait(0, 0xffffffff, &events, configTICK_RATE_HZ /*1sec*/) == pdTRUE) {
+			if (events & player_nf_t::nf_note) {
+				// update voices, notes will start sounding on next dma transfer
+				drain_notes_queue();
+				if (state == dma_empty) {
+					if (action_fill()) {
+						timer_start();
+						state = dma_full;
+					}
+				}
+			}
+			if (events & player_nf_t::nf_ht) {
+				if (state == dma_full) {
+					state = dma_halfdone;
+					if (!action_fill_bottom_half()) {
+						timer_stop();
+						state = dma_empty;
+					}
+				}
+			}
+			if (events & player_nf_t::nf_tc) {
+				if (state == dma_halfdone) {
+					state = dma_full;
+					if (!action_fill_top_half()) {
+						timer_stop();
+						state = dma_empty;
+					}
+				}
+			}
+			if (events & player_nf_t::nf_te) {
+				// TODO
+				state = dma_empty;
+				// reset dma, disable/enable, ...
+			}
+		}
+	}
 }
 

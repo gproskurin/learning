@@ -5,7 +5,8 @@
 
 extern void main();
 extern void _estack(void);
-extern void IntHandler_Timer6();
+//extern void IntHandler_Timer6();
+extern void IntHandler_Dma1Ch3();
 
 
 __attribute__((naked, noreturn)) void _reset(void)
@@ -74,6 +75,7 @@ __attribute__((section(".vectors"))) void (*tab[16 + 84])(void) =
 	0,
 	0,
 	0,
+	IntHandler_Dma1Ch3, // DMA1_CH3
 	0,
 	0,
 	0,
@@ -114,7 +116,6 @@ __attribute__((section(".vectors"))) void (*tab[16 + 84])(void) =
 	0,
 	0,
 	0,
-	0,
-	&IntHandler_Timer6 // TIM6
+	0, // &IntHandler_Timer6 // TIM6
 };
 #endif

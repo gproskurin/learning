@@ -11,10 +11,10 @@
 #include <array>
 
 
-#define PRIO_BLINK 1
+#define PRIO_BLINK 2
 #define PRIO_SENDER 1
-#define PRIO_LOGGER 2
-#define PRIO_PLAYER 3
+#define PRIO_LOGGER 3
+#define PRIO_PLAYER 4
 
 #if defined TARGET_STM32L432
 	const stm32_lib::gpio::gpio_pin_t pin_led_green(GPIOB, 3);
@@ -23,9 +23,6 @@
 	#define USART_LOG USART1
 	#define USART_LOG_AF 7
 	const stm32_lib::gpio::gpio_pin_t usart_log_pin_tx(GPIOB, 6);
-
-	// TIM_DAC
-	//#define TIM_DAC TIM6
 #endif
 
 
@@ -83,6 +80,13 @@ void bus_init()
 	toggle_bits_10(
 		&RCC->APB1RSTR1,
 		RCC_APB1RSTR1_DAC1RST_Msk | RCC_APB1RSTR1_TIM6RST_Msk
+	);
+
+	// DMA1
+	RCC->AHB1ENR |= RCC_AHB1ENR_DMA1EN_Msk;
+	toggle_bits_10(
+		&RCC->AHB1RSTR,
+		RCC_AHB1RSTR_DMA1RST_Msk
 	);
 
 	// USART1
@@ -314,17 +318,16 @@ struct sender_task_data_t {
 	std::array<StackType_t, 128> stack;
 	TaskHandle_t task_handle = nullptr;
 	StaticTask_t task_buffer;
-
-	QueueHandle_t arg_player_queue_handle = nullptr;
 } sender_task_data;
 
 void sender_task_function(void*)
 {
+	vTaskDelay(configTICK_RATE_HZ*3);
 #if 0
 	for (;;) {
-		player::enqueue_note(sender_task_data.arg_player_queue_handle, notes::sym_t::A4, notes::duration_t::l2, notes::instrument_t::sin12);
+		player::enqueue_note(notes::sym_t::A4, notes::duration_t::l2, notes::instrument_t::sin12);
 		vTaskDelay(configTICK_RATE_HZ);
-		player::enqueue_note(sender_task_data.arg_player_queue_handle, notes::sym_t::B4, notes::duration_t::l2, notes::instrument_t::sin12);
+		player::enqueue_note(notes::sym_t::B4, notes::duration_t::l2, notes::instrument_t::sin12);
 		vTaskDelay(configTICK_RATE_HZ/2);
 	}
 #endif
@@ -332,14 +335,14 @@ void sender_task_function(void*)
 	for (;;) {
 #if 0
 		for (const auto& n : Cmaj) {
-			player::enqueue_note(sender_task_data.arg_player_queue_handle, n, notes::duration_t::l4, notes::instrument_t::sin12);
+			player::enqueue_note(n, notes::duration_t::l4, notes::instrument_t::sin12);
 			vTaskDelay(configTICK_RATE_HZ/4);
 		}
 		vTaskDelay(configTICK_RATE_HZ);
 #endif
 
 		for (const auto& n : Am) {
-			player::enqueue_note(sender_task_data.arg_player_queue_handle, n, notes::duration_t::l4, notes::instrument_t::sin12);
+			player::enqueue_note(n, notes::duration_t::l4, notes::instrument_t::sin12);
 			vTaskDelay(configTICK_RATE_HZ/4);
 		}
 		vTaskDelay(configTICK_RATE_HZ*3);
@@ -348,10 +351,9 @@ void sender_task_function(void*)
 			for (const auto& n : beat.notes) {
 				if (n.duration) {
 					player::enqueue_note(
-						sender_task_data.arg_player_queue_handle,
 						n.note,
 						n.duration,
-						notes::instrument_t::sq
+						notes::instrument_t::sin12
 					);
 				}
 			}
@@ -361,9 +363,8 @@ void sender_task_function(void*)
 	}
 }
 
-void create_task_sender(QueueHandle_t player_queue_handle)
+void create_task_sender()
 {
-	sender_task_data.arg_player_queue_handle = player_queue_handle;
 	sender_task_data.task_handle = xTaskCreateStatic(
 		&sender_task_function,
 		"sender",
@@ -379,6 +380,7 @@ void create_task_sender(QueueHandle_t player_queue_handle)
 __attribute__ ((noreturn)) void main()
 {
 	bus_init();
+	stm32_lib::gpio::set_mode_output_lowspeed_pushpull(pin_led_green);
 
 	usart_init(USART_LOG);
 	logger.set_usart(USART_LOG);
@@ -399,32 +401,18 @@ __attribute__ ((noreturn)) void main()
 	}
 	logger.log_sync("Created blink tasks\r\n");
 
-	logger.log_sync("Creating player queue...\r\n");
-	QueueHandle_t player_queue_handle = player::create_queue();
-	logger.log_sync("Created player queue\r\n");
-
 	logger.log_sync("Creating player task...\r\n");
-	player::create_task("player", PRIO_PLAYER, player_queue_handle);
+	player::create_task("player", PRIO_PLAYER);
 	logger.log_sync("Created player task\r\n");
 
 	logger.log_sync("Creating sender task...\r\n");
-	create_task_sender(player_queue_handle);
+	create_task_sender();
 	logger.log_sync("Created sender task\r\n");
-
-	//logger.log_sync("Initializing interrupts\r\n");
-	//nvic_init_tim();
-
-	//logger.log_sync("Initializing timer\r\n");
-	//basic_timer_init(LED_TIM, 2000-1, 1000-1);
 
 	logger.log_sync("Starting FreeRTOS scheduler\r\n");
 	vTaskStartScheduler();
 
 	logger.log_sync("Error in FreeRTOS scheduler\r\n");
-	for (;;) {
-		//blink(2);
-		//delay(100000);
-		//__WFI();
-	}
+	for (;;) {}
 }
 

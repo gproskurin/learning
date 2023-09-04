@@ -145,9 +145,8 @@ namespace notes {
 
 namespace player {
 
-QueueHandle_t create_queue();
-void create_task(const char* task_name, UBaseType_t prio, QueueHandle_t queue);
-void enqueue_note(QueueHandle_t, notes::sym_t, notes::duration_t, notes::instrument_t);
+void create_task(const char* task_name, UBaseType_t prio);
+void enqueue_note(notes::sym_t, notes::duration_t, notes::instrument_t);
 
 }
 
