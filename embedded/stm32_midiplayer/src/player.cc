@@ -26,6 +26,27 @@ struct instr_info_t {
 };
 
 
+// use just quarter of sine period to deduce value for any point inside one period
+template <typename LookupTable>
+dds_value_t lookup_sin_quarter(const LookupTable& t, size_t idx)
+{
+	constexpr auto sz = t.size();
+	if (idx < sz)
+		return t[idx];
+	if (idx == sz)
+		return 65535; // FIXME
+	if (idx < sz*2)
+		return t[sz*2 - idx];
+	if (idx == sz*2)
+		return t[0];
+	if (idx < sz*3)
+		return t[0] - (t[idx - sz*2] - t[0]) - 1;
+	if (idx == sz*3)
+		return 0;
+	return t[0] - (t[sz*4 - idx] - t[0]) - 1;
+}
+
+
 dds_value_t lookup_sq(uint32_t x)
 {
 	return (x >> 31) ? std::numeric_limits<dds_value_t>::max() : 0;
@@ -33,27 +54,27 @@ dds_value_t lookup_sq(uint32_t x)
 
 dds_value_t lookup_sin3(uint32_t x)
 {
-	return lookup_table_sin3[x >> 29];
+	return lookup_sin_quarter(lookup_table_sin3, x >> 29);
 }
 
 dds_value_t lookup_sin4(uint32_t x)
 {
-	return lookup_table_sin4[x >> 28];
+	return lookup_sin_quarter(lookup_table_sin4, x >> 28);
 }
 
 dds_value_t lookup_sin5(uint32_t x)
 {
-	return lookup_table_sin5[x >> 27];
+	return lookup_sin_quarter(lookup_table_sin5, x >> 27);
 }
 
 dds_value_t lookup_sin10(uint32_t x)
 {
-	return lookup_table_sin10[x >> 22];
+	return lookup_sin_quarter(lookup_table_sin10, x >> 22);
 }
 
 dds_value_t lookup_sin12(uint32_t x)
 {
-	return lookup_table_sin12[x >> 20];
+	return lookup_sin_quarter(lookup_table_sin12, x >> 20);
 }
 
 const std::array<instr_info_t, 6> g_instr_info{

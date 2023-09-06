@@ -10,6 +10,6 @@
  - use external oscillator
 - run from SRAM, flash off
 - use DSP
-- sin lookup tables: shrink size / 4
++ sin lookup tables: shrink size / 4
 - adjustable tempo
 
