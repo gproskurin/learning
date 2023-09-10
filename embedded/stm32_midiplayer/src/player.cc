@@ -261,13 +261,13 @@ void dac_init()
 	DMA1_CSELR->CSELR = (DMA1_CSELR->CSELR & ~DMA_CSELR_C3S_Msk) | (/*TIM6&DAC1*/0b0110 << DMA_CSELR_C3S_Pos);
 
 	// src
-	DMA1_Channel3->CMAR = reinterpret_cast<uint32_t>(player_task_data.dma_buffer.data());
-	DMA1_Channel3->CNDTR = player_task_data.dma_buffer.size();
+	//DMA1_Channel3->CMAR = reinterpret_cast<uint32_t>(player_task_data.dma_buffer.data());
+	//DMA1_Channel3->CNDTR = player_task_data.dma_buffer.size();
 	// dst
 	DMA1_Channel3->CPAR = reinterpret_cast<uint32_t>(&DAC1->DHR12L1);
 
 	// enable
-	DMA1_Channel3->CCR |= DMA_CCR_EN;
+	//DMA1_Channel3->CCR |= DMA_CCR_EN;
 	//TIM_DAC->CR1 = TIM_CR1_CEN;
 	//DAC->CR |= DAC_CR_EN1;
 }
@@ -276,6 +276,11 @@ void dac_init()
 void timer_start()
 {
 	stm32_lib::gpio::set_state(pin_led_green, 1);
+
+	DMA1_Channel3->CMAR = reinterpret_cast<uint32_t>(player_task_data.dma_buffer.data());
+	DMA1_Channel3->CNDTR = player_task_data.dma_buffer.size();
+
+	DMA1_Channel3->CCR |= DMA_CCR_EN;
 	TIM_DAC->CR1 |= TIM_CR1_CEN;
 	DAC->CR |= DAC_CR_TEN1;
 }
@@ -284,6 +289,7 @@ void timer_stop()
 {
 	DAC->CR &= ~DAC_CR_TEN1;
 	TIM_DAC->CR1 &= ~TIM_CR1_CEN;
+	DMA1_Channel3->CCR &= ~DMA_CCR_EN;
 	stm32_lib::gpio::set_state(pin_led_green, 0);
 }
 
@@ -395,35 +401,68 @@ void player_task_function(void*)
 			if (events & player_nf_t::nf_note) {
 				// update voices, notes will start sounding on next dma transfer
 				drain_notes_queue();
-				if (state == dma_empty) {
-					if (action_fill()) {
-						timer_start();
-						state = dma_full;
-					}
-				}
 			}
-			if (events & player_nf_t::nf_ht) {
-				if (state == dma_full) {
-					state = dma_halfdone;
-					if (!action_fill_bottom_half()) {
-						timer_stop();
-						state = dma_empty;
-					}
-				}
-			}
-			if (events & player_nf_t::nf_tc) {
-				if (state == dma_halfdone) {
-					state = dma_full;
-					if (!action_fill_top_half()) {
-						timer_stop();
-						state = dma_empty;
-					}
-				}
-			}
+
 			if (events & player_nf_t::nf_te) {
-				// TODO
+				// TODO reset dma, disable/enable, ...
+				timer_stop();
 				state = dma_empty;
-				// reset dma, disable/enable, ...
+				logger.log_async("PLAYER error: dma te\r\n");
+				continue;
+			}
+
+			const bool ht = events & player_nf_t::nf_ht;
+			const bool tc = events & player_nf_t::nf_tc;
+			if (ht) {
+				if (tc) {
+					// ht=1 tc=1
+					// should not happen: missed ht-only, and received both later?
+					// do our best
+					if (action_fill()) {
+						if (state == dma_empty) {
+							timer_start();
+						}
+						state = dma_full;
+					} else {
+						timer_stop();
+						state = dma_empty;
+					}
+					logger.log_async("PLAYER error: ht=1 tc=1\r\n");
+				} else {
+					// ht=1 tc=0
+					if (state == dma_full) {
+						state = dma_halfdone;
+						if (!action_fill_bottom_half()) {
+							timer_stop();
+							state = dma_empty;
+						}
+					} else {
+						logger.log_async("PLAYER error: ht=1 tc=0 state!=dma_full\r\n");
+					}
+				}
+			} else {
+				if (tc) {
+					// ht=0 tc=1
+					if (state == dma_halfdone) {
+						if (action_fill_top_half()) {
+							state = dma_full;
+						} else {
+							timer_stop();
+							state = dma_empty;
+						}
+					} else {
+						logger.log_async("PLAYER error: ht=0 tc=1 state!=dma_halfdone\r\n");
+					}
+				} else {
+					// ht=0 tc=0
+					// probably just note added
+					if (state == dma_empty) {
+						if (action_fill()) {
+							state = dma_full;
+							timer_start();
+						}
+					}
+				}
 			}
 		}
 	}
