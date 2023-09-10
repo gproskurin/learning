@@ -19,10 +19,10 @@
 #if defined TARGET_STM32L432
 	const stm32_lib::gpio::gpio_pin_t pin_led_green(GPIOB, 3);
 
-	// USART1
-	#define USART_LOG USART1
+	// USART2 (st-link vcom)
+	#define USART_LOG USART2
 	#define USART_LOG_AF 7
-	const stm32_lib::gpio::gpio_pin_t usart_log_pin_tx(GPIOB, 6);
+	const stm32_lib::gpio::gpio_pin_t usart_log_pin_tx(GPIOA, 2);
 #endif
 
 
@@ -75,11 +75,11 @@ void bus_init()
 	RCC->AHB2ENR |= RCC_AHB2ENR_GPIOAEN_Msk | RCC_AHB2ENR_GPIOBEN_Msk;
 	toggle_bits_10(&RCC->AHB2RSTR, RCC_AHB2RSTR_GPIOARST_Msk | RCC_AHB2RSTR_GPIOBRST_Msk);
 
-	// DAC1 & TIM6
-	RCC->APB1ENR1 |= RCC_APB1ENR1_DAC1EN_Msk | RCC_APB1ENR1_TIM6EN_Msk;
+	// DAC1 & TIM6 & USART2
+	RCC->APB1ENR1 |= RCC_APB1ENR1_DAC1EN_Msk | RCC_APB1ENR1_TIM6EN_Msk | RCC_APB1ENR1_USART2EN_Msk;
 	toggle_bits_10(
 		&RCC->APB1RSTR1,
-		RCC_APB1RSTR1_DAC1RST_Msk | RCC_APB1RSTR1_TIM6RST_Msk
+		RCC_APB1RSTR1_DAC1RST_Msk | RCC_APB1RSTR1_TIM6RST_Msk | RCC_APB1RSTR1_USART2RST_Msk
 	);
 
 	// DMA1
@@ -87,13 +87,6 @@ void bus_init()
 	toggle_bits_10(
 		&RCC->AHB1RSTR,
 		RCC_AHB1RSTR_DMA1RST_Msk
-	);
-
-	// USART1
-	RCC->APB2ENR |= RCC_APB2ENR_USART1EN_Msk;
-	toggle_bits_10(
-		&RCC->APB2RSTR,
-		RCC_APB2RSTR_USART1RST_Msk
 	);
 #endif
 }
