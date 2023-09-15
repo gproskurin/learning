@@ -2,11 +2,11 @@
 #define FREERTOS_CONFIG_H
 
 #define configUSE_PREEMPTION				1
-#define configUSE_PORT_OPTIMISED_TASK_SELECTION		1
-#define configUSE_TICKLESS_IDLE				1
+#define configUSE_PORT_OPTIMISED_TASK_SELECTION		0
+#define configUSE_TICKLESS_IDLE				0 // TODO
 
-#if defined TARGET_STM32L432
-	#define configCPU_CLOCK_HZ			48000000
+#if defined TARGET_STM32L072
+	#define configCPU_CLOCK_HZ			16000000
 #endif
 
 //#define configSYSTICK_CLOCK_HZ			1000000

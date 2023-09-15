@@ -1,7 +1,8 @@
 ENTRY(_reset);
 MEMORY {
-  flash(rx): ORIGIN = 0x08000000, LENGTH = 256k
-  sram(rwx): ORIGIN = 0x20000000, LENGTH = 64k
+  flash1(rx): ORIGIN = 0x08000000, LENGTH = 96k
+  flash2(rx): ORIGIN = 0x08018000, LENGTH = 96k
+  sram(rwx) : ORIGIN = 0x20000000, LENGTH = 20k
 }
 _estack     = ORIGIN(sram) + LENGTH(sram);    /* stack points to end of SRAM */
 
@@ -9,31 +10,31 @@ SECTIONS {
   .vectors  : {
     KEEP(*(.vectors))
     . = 0x200; /* skip remaining vectors. FIXME: better? */
-  } > flash
+  } > flash1
 
   .init_array : {
     _sinit_array = .;
     KEEP (*(SORT_BY_INIT_PRIORITY(.init_array)))
     KEEP (*(SORT_BY_INIT_PRIORITY(.init_array*)))
     _einit_array = .;
-  } > flash
+  } > flash1
 
   .text : {
     *(.text)
     *(.text*)
     . = ALIGN(4);
-  } > flash
+  } > flash1
 
   .rodata : {
     *(.rodata*)
-  } > flash
+  } > flash1
 
   .data : {
     _sdata = .;
     *(.first_data)
     *(.data SORT(.data.*))
     _edata = .;
-  } > sram AT > flash
+  } > sram AT > flash1
   _sidata = LOADADDR(.data);
 
   .bss(NOLOAD) : {

@@ -11,17 +11,20 @@
 #include <array>
 
 
-#define PRIO_BLINK 2
-#define PRIO_SENDER 1
+#define PRIO_BLINK 1
+#define PRIO_SENDER 2
 #define PRIO_LOGGER 3
 #define PRIO_PLAYER 4
 
-#if defined TARGET_STM32L432
-	const stm32_lib::gpio::gpio_pin_t pin_led_green(GPIOB, 3);
+#if defined TARGET_STM32L072
+	const stm32_lib::gpio::gpio_pin_t pin_led_green(GPIOB, 5);
+	const stm32_lib::gpio::gpio_pin_t pin_led_blue(GPIOB, 6);
+	const stm32_lib::gpio::gpio_pin_t pin_led_red(GPIOB, 7);
+	const stm32_lib::gpio::gpio_pin_t pin_led_green2(GPIOA, 5);
 
 	// USART2 (st-link vcom)
 	#define USART_LOG USART2
-	#define USART_LOG_AF 7
+	#define USART_LOG_AF 4
 	const stm32_lib::gpio::gpio_pin_t usart_log_pin_tx(GPIOA, 2);
 #endif
 
@@ -62,32 +65,34 @@ void toggle_bits_10(volatile uint32_t* const ptr, const uint32_t mask)
 
 void bus_init()
 {
-#if defined TARGET_STM32L432
+#if defined TARGET_STM32L072
 	// flash
-	FLASH->ACR = (FLASH->ACR & ~FLASH_ACR_LATENCY_Msk) | FLASH_ACR_LATENCY_2WS;
+	FLASH->ACR |= FLASH_ACR_LATENCY;
 
-	// clock
-	//while (!(RCC->CR & RCC_CR_MSIRDY)) {} // wait for MSI to be ready
-	RCC->CR = (RCC->CR & ~RCC_CR_MSIRANGE_Msk) | RCC_CR_MSIRANGE_11;
-	RCC->CR |= RCC_CR_MSIRGSEL;
+	// clock: switch from MSI to HSI
+	// turn on HSI & wait
+	RCC->CR |= RCC_CR_HSION;
+	while (!(RCC->CR & RCC_CR_HSIRDY)) {}
+	// switch to HSI
+	RCC->CFGR = (RCC->CFGR & ~RCC_CFGR_SW_Msk) | (0b01 << RCC_CFGR_SW_Pos);
+	// switch off MSI & wait
+	RCC->CR &= ~RCC_CR_MSION;
+	while (RCC->CR & RCC_CR_MSIRDY) {}
 
 	// GPIOs
-	RCC->AHB2ENR |= RCC_AHB2ENR_GPIOAEN_Msk | RCC_AHB2ENR_GPIOBEN_Msk;
-	toggle_bits_10(&RCC->AHB2RSTR, RCC_AHB2RSTR_GPIOARST_Msk | RCC_AHB2RSTR_GPIOBRST_Msk);
+	RCC->IOPENR = RCC_IOPENR_IOPAEN_Msk | RCC_IOPENR_IOPBEN_Msk;
+	toggle_bits_10(&RCC->IOPRSTR, RCC_IOPRSTR_IOPARST | RCC_IOPRSTR_IOPBRST);
 
 	// DAC1 & TIM6 & USART2
-	RCC->APB1ENR1 |= RCC_APB1ENR1_DAC1EN_Msk | RCC_APB1ENR1_TIM6EN_Msk | RCC_APB1ENR1_USART2EN_Msk;
+	RCC->APB1ENR |= RCC_APB1ENR_DACEN_Msk | RCC_APB1ENR_TIM6EN_Msk | RCC_APB1ENR_USART2EN_Msk;
 	toggle_bits_10(
-		&RCC->APB1RSTR1,
-		RCC_APB1RSTR1_DAC1RST_Msk | RCC_APB1RSTR1_TIM6RST_Msk | RCC_APB1RSTR1_USART2RST_Msk
+		&RCC->APB1RSTR,
+		RCC_APB1RSTR_DACRST_Msk | RCC_APB1RSTR_TIM6RST_Msk | RCC_APB1RSTR_USART2RST_Msk
 	);
 
-	// DMA1
-	RCC->AHB1ENR |= RCC_AHB1ENR_DMA1EN_Msk;
-	toggle_bits_10(
-		&RCC->AHB1RSTR,
-		RCC_AHB1RSTR_DMA1RST_Msk
-	);
+	// DMA
+	RCC->AHBENR |= RCC_AHBENR_DMAEN_Msk;
+	toggle_bits_10(&RCC->AHBRSTR, RCC_AHBRSTR_DMARST_Msk);
 #endif
 }
 
@@ -127,8 +132,8 @@ struct blink_task_data_t {
 struct blink_tasks_t {
 	std::array<blink_task_data_t, 1> tasks = {
 		blink_task_data_t(
-			"blink_green",
-			pin_led_green,
+			"blink_green2",
+			pin_led_green2,
 			configTICK_RATE_HZ/8,
 			configTICK_RATE_HZ*3/8
 		)
@@ -144,12 +149,12 @@ void blink_task_function(void* arg)
 		if (do_log) {
 			logger.log_async("LED -> on\r\n");
 		}
-		//stm32_lib::gpio::set_state(args->pin, true);
+		stm32_lib::gpio::set_state(args->pin, true);
 		vTaskDelay(args->ticks_on);
 		if (do_log) {
 			logger.log_async("LED -> off\r\n");
 		}
-		//stm32_lib::gpio::set_state(args->pin, false);
+		stm32_lib::gpio::set_state(args->pin, false);
 		vTaskDelay(args->ticks_off);
 	}
 }
@@ -374,6 +379,9 @@ __attribute__ ((noreturn)) void main()
 {
 	bus_init();
 	stm32_lib::gpio::set_mode_output_lowspeed_pushpull(pin_led_green);
+	stm32_lib::gpio::set_mode_output_lowspeed_pushpull(pin_led_blue);
+	stm32_lib::gpio::set_mode_output_lowspeed_pushpull(pin_led_red);
+	stm32_lib::gpio::set_mode_output_lowspeed_pushpull(pin_led_green2);
 
 	usart_init(USART_LOG);
 	logger.set_usart(USART_LOG);

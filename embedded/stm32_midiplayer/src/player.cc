@@ -9,11 +9,13 @@
 
 extern usart_logger_t logger;
 
-#define DDS_FREQ 48000 // keep in sync with python generator
+#define DDS_FREQ 40000 // keep in sync with python generator
 #define TIM_DAC TIM6
 
 const stm32_lib::gpio::gpio_pin_t pin_dac(GPIOA, 4);
-const stm32_lib::gpio::gpio_pin_t pin_led_green(GPIOB, 3);
+const stm32_lib::gpio::gpio_pin_t pin_led_green(GPIOB, 5);
+const stm32_lib::gpio::gpio_pin_t pin_led_blue(GPIOB, 6);
+const stm32_lib::gpio::gpio_pin_t pin_led_red(GPIOB, 7);
 
 typedef uint16_t dds_value_t;
 #include "lookup_tables.cc.h"
@@ -195,21 +197,21 @@ void player::enqueue_note(notes::sym_t n, notes::duration_t d, notes::instrument
 }
 
 
-extern "C" __attribute__ ((interrupt)) void IntHandler_Dma1Ch3()
+extern "C" __attribute__ ((interrupt)) void IntHandler_DmaCh2()
 {
 	uint32_t events = 0;
 	const auto isr = DMA1->ISR;
-	if (isr & DMA_ISR_HTIF3) {
+	if (isr & DMA_ISR_HTIF2) {
 		events |= player_nf_t::nf_ht;
 	}
-	if (isr & DMA_ISR_TCIF3) {
+	if (isr & DMA_ISR_TCIF2) {
 		events |= player_nf_t::nf_tc;
 	}
-	if (isr & DMA_ISR_TEIF3) {
+	if (isr & DMA_ISR_TEIF2) {
 		events |= player_nf_t::nf_te;
 	}
 	if (events) {
-		DMA1->IFCR = DMA_IFCR_CHTIF3 | DMA_IFCR_CTCIF3 | DMA_IFCR_CTEIF3; // clear flags
+		DMA1->IFCR = DMA_IFCR_CHTIF2 | DMA_IFCR_CTCIF2 | DMA_IFCR_CTEIF2; // clear flags
 
 		BaseType_t yield = pdFALSE;
 		xTaskNotifyFromISR(player_task_data.task_handle, events, eSetBits, &yield);
@@ -220,34 +222,49 @@ extern "C" __attribute__ ((interrupt)) void IntHandler_Dma1Ch3()
 
 #define CLOCK_SPEED configCPU_CLOCK_HZ
 
+
+constexpr std::pair<uint16_t, uint16_t> calc_psc_arr()
+{
+	uint16_t psc = 0;
+	uint32_t arr = CLOCK_SPEED / DDS_FREQ;
+	while (arr >= 65535) {
+		++psc;
+		arr /= 2;
+	}
+	return std::make_pair(psc, arr-1);
+}
+
+
 void dac_init()
 {
 	// ensure there is no truncation in calculation
 	static_assert((CLOCK_SPEED % DDS_FREQ) == 0);
-	constexpr uint16_t arr = CLOCK_SPEED / DDS_FREQ - 1;
-	static_assert((uint64_t(arr) + 1) * uint64_t(DDS_FREQ) == uint64_t(CLOCK_SPEED));
+	constexpr auto psc_arr = calc_psc_arr();
+	//static_assert((uint64_t(arr) + 1) * uint64_t(DDS_FREQ) == uint64_t(CLOCK_SPEED));
+	//static_assert(uint64_t(psc_arr.second-1) * uint64_t(DDS_FREQ) * uint64_t(psc_arr.first+1) == uint64_t(CLOCK_SPEED));
 
 	TIM_DAC->CR1 = 0;
 	TIM_DAC->DIER = TIM_DIER_UDE;
 	TIM_DAC->CR2 = (0b010 << TIM_CR2_MMS_Pos);
-	TIM_DAC->PSC = 0;
-	TIM_DAC->ARR = arr;
+	TIM_DAC->PSC = psc_arr.first;
+	TIM_DAC->ARR = psc_arr.second;
 
-	NVIC_SetPriority(DMA1_Channel3_IRQn, 3);
-	NVIC_EnableIRQ(DMA1_Channel3_IRQn);
+	NVIC_SetPriority(DMA1_Channel2_3_IRQn, 3);
+	NVIC_EnableIRQ(DMA1_Channel2_3_IRQn);
 
 	stm32_lib::gpio::set_mode_output_analog(pin_dac);
 
 	DAC->CR = 0;
-	DAC->MCR = (DAC->MCR & ~DAC_MCR_MODE1_Msk) | (0b000 << DAC_MCR_MODE1_Pos); // buffer
+	//DAC->MCR = (DAC->MCR & ~DAC_MCR_MODE1_Msk) | (0b000 << DAC_MCR_MODE1_Pos); // buffer
 	DAC->CR =
 		(/*TIM6*/0b000 << DAC_CR_TSEL1_Pos)
 		| DAC_CR_EN1
+		| DAC_CR_DMAEN1
 		;
 
 	// init DMA
-	DMA1_Channel3->CCR = 0;
-	DMA1_Channel3->CCR =
+	DMA1_Channel2->CCR = 0;
+	DMA1_Channel2->CCR =
 		(0b10 << DMA_CCR_PL_Pos) // priority
 		| (0b01 << DMA_CCR_MSIZE_Pos) // 16bit
 		| (0b01 << DMA_CCR_PSIZE_Pos)
@@ -258,13 +275,13 @@ void dac_init()
 		| DMA_CCR_TCIE
 		| DMA_CCR_TEIE
 		;
-	DMA1_CSELR->CSELR = (DMA1_CSELR->CSELR & ~DMA_CSELR_C3S_Msk) | (/*TIM6&DAC1*/0b0110 << DMA_CSELR_C3S_Pos);
+	DMA1_CSELR->CSELR = (DMA1_CSELR->CSELR & ~DMA_CSELR_C2S_Msk) | (/*TIM6&DAC1*/0b1001 << DMA_CSELR_C2S_Pos);
 
 	// src
-	//DMA1_Channel3->CMAR = reinterpret_cast<uint32_t>(player_task_data.dma_buffer.data());
-	//DMA1_Channel3->CNDTR = player_task_data.dma_buffer.size();
+	//DMA1_Channel2->CMAR = reinterpret_cast<uint32_t>(player_task_data.dma_buffer.data());
+	//DMA1_Channel2->CNDTR = player_task_data.dma_buffer.size();
 	// dst
-	DMA1_Channel3->CPAR = reinterpret_cast<uint32_t>(&DAC1->DHR12L1);
+	DMA1_Channel2->CPAR = reinterpret_cast<uint32_t>(&DAC1->DHR12L1);
 
 	// enable
 	//DMA1_Channel3->CCR |= DMA_CCR_EN;
@@ -277,10 +294,10 @@ void timer_start()
 {
 	stm32_lib::gpio::set_state(pin_led_green, 1);
 
-	DMA1_Channel3->CMAR = reinterpret_cast<uint32_t>(player_task_data.dma_buffer.data());
-	DMA1_Channel3->CNDTR = player_task_data.dma_buffer.size();
+	DMA1_Channel2->CMAR = reinterpret_cast<uint32_t>(player_task_data.dma_buffer.data());
+	DMA1_Channel2->CNDTR = player_task_data.dma_buffer.size();
 
-	DMA1_Channel3->CCR |= DMA_CCR_EN;
+	DMA1_Channel2->CCR |= DMA_CCR_EN;
 	TIM_DAC->CR1 |= TIM_CR1_CEN;
 	DAC->CR |= DAC_CR_TEN1;
 }
@@ -289,7 +306,7 @@ void timer_stop()
 {
 	DAC->CR &= ~DAC_CR_TEN1;
 	TIM_DAC->CR1 &= ~TIM_CR1_CEN;
-	DMA1_Channel3->CCR &= ~DMA_CCR_EN;
+	DMA1_Channel2->CCR &= ~DMA_CCR_EN;
 	stm32_lib::gpio::set_state(pin_led_green, 0);
 }
 
@@ -304,6 +321,7 @@ void play_note(notes::sym_t n, notes::duration_t d, notes::instrument_t instr, n
 }
 
 
+bool blue_led = false;
 void drain_notes_queue()
 {
 	queue_item_t item;
@@ -314,6 +332,8 @@ void drain_notes_queue()
 		queue_item_decode(item, n, d, instr);
 		play_note(n, d, instr, player_task_data.next_note_id);
 		++player_task_data.next_note_id; // TODO handle wrap
+		stm32_lib::gpio::set_state(pin_led_blue, blue_led);
+		blue_led = !blue_led;
 	}
 }
 
@@ -366,7 +386,16 @@ namespace dmafill_fsm {
 				}
 				return false;
 			}
-			player_task_data.dma_buffer[i] = static_cast<uint16_t>(value / voices_count);
+			// FIXME
+			uint32_t v = value;
+			switch (voices_count) {
+				case 1: break;
+				case 2: v /= 2; break;
+				case 3: v /= 4; break; // FIXME
+				case 4: v /= 4; break;
+			}
+			//player_task_data.dma_buffer[i] = static_cast<uint16_t>(value / voices_count);
+			player_task_data.dma_buffer[i] = static_cast<uint16_t>(v);
 		}
 		return true;
 	}
@@ -428,6 +457,7 @@ void player_task_function(void*)
 						state = dma_empty;
 					}
 					logger.log_async("PLAYER error: ht=1 tc=1\r\n");
+					//stm32_lib::gpio::set_state(pin_led_red, true);
 				} else {
 					// ht=1 tc=0
 					if (state == dma_full) {
@@ -438,6 +468,7 @@ void player_task_function(void*)
 						}
 					} else {
 						logger.log_async("PLAYER error: ht=1 tc=0 state!=dma_full\r\n");
+						//stm32_lib::gpio::set_state(pin_led_red, true);
 					}
 				}
 			} else {
@@ -452,6 +483,7 @@ void player_task_function(void*)
 						}
 					} else {
 						logger.log_async("PLAYER error: ht=0 tc=1 state!=dma_halfdone\r\n");
+						//stm32_lib::gpio::set_state(pin_led_red, true);
 					}
 				} else {
 					// ht=0 tc=0
