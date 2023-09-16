@@ -12,23 +12,29 @@ namespace freertos_utils {
 template <size_t StackSize>
 using task_stack_t = std::array<StackType_t, StackSize>;
 
-// LED blinking tasks
-struct blink_task_data_t {
-	const char* const task_name;
-	const stm32_lib::gpio::gpio_pin_t pin;
-	const TickType_t ticks_on;
-	const TickType_t ticks_off;
-	blink_task_data_t(const char* n, const stm32_lib::gpio::gpio_pin_t& p, TickType_t ton, TickType_t toff)
-		: task_name(n), pin(p), ticks_on(ton), ticks_off(toff)
-	{}
 
-	task_stack_t<64> stack;
-	TaskHandle_t task_handle = nullptr;
-	StaticTask_t task_buffer;
+class pin_toggle_task_t {
+public:
+	pin_toggle_task_t(const char* task_name, const stm32_lib::gpio::gpio_pin_t&, UBaseType_t prio);
+
+	void init_pin() const;
+
+	void on();
+	void off();
+	void pulse_once(TickType_t tm_on);
+	void pulse_many(TickType_t tm_on, TickType_t tm_off, uint8_t times);
+	void pulse_continuous(TickType_t tm_on, TickType_t tm_off);
+
+private:
+	const stm32_lib::gpio::gpio_pin_t pin_;
+
+	task_stack_t<64> stack_;
+	StaticTask_t task_buffer_;
+	TaskHandle_t const task_handle_;
+
+	static void task_function(void*);
 };
 
-void blink_task_function(void* arg);
-void create_blink_task(blink_task_data_t& args, UBaseType_t prio);
 
 } // namespace
 
