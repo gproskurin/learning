@@ -7,6 +7,11 @@
 
 namespace freertos_utils {
 
+/*
+Notification value format (uint32_t)
+tm_on_high(8bit),tm_on_low(8bit),tm_off_low(8bit),count(5bit),command(3bit)
+*/
+
 enum pin_toggle_cmd_t : uint32_t {
 	nop = 0b000,
 	off = 0b001,

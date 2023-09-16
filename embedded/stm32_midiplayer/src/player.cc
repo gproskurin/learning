@@ -2,6 +2,7 @@
 
 #include "cmsis_device.h"
 #include "lib_stm32.h"
+#include "freertos_utils.h"
 #include "logging.h"
 
 #include <array>
@@ -13,9 +14,14 @@ extern usart_logger_t logger;
 #define TIM_DAC TIM6
 
 const stm32_lib::gpio::gpio_pin_t pin_dac(GPIOA, 4);
+
 const stm32_lib::gpio::gpio_pin_t pin_led_green(GPIOB, 5);
 const stm32_lib::gpio::gpio_pin_t pin_led_blue(GPIOB, 6);
 const stm32_lib::gpio::gpio_pin_t pin_led_red(GPIOB, 7);
+
+freertos_utils::pin_toggle_task_t pin_green("pin_toggle_green", pin_led_green, 1);
+freertos_utils::pin_toggle_task_t pin_blue("pin_toggle_blue", pin_led_blue, 1);
+freertos_utils::pin_toggle_task_t pin_red("pin_toggle_red", pin_led_red, 1);
 
 typedef uint16_t dds_value_t;
 #include "lookup_tables.cc.h"
@@ -292,7 +298,7 @@ void dac_init()
 
 void timer_start()
 {
-	stm32_lib::gpio::set_state(pin_led_green, 1);
+	pin_green.on();
 
 	DMA1_Channel2->CMAR = reinterpret_cast<uint32_t>(player_task_data.dma_buffer.data());
 	DMA1_Channel2->CNDTR = player_task_data.dma_buffer.size();
@@ -307,7 +313,8 @@ void timer_stop()
 	DAC->CR &= ~DAC_CR_TEN1;
 	TIM_DAC->CR1 &= ~TIM_CR1_CEN;
 	DMA1_Channel2->CCR &= ~DMA_CCR_EN;
-	stm32_lib::gpio::set_state(pin_led_green, 0);
+
+	pin_green.off();
 }
 
 
@@ -321,7 +328,6 @@ void play_note(notes::sym_t n, notes::duration_t d, notes::instrument_t instr, n
 }
 
 
-bool blue_led = false;
 void drain_notes_queue()
 {
 	queue_item_t item;
@@ -332,8 +338,7 @@ void drain_notes_queue()
 		queue_item_decode(item, n, d, instr);
 		play_note(n, d, instr, player_task_data.next_note_id);
 		++player_task_data.next_note_id; // TODO handle wrap
-		stm32_lib::gpio::set_state(pin_led_blue, blue_led);
-		blue_led = !blue_led;
+		pin_blue.pulse_once(configTICK_RATE_HZ/50);
 	}
 }
 
@@ -422,6 +427,9 @@ namespace dmafill_fsm {
 void player_task_function(void*)
 {
 	using namespace dmafill_fsm;
+	pin_green.init_pin();
+	pin_blue.init_pin();
+	pin_red.init_pin();
 
 	state_t state = dma_empty;
 	for(;;) {
@@ -457,7 +465,7 @@ void player_task_function(void*)
 						state = dma_empty;
 					}
 					logger.log_async("PLAYER error: ht=1 tc=1\r\n");
-					//stm32_lib::gpio::set_state(pin_led_red, true);
+					pin_red.pulse_once(configTICK_RATE_HZ/10);
 				} else {
 					// ht=1 tc=0
 					if (state == dma_full) {
@@ -468,7 +476,7 @@ void player_task_function(void*)
 						}
 					} else {
 						logger.log_async("PLAYER error: ht=1 tc=0 state!=dma_full\r\n");
-						//stm32_lib::gpio::set_state(pin_led_red, true);
+						pin_red.pulse_once(configTICK_RATE_HZ/10);
 					}
 				}
 			} else {
@@ -483,7 +491,7 @@ void player_task_function(void*)
 						}
 					} else {
 						logger.log_async("PLAYER error: ht=0 tc=1 state!=dma_halfdone\r\n");
-						//stm32_lib::gpio::set_state(pin_led_red, true);
+						pin_red.pulse_once(configTICK_RATE_HZ/10);
 					}
 				} else {
 					// ht=0 tc=0

@@ -2,6 +2,7 @@
 
 #include "lib_stm32.h"
 #include "logging.h"
+#include "freertos_utils.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -17,9 +18,6 @@
 #define PRIO_PLAYER 4
 
 #if defined TARGET_STM32L072
-	const stm32_lib::gpio::gpio_pin_t pin_led_green(GPIOB, 5);
-	const stm32_lib::gpio::gpio_pin_t pin_led_blue(GPIOB, 6);
-	const stm32_lib::gpio::gpio_pin_t pin_led_red(GPIOB, 7);
 	const stm32_lib::gpio::gpio_pin_t pin_led_green2(GPIOA, 5);
 
 	// USART2 (st-link vcom)
@@ -114,50 +112,7 @@ void vApplicationIdleHook(void)
 }
 
 
-// LED blinking tasks
-struct blink_task_data_t {
-	const char* const task_name;
-	const stm32_lib::gpio::gpio_pin_t pin;
-	const TickType_t ticks_on;
-	const TickType_t ticks_off;
-	blink_task_data_t(const char* tname, const stm32_lib::gpio::gpio_pin_t& p, TickType_t ton, TickType_t toff)
-		: task_name(tname), pin(p), ticks_on(ton), ticks_off(toff)
-	{}
-
-	task_stack_t<128> stack;
-	TaskHandle_t task_handle = nullptr;
-	StaticTask_t task_buffer;
-};
-
-struct blink_tasks_t {
-	std::array<blink_task_data_t, 1> tasks = {
-		blink_task_data_t(
-			"blink_green2",
-			pin_led_green2,
-			configTICK_RATE_HZ/8,
-			configTICK_RATE_HZ*3/8
-		)
-	};
-} blink_tasks;
-
-
-void blink_task_function(void* arg)
-{
-	const blink_task_data_t* const args = reinterpret_cast<blink_task_data_t*>(arg);
-	for(int i=0;;++i) {
-		const bool do_log = (i % 64 == 0);
-		if (do_log) {
-			logger.log_async("LED -> on\r\n");
-		}
-		stm32_lib::gpio::set_state(args->pin, true);
-		vTaskDelay(args->ticks_on);
-		if (do_log) {
-			logger.log_async("LED -> off\r\n");
-		}
-		stm32_lib::gpio::set_state(args->pin, false);
-		vTaskDelay(args->ticks_off);
-	}
-}
+freertos_utils::pin_toggle_task_t g_pin_green2("blink_green2", pin_led_green2, PRIO_BLINK);
 
 
 struct note_t {
@@ -290,28 +245,6 @@ void str_cpy_3(char* dst, const char* s1, const char* s2, const char* s3)
 }
 
 
-void create_blink_task(blink_task_data_t& args)
-{
-	char log_buf[64];
-
-	str_cpy_3(log_buf, "Creating blink task \"", args.task_name, "\" ...\r\n");
-	logger.log_sync(log_buf);
-
-	args.task_handle = xTaskCreateStatic(
-		&blink_task_function,
-		args.task_name,
-		args.stack.size(),
-		reinterpret_cast<void*>(&args),
-		PRIO_BLINK,
-		args.stack.data(),
-		&args.task_buffer
-	);
-
-	str_cpy_3(log_buf, "Created blink task \"", args.task_name, "\"\r\n");
-	logger.log_sync(log_buf);
-}
-
-
 struct sender_task_data_t {
 	std::array<StackType_t, 128> stack;
 	TaskHandle_t task_handle = nullptr;
@@ -378,10 +311,6 @@ void create_task_sender()
 __attribute__ ((noreturn)) void main()
 {
 	bus_init();
-	stm32_lib::gpio::set_mode_output_lowspeed_pushpull(pin_led_green);
-	stm32_lib::gpio::set_mode_output_lowspeed_pushpull(pin_led_blue);
-	stm32_lib::gpio::set_mode_output_lowspeed_pushpull(pin_led_red);
-	stm32_lib::gpio::set_mode_output_lowspeed_pushpull(pin_led_green2);
 
 	usart_init(USART_LOG);
 	logger.set_usart(USART_LOG);
@@ -395,12 +324,10 @@ __attribute__ ((noreturn)) void main()
 	logger.create_task("logger", PRIO_LOGGER);
 	logger.log_sync("Created logger task\r\n");
 
-	logger.log_sync("Creating blink tasks...\r\n");
-	for (auto& bt : blink_tasks.tasks) {
-		stm32_lib::gpio::set_mode_output_lowspeed_pushpull(bt.pin);
-		create_blink_task(bt);
-	}
-	logger.log_sync("Created blink tasks\r\n");
+	logger.log_sync("Initializing blink task pin...\r\n");
+	g_pin_green2.init_pin();
+	g_pin_green2.pulse_continuous(configTICK_RATE_HZ/50, configTICK_RATE_HZ/25);
+	logger.log_sync("Initialized blink task pin\r\n");
 
 	logger.log_sync("Creating player task...\r\n");
 	player::create_task("player", PRIO_PLAYER);
