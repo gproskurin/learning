@@ -96,8 +96,8 @@ struct af_t {
 
 struct gpio_pin_t {
 	GPIO_TypeDef* const gpio;
-	uint32_t const reg;
-	gpio_pin_t(GPIO_TypeDef* g, uint32_t r) : gpio(g), reg(r) {}
+	uint8_t const reg;
+	gpio_pin_t(GPIO_TypeDef* g, uint8_t r) : gpio(g), reg(r) {}
 
 #ifdef TARGET_STM32F103
 	void set(mode_t m, cnf_t c) const
@@ -184,6 +184,18 @@ void set_mode_output_lowspeed_pushpull(const gpio_pin_t& pin)
 
 
 inline
+void set_mode_output_hispeed_pushpull(const gpio_pin_t& pin)
+{
+#ifdef TARGET_STM32F103
+	#error
+	//pin.set(mode_t::output_2mhz, cnf_t::output_pushpull);
+#else
+	pin.set(mode_t::output, otype_t::push_pull, speed_t::bits_11);
+#endif
+}
+
+
+inline
 #ifdef TARGET_STM32F103
 void set_mode_af_lowspeed_pu(const gpio_pin_t& pin)
 {
@@ -246,17 +258,24 @@ void init_pins(
 void init_pins(
 		const gpio::gpio_pin_t& mosi, uint32_t af_mosi,
 		const gpio::gpio_pin_t& miso, uint32_t af_miso,
-		const gpio::gpio_pin_t& sck, uint32_t af_sck,
-		const gpio::gpio_pin_t& ss, uint32_t af_ss
+		const gpio::gpio_pin_t& sck, uint32_t af_sck
 	)
 {
 	using namespace gpio;
-	mosi.set(af_t(af_mosi), otype_t::push_pull, pupd_t::no_pupd, speed_t::bits_00);
-	//miso.set(af_t(af_miso), pupd_t::no_pupd, speed_t::bits_00);
-	sck.set(af_t(af_sck), pupd_t::no_pupd, speed_t::bits_00);
-	//ss.set(af_t(af_ss), pupd_t::pu, speed_t::bits_00);
-	ss.set(mode_t::output, otype_t::push_pull, pupd_t::pu, speed_t::bits_00);
+	mosi.set(af_t(af_mosi), otype_t::push_pull, pupd_t::pd, speed_t::bits_00);
+	miso.set(af_t(af_miso), otype_t::push_pull, pupd_t::pd, speed_t::bits_00);
+	sck.set(af_t(af_sck), otype_t::push_pull, pupd_t::pd, speed_t::bits_00);
 }
+
+
+inline
+void init_pin_nss(const gpio::gpio_pin_t& pin)
+{
+	using namespace gpio;
+	pin.set(mode_t::output, otype_t::push_pull, pupd_t::pu, speed_t::bits_00);
+	set_state(pin, 1);
+}
+
 #endif
 
 
@@ -265,7 +284,8 @@ class spi_t {
 	const gpio::gpio_pin_t pin_nss_;
 public:
 	spi_t(SPI_TypeDef* spi, const gpio::gpio_pin_t& nss);
-	uint16_t write16(uint16_t data);
+	template <typename T> T write(T data);
+	uint16_t write16(uint16_t data) { return write<uint16_t>(data); }
 };
 
 inline
@@ -275,27 +295,30 @@ spi_t::spi_t(SPI_TypeDef* spi, const gpio::gpio_pin_t& nss)
 {
 }
 
-inline
-uint16_t spi_t::write16(uint16_t data)
+
+template <typename T>
+T spi_t::write(T data)
 {
+	static_assert(sizeof(T) == 1 || sizeof(T) == 2); // FIXME
 	gpio::set_state(pin_nss_, 0);
 	//vTaskDelay(1);
 	for (volatile int i=0; i<256; ++i) {}
 	// TODO wait a bit?
 #if defined TARGET_STM32H745_CM4 || defined TARGET_STM32H745_CM7
-	volatile uint16_t* const tx = reinterpret_cast<volatile uint16_t*>(&spi_->TXDR);
+	volatile T* const tx = reinterpret_cast<volatile T*>(&spi_->TXDR);
 	*tx = data;
 	spi_->CR1 |= SPI_CR1_CSTART_Msk;
-	volatile uint16_t* const rx = reinterpret_cast<volatile uint16_t*>(&spi_->RXDR);
-	const uint16_t r = *rx;
+	volatile T* const rx = reinterpret_cast<volatile T*>(&spi_->RXDR);
+	const T r = *rx;
 #else
+	volatile T* const dr = reinterpret_cast<volatile T*>(&spi_->DR);
+
 	while(! (spi_->SR & SPI_SR_TXE)) {}
-	spi_->DR = data;
-	// FIXME need all this?
-	//while(! (spi_->SR & SPI_SR_TXE)) {}
-	//while(spi_->SR & SPI_SR_BSY) {}
+	*dr = data;
+
 	while(! (spi_->SR & SPI_SR_RXNE)) {}
-	const uint16_t r = spi_->DR;
+	const T r = *dr;
+	while(spi_->SR & SPI_SR_BSY) {}
 #endif
 	for (volatile int i=0; i<256; ++i) {}
 	gpio::set_state(pin_nss_, 1);
