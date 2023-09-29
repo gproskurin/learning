@@ -5,7 +5,7 @@
 
 extern void main();
 extern void _estack(void);
-//extern void IntHandler_Timer();
+extern void IntHandler_EXTI23();
 
 
 __attribute__((naked, noreturn)) void _reset(void)
@@ -41,7 +41,7 @@ extern void xPortPendSVHandler(void);
 extern void xPortSysTickHandler(void);
 
 #if defined TARGET_STM32L072
-__attribute__((section(".vectors"))) void (*tab[])(void) =
+__attribute__((section(".vectors"))) void (*tab[16 + 32])(void) =
 {
 	_estack,
 	_reset,
@@ -66,43 +66,7 @@ __attribute__((section(".vectors"))) void (*tab[])(void) =
 	0,
 	0,
 	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0, //&IntHandler_Timer, // TIM9
-	0,
-	0, // TIM11 43 = 27 + 16
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0 // &IntHandler_Timer // TIM6 59 = 16 + 43
+	IntHandler_EXTI23,
+	0
 };
 #endif

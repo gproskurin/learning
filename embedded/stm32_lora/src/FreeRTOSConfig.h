@@ -2,15 +2,11 @@
 #define FREERTOS_CONFIG_H
 
 #define configUSE_PREEMPTION				1
-#ifdef TARGET_STM32L072
-	#define configUSE_PORT_OPTIMISED_TASK_SELECTION		0
-#else
-	#define configUSE_PORT_OPTIMISED_TASK_SELECTION		1
-#endif
-#define configUSE_TICKLESS_IDLE				1
+#define configUSE_PORT_OPTIMISED_TASK_SELECTION		0
+#define configUSE_TICKLESS_IDLE				0
 
 #if defined TARGET_STM32L072
-	#define configCPU_CLOCK_HZ			2100000
+	#define configCPU_CLOCK_HZ			16000000
 #endif
 
 //#define configSYSTICK_CLOCK_HZ			1000000
@@ -22,7 +18,7 @@
 #define configTICK_TYPE_WIDTH_IN_BITS			(TICK_TYPE_WIDTH_32_BITS)
 #define configIDLE_SHOULD_YIELD				0
 #define configUSE_TASK_NOTIFICATIONS			1
-#define configTASK_NOTIFICATION_ARRAY_ENTRIES		3
+#define configTASK_NOTIFICATION_ARRAY_ENTRIES		1
 #define configUSE_MUTEXES				0
 #define configUSE_RECURSIVE_MUTEXES			0
 #define configUSE_COUNTING_SEMAPHORES			0
