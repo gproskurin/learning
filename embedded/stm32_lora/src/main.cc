@@ -184,8 +184,7 @@ void spi_sx_init()
 	// CPOL=0 CPHA=0, Motorola mode
 	SPI_SX1276->CR1 = 0;
 	constexpr uint32_t cr1 =
-		SPI_CR1_DFF_Msk
-		| (0b100 << SPI_CR1_BR_Pos)
+		(0b011 << SPI_CR1_BR_Pos)
 		| SPI_CR1_MSTR_Msk
 		| SPI_CR1_SSM_Msk
 		;
@@ -195,6 +194,14 @@ void spi_sx_init()
 
 	SPI_SX1276->CR1 = cr1 | SPI_CR1_SPE;
 }
+
+
+inline
+void sleep_ns(int ns)
+{
+	for (volatile int i=0; i<(ns/10)+2; ++i) {} // TODO
+}
+
 
 char prn_halfbyte(uint8_t x)
 {
@@ -207,6 +214,59 @@ char* printf_byte(uint8_t x, char* buf)
 	buf[1] = prn_halfbyte(x & 0b1111);
 	return buf+2;
 }
+
+
+void log_async_2(uint8_t x1, uint8_t x2, char* const buf0)
+{
+	auto buf = buf0;
+	buf = printf_byte(x1, buf);
+	*buf++ = ' ';
+	buf = printf_byte(x2, buf);
+	*buf++ = '\r';
+	*buf++ = '\n';
+	*buf++ = 0;
+	logger.log_async(buf0);
+}
+
+
+class spi_sx1276_t {
+	SPI_TypeDef* const spi_;
+	const stm32_lib::gpio::gpio_pin_t pin_nss_;
+public:
+	spi_sx1276_t(SPI_TypeDef* spi, const stm32_lib::gpio::gpio_pin_t& pin_nss) : spi_(spi), pin_nss_(pin_nss) {}
+
+	uint8_t get_reg(uint8_t reg)
+	{
+		nss_0();
+		stm32_lib::spi::write<uint8_t>(spi_, reg);
+		const auto r = stm32_lib::spi::write<uint8_t>(spi_, 0);
+		nss_1();
+		return r;
+	}
+
+	uint8_t set_reg(uint8_t reg, uint8_t val)
+	{
+		nss_0();
+		stm32_lib::spi::write<uint8_t>(spi_, 0b10000000 | reg);
+		const auto r = stm32_lib::spi::write<uint8_t>(spi_, val);
+		nss_1();
+		return r;
+	}
+
+private:
+	void nss_0()
+	{
+		stm32_lib::gpio::set_state(pin_nss_, 0);
+		sleep_ns(30);
+	}
+
+	void nss_1()
+	{
+		sleep_ns(100);
+		stm32_lib::gpio::set_state(pin_nss_, 1);
+		sleep_ns(30);
+	}
+};
 
 
 // LORA task
@@ -260,35 +320,30 @@ void lora_task_function(void* arg)
 		//pin_radio_reset.set(stm32_lib::gpio::pupd_t::pu);
 	}
 
-	stm32_lib::spi::spi_t spi(SPI1, pin_sxspi_nss);
+	spi_sx1276_t spi(SPI_SX1276, pin_sxspi_nss);
 
-	//spi.write<uint16_t>((0b10000000 | 0x01) | 0b00101101);
-	bool r = false;
-	static std::array<std::array<char, 10>, 127> bufs;
-	for (uint16_t reg=0x01; reg<= 0x7f; ++reg) {
-		const auto x = 0xff & spi.write<uint16_t>((reg << 8) | 0);
-		if (x) {
-			r = r || x;
-			char* const buf0 = bufs[reg].data();
-			auto buf = buf0;
-			buf = printf_byte(reg, buf);
-			*buf++ = ' ';
-			buf = printf_byte(x, buf);
-			*buf++ = '\r';
-			*buf++ = '\n';
-			*buf++ = 0;
-			logger.log_async(buf0);
-		}
+	static std::array<std::array<char, 8>, 127> bufs;
+	for (uint8_t reg=0x01; reg<=0x14; ++reg) {
+		const auto x = spi.get_reg(reg);
+		log_async_2(reg, x, bufs[reg].data());
 	}
 
-	logger.log_async("SRI_WRITE done\r\n");
-	if (!r) {
-		logger.log_async("SRI_WRITE - zero\r\n");
-		g_pin_red.on();
-	} else {
-		logger.log_async(" *** SRI_WRITE - unknown\r\n");
-		g_pin_blue.on();
-	}
+	constexpr uint8_t reg = 0x02;
+
+	static char buf1[8];
+	log_async_2(reg, spi.get_reg(reg), buf1);
+
+	static char buf2[8];
+	log_async_2(reg, spi.set_reg(reg, 0x3e), buf2);
+
+	static char buf3[8];
+	log_async_2(reg, spi.get_reg(reg), buf3);
+
+	static char buf4[8];
+	log_async_2(reg, spi.set_reg(reg, 0x1a), buf4);
+
+	static char buf5[8];
+	log_async_2(reg, spi.get_reg(reg), buf5);
 
 	const lora_task_data_t* const args = reinterpret_cast<lora_task_data_t*>(arg);
 	stm32_lib::gpio::set_mode_output_lowspeed_pushpull(pin_led_blue);
