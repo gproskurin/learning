@@ -27,6 +27,7 @@ const stm32_lib::gpio::gpio_pin_t usart_log_pin_tx(GPIOA, 2);
 
 // SX1276 SPI
 #define SPI_SX1276_AF 0
+#define SPI_SX1276 SPI1
 const stm32_lib::gpio::gpio_pin_t pin_sxspi_nss(GPIOA, 15);
 const stm32_lib::gpio::gpio_pin_t pin_sxspi_sck(GPIOB, 3);
 const stm32_lib::gpio::gpio_pin_t pin_sxspi_miso(GPIOA, 6);
@@ -40,8 +41,9 @@ const std::array<stm32_lib::gpio::gpio_pin_t, 4> pins_dio{
 };
 
 const stm32_lib::gpio::gpio_pin_t pin_radio_reset(GPIOC, 0);
+//const stm32_lib::gpio::gpio_pin_t pin_sx1276_reset(GPIOA, 11);
 
-const stm32_lib::gpio::gpio_pin_t pin_radio_tcxo_vcc(GPIOA, 12);
+//const stm32_lib::gpio::gpio_pin_t pin_radio_tcxo_vcc(GPIOA, 12);
 const stm32_lib::gpio::gpio_pin_t pin_radio_ant_sw_rx(GPIOA, 1);
 const stm32_lib::gpio::gpio_pin_t pin_radio_ant_sw_tx_boost(GPIOC, 1);
 const stm32_lib::gpio::gpio_pin_t pin_radio_ant_sw_tx_rfo(GPIOC, 2);
@@ -68,13 +70,6 @@ void usart_init(USART_TypeDef* const usart)
 
 	usart->CR1 = cr1;
 	usart->CR1 = cr1 | USART_CR1_UE;
-}
-
-
-void delay(int val)
-{
-	for (volatile int i = 0; i<val; ++i) {
-	}
 }
 
 
@@ -106,14 +101,15 @@ void bus_init()
 	RCC->IOPENR = RCC_IOPENR_IOPAEN_Msk | RCC_IOPENR_IOPBEN_Msk | RCC_IOPENR_IOPCEN_Msk;
 	toggle_bits_10(&RCC->IOPRSTR, RCC_IOPRSTR_IOPARST | RCC_IOPRSTR_IOPBRST | RCC_IOPRSTR_IOPCRST);
 
-	// USART2 & SPI2
-	RCC->APB1ENR |= RCC_APB1ENR_USART2EN_Msk | RCC_APB1ENR_SPI2EN_Msk;
-	toggle_bits_10(&RCC->APB1RSTR, RCC_APB1RSTR_USART2RST_Msk | RCC_APB1RSTR_SPI2RST_Msk);
+	// USART2
+	RCC->APB1ENR |= RCC_APB1ENR_USART2EN_Msk;
+	toggle_bits_10(&RCC->APB1RSTR, RCC_APB1RSTR_USART2RST_Msk);
 
 	// SPI1 & SYSCFG
 	RCC->APB2ENR |= RCC_APB2ENR_SPI1EN_Msk | RCC_APB2ENR_SYSCFGEN_Msk;
 	toggle_bits_10(&RCC->APB2RSTR, RCC_APB2RSTR_SPI1RST_Msk | RCC_APB2RSTR_SYSCFGRST_Msk);
 
+#if 0
 	// PB2 interrupt TODO: do not hardcode PB2, use bit masks stuff
 	{
 		auto const cr = &SYSCFG->EXTICR[pin_userbutton.reg / 4];
@@ -128,6 +124,7 @@ void bus_init()
 	NVIC_SetPriority(EXTI2_3_IRQn, 13);
 	NVIC_EnableIRQ(EXTI2_3_IRQn);
 #endif
+#endif
 }
 
 
@@ -135,7 +132,7 @@ volatile bool blue_state = false;
 extern "C" __attribute__ ((interrupt)) void IntHandler_EXTI23()
 {
 	if (EXTI->PR & (1 << pin_userbutton.reg)) {
-		stm32_lib::gpio::set_state(pin_led_blue, (blue_state = !blue_state));
+		//stm32_lib::gpio::set_state(pin_led_blue, (blue_state = !blue_state));
 		EXTI->PR = (1 << pin_userbutton.reg);
 	}
 }
@@ -164,19 +161,6 @@ freertos_utils::pin_toggle_task_t g_pin_red("blink_red", pin_led_red, PRIO_BLINK
 freertos_utils::pin_toggle_task_t g_pin_green("blink_green", pin_led_green, PRIO_BLINK);
 
 
-char* print_bits(uint8_t x, char* buf)
-{
-	for (size_t i=0; i<8; ++i) {
-		*buf++ = (x & 0b10000000) ? '1' : '0';
-		x <<= 1;
-	}
-	*buf++ = '\r';
-	*buf++ = '\n';
-	*buf = 0;
-	return buf;
-}
-
-
 void init_radio_pin(const stm32_lib::gpio::gpio_pin_t& pin)
 {
 	pin.set(
@@ -198,18 +182,30 @@ void spi_sx_init()
 	);
 
 	// CPOL=0 CPHA=0, Motorola mode
-	SPI1->CR1 = 0;
+	SPI_SX1276->CR1 = 0;
 	constexpr uint32_t cr1 =
-		// SPI_CR1_DFF_Msk
-		(0b011 << SPI_CR1_BR_Pos)
+		SPI_CR1_DFF_Msk
+		| (0b100 << SPI_CR1_BR_Pos)
 		| SPI_CR1_MSTR_Msk
 		| SPI_CR1_SSM_Msk
 		;
-	SPI1->CR1 = cr1;
+	SPI_SX1276->CR1 = cr1;
 
-	SPI1->CR2 = SPI_CR2_SSOE;
+	SPI_SX1276->CR2 = SPI_CR2_SSOE;
 
-	SPI1->CR1 = cr1 | SPI_CR1_SPE;
+	SPI_SX1276->CR1 = cr1 | SPI_CR1_SPE;
+}
+
+char prn_halfbyte(uint8_t x)
+{
+	return ((x <= 9) ? '0' : ('A'-10)) + x;
+}
+
+char* printf_byte(uint8_t x, char* buf)
+{
+	buf[0] = prn_halfbyte(x >> 4);
+	buf[1] = prn_halfbyte(x & 0b1111);
+	return buf+2;
 }
 
 
@@ -227,25 +223,24 @@ void lora_task_function(void* arg)
 {
 	spi_sx_init();
 
-	init_radio_pin(pin_radio_tcxo_vcc);
+	//init_radio_pin(pin_radio_tcxo_vcc);
 	init_radio_pin(pin_radio_ant_sw_rx);
 	init_radio_pin(pin_radio_ant_sw_tx_boost);
 	init_radio_pin(pin_radio_ant_sw_tx_rfo);
 
-	stm32_lib::gpio::set_state(pin_radio_tcxo_vcc, 1);
+	//stm32_lib::gpio::set_state(pin_radio_tcxo_vcc, 1);
 	vTaskDelay(configTICK_RATE_HZ/10);
 
 	// init dio
 	for (const auto& p : pins_dio) {
-		using namespace stm32_lib::gpio;
-		using mode_t = stm32_lib::gpio::mode_t;
-		p.set(mode_t::input, pupd_t::pd, speed_t::bits_11);
+		p.set(stm32_lib::gpio::mode_t::input, stm32_lib::gpio::pupd_t::pd);
 	}
 
 	// reset radio
 	{
 		using namespace stm32_lib::gpio;
 		using mode_t = stm32_lib::gpio::mode_t;
+
 		pin_radio_reset.set(
 			stm32_lib::gpio::mode_t::output,
 			stm32_lib::gpio::otype_t::push_pull,
@@ -262,43 +257,44 @@ void lora_task_function(void* arg)
 			stm32_lib::gpio::pupd_t::no_pupd
 		);
 		vTaskDelay(configTICK_RATE_HZ/10);
+		//pin_radio_reset.set(stm32_lib::gpio::pupd_t::pu);
 	}
 
 	stm32_lib::spi::spi_t spi(SPI1, pin_sxspi_nss);
 
+	//spi.write<uint16_t>((0b10000000 | 0x01) | 0b00101101);
 	bool r = false;
-	for (uint16_t reg=0x01; reg<= 0x1d; ++reg) {
-		auto x = spi.write<uint16_t>(reg);
-		//auto r = spi.write<uint8_t>(0x55);
-		if (x)
-			r = true;
+	static std::array<std::array<char, 10>, 127> bufs;
+	for (uint16_t reg=0x01; reg<= 0x7f; ++reg) {
+		const auto x = 0xff & spi.write<uint16_t>((reg << 8) | 0);
+		if (x) {
+			r = r || x;
+			char* const buf0 = bufs[reg].data();
+			auto buf = buf0;
+			buf = printf_byte(reg, buf);
+			*buf++ = ' ';
+			buf = printf_byte(x, buf);
+			*buf++ = '\r';
+			*buf++ = '\n';
+			*buf++ = 0;
+			logger.log_async(buf0);
+		}
 	}
 
-#if 0
-		char buf[16];
-		int i=0;
-		while(r) {
-			buf[i] = (r & 1) + '0';
-			r = r >> 1;
-			++i;
-		}
-		buf[i++] = '\r'; buf[i++] = '\n'; buf[i++] = 0;
-		logger.log_async(buf);
-#endif
-		logger.log_async("SRI_WRITE done\r\n");
-		if (!r) {
-			logger.log_async("SRI_WRITE - zero\r\n");
-			g_pin_red.on();
-		} else {
-			logger.log_async(" *** SRI_WRITE - unknown\r\n");
-			g_pin_blue.on();
-		}
+	logger.log_async("SRI_WRITE done\r\n");
+	if (!r) {
+		logger.log_async("SRI_WRITE - zero\r\n");
+		g_pin_red.on();
+	} else {
+		logger.log_async(" *** SRI_WRITE - unknown\r\n");
+		g_pin_blue.on();
+	}
 
 	const lora_task_data_t* const args = reinterpret_cast<lora_task_data_t*>(arg);
 	stm32_lib::gpio::set_mode_output_lowspeed_pushpull(pin_led_blue);
 	for(;;) {
 		//logger.log_async("LORA keepalive\r\n");
-		g_pin_green.pulse_once(configTICK_RATE_HZ/16);
+		g_pin_green.pulse_once(configTICK_RATE_HZ/8);
 		vTaskDelay(configTICK_RATE_HZ);
 	}
 }
