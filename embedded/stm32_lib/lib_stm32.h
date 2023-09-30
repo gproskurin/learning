@@ -279,50 +279,26 @@ void init_pin_nss(const gpio::gpio_pin_t& pin)
 #endif
 
 
-class spi_t {
-	SPI_TypeDef* const spi_;
-	const gpio::gpio_pin_t pin_nss_;
-public:
-	spi_t(SPI_TypeDef* spi, const gpio::gpio_pin_t& nss);
-	template <typename T> T write(T data);
-	uint16_t write16(uint16_t data) { return write<uint16_t>(data); }
-};
-
-inline
-spi_t::spi_t(SPI_TypeDef* spi, const gpio::gpio_pin_t& nss)
-	: spi_(spi)
-	, pin_nss_(nss)
-{
-}
-
-
 template <typename T>
-T spi_t::write(T data)
+T write(SPI_TypeDef* const spi, T data)
 {
 	static_assert(sizeof(T) == 1 || sizeof(T) == 2); // FIXME
-	gpio::set_state(pin_nss_, 0);
-	//vTaskDelay(1);
-	for (volatile int i=0; i<256; ++i) {}
-	// TODO wait a bit?
 #if defined TARGET_STM32H745_CM4 || defined TARGET_STM32H745_CM7
-	volatile T* const tx = reinterpret_cast<volatile T*>(&spi_->TXDR);
+	volatile T* const tx = reinterpret_cast<volatile T*>(&spi->TXDR);
 	*tx = data;
-	spi_->CR1 |= SPI_CR1_CSTART_Msk;
-	volatile T* const rx = reinterpret_cast<volatile T*>(&spi_->RXDR);
+	spi->CR1 |= SPI_CR1_CSTART_Msk;
+	volatile T* const rx = reinterpret_cast<volatile T*>(&spi->RXDR);
 	const T r = *rx;
 #else
-	volatile T* const dr = reinterpret_cast<volatile T*>(&spi_->DR);
+	volatile T* const dr = reinterpret_cast<volatile T*>(&spi->DR);
 
-	while(! (spi_->SR & SPI_SR_TXE)) {}
+	while(! (spi->SR & SPI_SR_TXE)) {}
 	*dr = data;
 
-	while(! (spi_->SR & SPI_SR_RXNE)) {}
+	while(! (spi->SR & SPI_SR_RXNE)) {}
 	const T r = *dr;
-	while(spi_->SR & SPI_SR_BSY) {}
+	while(spi->SR & SPI_SR_BSY) {}
 #endif
-	for (volatile int i=0; i<256; ++i) {}
-	gpio::set_state(pin_nss_, 1);
-	for (volatile int i=0; i<256; ++i) {}
 	return r;
 }
 
