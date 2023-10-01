@@ -26,6 +26,28 @@ extern const stm32_lib::gpio::gpio_pin_t pin_radio_ant_sw_tx_boost;
 extern const stm32_lib::gpio::gpio_pin_t pin_radio_ant_sw_tx_rfo;
 
 
+enum regs_t : uint8_t {
+	RegFifo = 0x00,
+	RegOpMode = 0x01
+};
+
+enum reg_val_t : uint8_t {
+	RegOpMode_LongRangeMode = 0b10000000,
+	RegOpMode_AccessSharedReg = 0b01000000,
+	RegOpMode_LowFrequencyModeOn = 0b00001000,
+	RegOpMode_Mode_msk = 0b111,
+	RegOpMode_Mode_pos = 0,
+	RegOpMode_Mode_SLEEP = 0b000,
+	RegOpMode_Mode_STDBY = 0b001,
+	RegOpMode_Mode_FSTX = 0b010,
+	RegOpMode_Mode_TX = 0b011,
+	RegOpMode_Mode_FSRX = 0b100,
+	RegOpMode_Mode_RXCONTINUOUS = 0b101,
+	RegOpMode_Mode_RXSINGLE = 0b110,
+	RegOpMode_Mode_CAD = 0b111
+};
+
+
 inline
 void sleep_ns(int ns)
 {
