@@ -1,6 +1,7 @@
 #include "lib_stm32.h"
 #include "freertos_utils.h"
 #include "logging.h"
+#include "sx1276.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -24,30 +25,6 @@ const stm32_lib::gpio::gpio_pin_t pin_userbutton(GPIOB, 2);
 #define USART_LOG USART2
 #define USART_LOG_AF 4
 const stm32_lib::gpio::gpio_pin_t usart_log_pin_tx(GPIOA, 2);
-
-// SX1276 SPI
-#define SPI_SX1276_AF 0
-#define SPI_SX1276 SPI1
-const stm32_lib::gpio::gpio_pin_t pin_sxspi_nss(GPIOA, 15);
-const stm32_lib::gpio::gpio_pin_t pin_sxspi_sck(GPIOB, 3);
-const stm32_lib::gpio::gpio_pin_t pin_sxspi_miso(GPIOA, 6);
-const stm32_lib::gpio::gpio_pin_t pin_sxspi_mosi(GPIOA, 7);
-
-const std::array<stm32_lib::gpio::gpio_pin_t, 4> pins_dio{
-	stm32_lib::gpio::gpio_pin_t(GPIOB, 4),
-	stm32_lib::gpio::gpio_pin_t(GPIOB, 1),
-	stm32_lib::gpio::gpio_pin_t(GPIOB, 0),
-	stm32_lib::gpio::gpio_pin_t(GPIOC, 13)
-};
-
-const stm32_lib::gpio::gpio_pin_t pin_radio_reset(GPIOC, 0);
-//const stm32_lib::gpio::gpio_pin_t pin_sx1276_reset(GPIOA, 11);
-
-//const stm32_lib::gpio::gpio_pin_t pin_radio_tcxo_vcc(GPIOA, 12);
-const stm32_lib::gpio::gpio_pin_t pin_radio_ant_sw_rx(GPIOA, 1);
-const stm32_lib::gpio::gpio_pin_t pin_radio_ant_sw_tx_boost(GPIOC, 1);
-const stm32_lib::gpio::gpio_pin_t pin_radio_ant_sw_tx_rfo(GPIOC, 2);
-
 
 #define CLOCK_SPEED configCPU_CLOCK_HZ
 #define USART_CON_BAUDRATE 115200
@@ -161,48 +138,6 @@ freertos_utils::pin_toggle_task_t g_pin_red("blink_red", pin_led_red, PRIO_BLINK
 freertos_utils::pin_toggle_task_t g_pin_green("blink_green", pin_led_green, PRIO_BLINK);
 
 
-void init_radio_pin(const stm32_lib::gpio::gpio_pin_t& pin)
-{
-	pin.set(
-		stm32_lib::gpio::mode_t::output,
-		stm32_lib::gpio::otype_t::push_pull,
-		stm32_lib::gpio::pupd_t::no_pupd,
-		stm32_lib::gpio::speed_t::bits_11
-	);
-}
-
-
-void spi_sx_init()
-{
-	stm32_lib::spi::init_pin_nss(pin_sxspi_nss);
-	stm32_lib::spi::init_pins(
-		pin_sxspi_mosi, SPI_SX1276_AF,
-		pin_sxspi_miso, SPI_SX1276_AF,
-		pin_sxspi_sck, SPI_SX1276_AF
-	);
-
-	// CPOL=0 CPHA=0, Motorola mode
-	SPI_SX1276->CR1 = 0;
-	constexpr uint32_t cr1 =
-		(0b011 << SPI_CR1_BR_Pos)
-		| SPI_CR1_MSTR_Msk
-		| SPI_CR1_SSM_Msk
-		;
-	SPI_SX1276->CR1 = cr1;
-
-	SPI_SX1276->CR2 = SPI_CR2_SSOE;
-
-	SPI_SX1276->CR1 = cr1 | SPI_CR1_SPE;
-}
-
-
-inline
-void sleep_ns(int ns)
-{
-	for (volatile int i=0; i<(ns/10)+2; ++i) {} // TODO
-}
-
-
 char prn_halfbyte(uint8_t x)
 {
 	return ((x <= 9) ? '0' : ('A'-10)) + x;
@@ -229,45 +164,6 @@ void log_async_2(uint8_t x1, uint8_t x2, char* const buf0)
 }
 
 
-class spi_sx1276_t {
-	SPI_TypeDef* const spi_;
-	const stm32_lib::gpio::gpio_pin_t pin_nss_;
-public:
-	spi_sx1276_t(SPI_TypeDef* spi, const stm32_lib::gpio::gpio_pin_t& pin_nss) : spi_(spi), pin_nss_(pin_nss) {}
-
-	uint8_t get_reg(uint8_t reg)
-	{
-		nss_0();
-		stm32_lib::spi::write<uint8_t>(spi_, reg);
-		const auto r = stm32_lib::spi::write<uint8_t>(spi_, 0);
-		nss_1();
-		return r;
-	}
-
-	uint8_t set_reg(uint8_t reg, uint8_t val)
-	{
-		nss_0();
-		stm32_lib::spi::write<uint8_t>(spi_, 0b10000000 | reg);
-		const auto r = stm32_lib::spi::write<uint8_t>(spi_, val);
-		nss_1();
-		return r;
-	}
-
-private:
-	void nss_0()
-	{
-		stm32_lib::gpio::set_state(pin_nss_, 0);
-		sleep_ns(30);
-	}
-
-	void nss_1()
-	{
-		sleep_ns(100);
-		stm32_lib::gpio::set_state(pin_nss_, 1);
-		sleep_ns(30);
-	}
-};
-
 
 // LORA task
 struct lora_task_data_t {
@@ -281,18 +177,18 @@ struct lora_task_data_t {
 
 void lora_task_function(void* arg)
 {
-	spi_sx_init();
+	sx1276::spi_sx_init();
 
-	//init_radio_pin(pin_radio_tcxo_vcc);
-	init_radio_pin(pin_radio_ant_sw_rx);
-	init_radio_pin(pin_radio_ant_sw_tx_boost);
-	init_radio_pin(pin_radio_ant_sw_tx_rfo);
+	//sx1276::init_radio_pin(sx1276::pin_radio_tcxo_vcc);
+	sx1276::init_radio_pin(sx1276::pin_radio_ant_sw_rx);
+	sx1276::init_radio_pin(sx1276::pin_radio_ant_sw_tx_boost);
+	sx1276::init_radio_pin(sx1276::pin_radio_ant_sw_tx_rfo);
 
 	//stm32_lib::gpio::set_state(pin_radio_tcxo_vcc, 1);
 	vTaskDelay(configTICK_RATE_HZ/10);
 
 	// init dio
-	for (const auto& p : pins_dio) {
+	for (const auto& p : sx1276::pins_dio) {
 		p.set(stm32_lib::gpio::mode_t::input, stm32_lib::gpio::pupd_t::pd);
 	}
 
@@ -301,18 +197,18 @@ void lora_task_function(void* arg)
 		using namespace stm32_lib::gpio;
 		using mode_t = stm32_lib::gpio::mode_t;
 
-		pin_radio_reset.set(
+		sx1276::pin_radio_reset.set(
 			stm32_lib::gpio::mode_t::output,
 			stm32_lib::gpio::otype_t::push_pull,
 			stm32_lib::gpio::pupd_t::no_pupd,
 			stm32_lib::gpio::speed_t::bits_11
 		);
-		pin_radio_reset.set(mode_t::output, otype_t::push_pull, pupd_t::pu);
+		sx1276::pin_radio_reset.set(mode_t::output, otype_t::push_pull, pupd_t::pu);
 
-		stm32_lib::gpio::set_state(pin_radio_reset, 0);
+		stm32_lib::gpio::set_state(sx1276::pin_radio_reset, 0);
 		vTaskDelay(configTICK_RATE_HZ/10);
 
-		pin_radio_reset.set(
+		sx1276::pin_radio_reset.set(
 			stm32_lib::gpio::mode_t::input,
 			stm32_lib::gpio::pupd_t::no_pupd
 		);
@@ -320,7 +216,7 @@ void lora_task_function(void* arg)
 		//pin_radio_reset.set(stm32_lib::gpio::pupd_t::pu);
 	}
 
-	spi_sx1276_t spi(SPI_SX1276, pin_sxspi_nss);
+	sx1276::spi_sx1276_t spi(SPI_SX1276, sx1276::pin_sxspi_nss);
 
 	static std::array<std::array<char, 8>, 127> bufs;
 	for (uint8_t reg=0x01; reg<=0x14; ++reg) {
