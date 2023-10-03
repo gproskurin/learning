@@ -30,6 +30,10 @@ const stm32_lib::gpio::gpio_pin_t usart_log_pin_tx(GPIOA, 2);
 #define CLOCK_SPEED configCPU_CLOCK_HZ
 #define USART_CON_BAUDRATE 115200
 
+namespace sx1276 {
+	struct hwconf_t;
+	extern const hwconf_t hwc;
+};
 
 usart_logger_t logger;
 
@@ -130,6 +134,9 @@ void vApplicationIdleHook(void)
 }
 
 
+lora::task_data_t lora_task_data;
+
+
 freertos_utils::pin_toggle_task_t g_pin_green2("blink_green2", pin_led_green2, PRIO_BLINK);
 freertos_utils::pin_toggle_task_t g_pin_blue("blink_blue", pin_led_blue, PRIO_BLINK);
 freertos_utils::pin_toggle_task_t g_pin_red("blink_red", pin_led_red, PRIO_BLINK);
@@ -159,7 +166,7 @@ __attribute__ ((noreturn)) void main()
 	g_pin_red.init_pin();
 
 	logger.log_sync("Creating LORA task...\r\n");
-	lora::create_task("lora", PRIO_LORA);
+	lora::create_task("lora", PRIO_LORA, lora_task_data, &sx1276::hwc);
 	logger.log_sync("Created LORA task\r\n");
 
 	logger.log_sync("Starting FreeRTOS scheduler\r\n");

@@ -7,23 +7,27 @@
 
 namespace sx1276 {
 
-// SX1276 SPI
-#define SPI_SX1276_AF 0
-#define SPI_SX1276 SPI1
-extern const stm32_lib::gpio::gpio_pin_t pin_sxspi_nss;
-extern const stm32_lib::gpio::gpio_pin_t pin_sxspi_sck;
-extern const stm32_lib::gpio::gpio_pin_t pin_sxspi_miso;
-extern const stm32_lib::gpio::gpio_pin_t pin_sxspi_mosi;
+struct hwconf_t {
+	SPI_TypeDef* spi = nullptr;
+	uint8_t spi_af; // TODO per spi pin
 
-extern const std::array<stm32_lib::gpio::gpio_pin_t, 4> pins_dio;
+	stm32_lib::gpio::gpio_pin_t pin_spi_nss;
+	stm32_lib::gpio::gpio_pin_t pin_spi_sck;
+	stm32_lib::gpio::gpio_pin_t pin_spi_miso;
+	stm32_lib::gpio::gpio_pin_t pin_spi_mosi;
 
-extern const stm32_lib::gpio::gpio_pin_t pin_radio_reset;
-//extern const stm32_lib::gpio::gpio_pin_t pin_sx1276_reset;
+	std::array<stm32_lib::gpio::gpio_pin_t, 4> pins_dio;
 
-//extern const stm32_lib::gpio::gpio_pin_t pin_radio_tcxo_vcc;
-extern const stm32_lib::gpio::gpio_pin_t pin_radio_ant_sw_rx;
-extern const stm32_lib::gpio::gpio_pin_t pin_radio_ant_sw_tx_boost;
-extern const stm32_lib::gpio::gpio_pin_t pin_radio_ant_sw_tx_rfo;
+	stm32_lib::gpio::gpio_pin_t pin_radio_reset;
+	//stm32_lib::gpio::gpio_pin_t pin_sx1276_reset;
+
+	//stm32_lib::gpio::gpio_pin_t pin_radio_tcxo_vcc;
+	stm32_lib::gpio::gpio_pin_t pin_radio_ant_sw_rx;
+	stm32_lib::gpio::gpio_pin_t pin_radio_ant_sw_tx_boost;
+	stm32_lib::gpio::gpio_pin_t pin_radio_ant_sw_tx_rfo;
+};
+
+extern const hwconf_t hwc;
 
 
 enum regs_t : uint8_t {
@@ -59,7 +63,7 @@ void sleep_ns(int ns)
 void init_radio_pin(const stm32_lib::gpio::gpio_pin_t&);
 
 
-void spi_sx_init();
+void spi_sx_init(const hwconf_t&);
 
 
 class spi_sx1276_t {

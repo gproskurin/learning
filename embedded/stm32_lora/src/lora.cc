@@ -1,5 +1,3 @@
-#include "freertos_utils.h"
-
 #include "lora.h"
 
 
@@ -41,24 +39,18 @@ void log_async_2(uint8_t x1, uint8_t x2, char* const buf0)
 } // namespace
 
 
-// LORA task
-struct task_data_t {
-	freertos_utils::task_stack_t<256> stack;
-	TaskHandle_t task_handle = nullptr;
-	StaticTask_t task_buffer;
-} task_data;
-
-
-void task_function(void*)
+void task_function(void* arg)
 {
-	sx1276::spi_sx_init();
+	const sx1276::hwconf_t* const hwp = reinterpret_cast<const sx1276::hwconf_t*>(arg);
 
-	//sx1276::init_radio_pin(sx1276::pin_radio_tcxo_vcc);
-	sx1276::init_radio_pin(sx1276::pin_radio_ant_sw_rx);
-	sx1276::init_radio_pin(sx1276::pin_radio_ant_sw_tx_boost);
-	sx1276::init_radio_pin(sx1276::pin_radio_ant_sw_tx_rfo);
+	sx1276::spi_sx_init(*hwp);
 
-	//stm32_lib::gpio::set_state(pin_radio_tcxo_vcc, 1);
+	//sx1276::init_radio_pin(hwp->pin_radio_tcxo_vcc);
+	sx1276::init_radio_pin(hwp->pin_radio_ant_sw_rx);
+	sx1276::init_radio_pin(hwp->pin_radio_ant_sw_tx_boost);
+	sx1276::init_radio_pin(hwp->pin_radio_ant_sw_tx_rfo);
+
+	//stm32_lib::gpio::set_state(hwp->pin_radio_tcxo_vcc, 1);
 	vTaskDelay(configTICK_RATE_HZ/10);
 
 	// init dio
@@ -71,18 +63,18 @@ void task_function(void*)
 		using namespace stm32_lib::gpio;
 		using mode_t = stm32_lib::gpio::mode_t;
 
-		sx1276::pin_radio_reset.set(
+		hwp->pin_radio_reset.set(
 			stm32_lib::gpio::mode_t::output,
 			stm32_lib::gpio::otype_t::push_pull,
 			stm32_lib::gpio::pupd_t::no_pupd,
 			stm32_lib::gpio::speed_t::bits_11
 		);
-		sx1276::pin_radio_reset.set(mode_t::output, otype_t::push_pull, pupd_t::pu);
+		hwp->pin_radio_reset.set(mode_t::output, otype_t::push_pull, pupd_t::pu);
 
-		stm32_lib::gpio::set_state(sx1276::pin_radio_reset, 0);
+		stm32_lib::gpio::set_state(hwp->pin_radio_reset, 0);
 		vTaskDelay(configTICK_RATE_HZ/10);
 
-		sx1276::pin_radio_reset.set(
+		hwp->pin_radio_reset.set(
 			stm32_lib::gpio::mode_t::input,
 			stm32_lib::gpio::pupd_t::no_pupd
 		);
@@ -90,7 +82,7 @@ void task_function(void*)
 		//pin_radio_reset.set(stm32_lib::gpio::pupd_t::pu);
 	}
 
-	sx1276::spi_sx1276_t spi(SPI_SX1276, sx1276::pin_sxspi_nss);
+	sx1276::spi_sx1276_t spi(hwp->spi, hwp->pin_spi_nss);
 
 	static std::array<std::array<char, 8>, 127> bufs;
 	for (uint8_t reg=0x01; reg<=0x14; ++reg) {
@@ -128,13 +120,13 @@ void task_function(void*)
 }
 
 
-void create_task(const char* task_name, UBaseType_t prio)
+void create_task(const char* task_name, UBaseType_t prio, task_data_t& task_data, const sx1276::hwconf_t* hwp)
 {
 	task_data.task_handle = xTaskCreateStatic(
 		&task_function,
 		task_name,
 		task_data.stack.size(),
-		nullptr, // reinterpret_cast<void*>(&lora_task_data),
+		const_cast<void*>(reinterpret_cast<const void*>(hwp)),
 		prio,
 		task_data.stack.data(),
 		&task_data.task_buffer
