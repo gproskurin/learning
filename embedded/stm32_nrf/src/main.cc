@@ -1,4 +1,5 @@
 #include "lib_stm32.h"
+#include "nrf24.h"
 #include "freertos_utils.h"
 #include "logging.h"
 
@@ -8,79 +9,77 @@
 #include <stdint.h>
 #include <string.h>
 #include <array>
+#include <optional>
 
 
 #define PRIO_BLINK 1
 #define PRIO_NRF 3
 #define PRIO_LOGGER 2
 
-const stm32_lib::gpio::gpio_pin_t pin_led_green(GPIOB, 5);
-const stm32_lib::gpio::gpio_pin_t pin_led_blue(GPIOB, 6);
-const stm32_lib::gpio::gpio_pin_t pin_led_red(GPIOB, 7);
-const stm32_lib::gpio::gpio_pin_t pin_led_green2(GPIOA, 5);
-const stm32_lib::gpio::gpio_pin_t pin_userbutton(GPIOB, 2);
 
-// USART2 (st-link vcom)
-#define USART_LOG USART2
-#define USART_LOG_AF 4
-const stm32_lib::gpio::gpio_pin_t usart_log_pin_tx(GPIOA, 2);
+const stm32_lib::gpio::gpio_pin_t pin_led_blue(GPIOB, 5);
+const stm32_lib::gpio::gpio_pin_t pin_led_green(GPIOB, 0);
+const stm32_lib::gpio::gpio_pin_t pin_led_red(GPIOB, 1);
+
+const stm32_lib::gpio::gpio_pin_t pin_userbutton1(GPIOC, 4);
+const stm32_lib::gpio::gpio_pin_t pin_userbutton2(GPIOD, 0);
+const stm32_lib::gpio::gpio_pin_t pin_userbutton3(GPIOD, 1);
 
 
-#define SPI_NRF SPI2
-#define SPI_NRF_AF 0
-// MSB first, CPOL=0, CPHA=0
-const stm32_lib::gpio::gpio_pin_t pin_nrfspi_nss(GPIOB, 12);
-const stm32_lib::gpio::gpio_pin_t pin_nrfspi_sck(GPIOB, 13);
-const stm32_lib::gpio::gpio_pin_t pin_nrfspi_miso(GPIOB, 14);
-const stm32_lib::gpio::gpio_pin_t pin_nrfspi_mosi(GPIOB, 15);
-
-//const stm32_lib::gpio::gpio_pin_t pin_nrf_vcc(GPIOA, 0); // TODO
-const stm32_lib::gpio::gpio_pin_t pin_nrf_irq(GPIOA, 0); // active low
-const stm32_lib::gpio::gpio_pin_t pin_nrf_ce(GPIOA, 4);
+// USART (st-link vcom)
+#define USART_LOG USART1
+#define USART_LOG_AF 7
+const stm32_lib::gpio::gpio_pin_t usart_log_pin_tx(GPIOB, 6);
 
 
-#define CLOCK_SPEED configCPU_CLOCK_HZ
 #define USART_CON_BAUDRATE 115200
 
-
-template <size_t StackSize>
-using task_stack_t = std::array<StackType_t, StackSize>;
 
 usart_logger_t logger;
 
 
+const nrf24::hw_conf_t nrf1_conf{
+	.spi = SPI1,
+	.spi_af = 0,
+	.pin_spi_nss{GPIOB, 9},
+	.pin_spi_sck{GPIOA, 15},
+	.pin_spi_miso{GPIOA, 11},
+	.pin_spi_mosi{GPIOA, 12},
+	.pin_irq{GPIOB, 8},
+	.pin_ce{GPIOA, 4}
+};
+
+const nrf24::hw_conf_t nrf2_conf{
+	.spi = SPI2,
+	.spi_af = 0,
+	.pin_spi_nss{GPIOB, 12},
+	.pin_spi_sck{GPIOB, 13},
+	.pin_spi_miso{GPIOB, 14},
+	.pin_spi_mosi{GPIOB, 15},
+	.pin_irq{GPIOA, 0},
+	.pin_ce{GPIOA, 4}
+};
+
+
 // NRF task
 struct nrf_task_data_t {
-	task_stack_t<256> stack;
+	freertos_utils::task_stack_t<256> stack;
 	TaskHandle_t task_handle = nullptr;
 	StaticTask_t task_buffer;
 };
 
 nrf_task_data_t nrf1_task_data;
-
-
-enum reg_t : uint8_t {
-	CMD_R_REGISTER = 0b00000000,
-	CMD_W_REGISTER = 0b00100000,
-	CMD_NOP = 0b11111111,
-
-	REG_CONFIG = 0x00,
-	REGV_CONFIG_PWR_UP = 0b10,
-	REGV_CONFIG_PRIM_RX_PRX = 0b1,
-	//REGV_CONFIG_PRIM_RX_PTX = 0
-
-	REG_FIFO_STATUS = 0x17
-};
+nrf_task_data_t nrf2_task_data;
 
 
 void usart_init(USART_TypeDef* const usart)
 {
 	usart->CR1 = 0; // ensure UE flag is reset
 
-	constexpr uint32_t cr1 = USART_CR1_TE;
+	constexpr uint32_t cr1 = USART_CR1_FIFOEN | USART_CR1_TE;
 
 	stm32_lib::gpio::set_mode_af_lowspeed_pu(usart_log_pin_tx, USART_LOG_AF);
-	usart->BRR = CLOCK_SPEED / USART_CON_BAUDRATE;
+	usart->BRR = configCPU_CLOCK_HZ / USART_CON_BAUDRATE;
 
 	usart->CR1 = cr1;
 	usart->CR1 = cr1 | USART_CR1_UE;
@@ -97,32 +96,24 @@ void toggle_bits_10(volatile uint32_t* const ptr, const uint32_t mask)
 
 void bus_init()
 {
-#if defined TARGET_STM32L072
-	// flash
-	FLASH->ACR |= FLASH_ACR_LATENCY;
-
-	// clock: switch from MSI to HSI
-	// turn on HSI & wait
-	RCC->CR |= RCC_CR_HSION;
-	while (!(RCC->CR & RCC_CR_HSIRDY)) {}
-	// switch to HSI
-	RCC->CFGR = (RCC->CFGR & ~RCC_CFGR_SW_Msk) | (0b01 << RCC_CFGR_SW_Pos);
-	// switch off MSI & wait
-	RCC->CR &= ~RCC_CR_MSION;
-	while (RCC->CR & RCC_CR_MSIRDY) {}
+#if defined TARGET_STM32WB55
+	// flash & clock
+	FLASH->ACR = (FLASH->ACR & ~FLASH_ACR_LATENCY_Msk) | (0b010 << FLASH_ACR_LATENCY_Pos);
+	RCC->CR = (RCC->CR & ~RCC_CR_MSIRANGE_Msk) | (0b1011 << RCC_CR_MSIRANGE_Pos);
 
 	// GPIOs
-	RCC->IOPENR = RCC_IOPENR_IOPAEN_Msk | RCC_IOPENR_IOPBEN_Msk | RCC_IOPENR_IOPCEN_Msk;
-	toggle_bits_10(&RCC->IOPRSTR, RCC_IOPRSTR_IOPARST | RCC_IOPRSTR_IOPBRST | RCC_IOPRSTR_IOPCRST);
+	RCC->AHB2ENR |= RCC_AHB2ENR_GPIOAEN_Msk | RCC_AHB2ENR_GPIOBEN_Msk;
+	toggle_bits_10(&RCC->AHB2RSTR, RCC_AHB2RSTR_GPIOARST | RCC_AHB2RSTR_GPIOBRST);
 
-	// USART2 & SPI2
-	RCC->APB1ENR |= RCC_APB1ENR_USART2EN_Msk | RCC_APB1ENR_SPI2EN_Msk;
-	toggle_bits_10(&RCC->APB1RSTR, RCC_APB1RSTR_USART2RST_Msk | RCC_APB1RSTR_SPI2RST_Msk);
+	// SPI2
+	RCC->APB1ENR1 |= RCC_APB1ENR1_SPI2EN_Msk;
+	toggle_bits_10(&RCC->APB1RSTR1, RCC_APB1RSTR1_SPI2RST_Msk);
 
-	// SPI1 & SYSCFG
-	RCC->APB2ENR |=/* RCC_APB2ENR_SPI1EN_Msk |*/ RCC_APB2ENR_SYSCFGEN_Msk;
-	toggle_bits_10(&RCC->APB2RSTR, /*RCC_APB2RSTR_SPI1RST_Msk |*/ RCC_APB2RSTR_SYSCFGRST_Msk);
+	// SPI1 & USART1
+	RCC->APB2ENR |= RCC_APB2ENR_SPI1EN_Msk | RCC_APB2ENR_USART1EN_Msk;
+	toggle_bits_10(&RCC->APB2RSTR, RCC_APB2RSTR_SPI1RST_Msk | RCC_APB2RSTR_USART1RST_Msk);
 
+#if 0
 	// PB2 interrupt TODO: do not hardcode PB2, use bit masks stuff
 	{
 		auto const cr = &SYSCFG->EXTICR[pin_userbutton.reg / 4];
@@ -137,24 +128,27 @@ void bus_init()
 	NVIC_SetPriority(EXTI2_3_IRQn, 13);
 	NVIC_EnableIRQ(EXTI2_3_IRQn);
 #endif
+#endif
 }
 
 
+#if 0
 extern "C" __attribute__ ((interrupt)) void IntHandler_EXTI23()
 {
 	if (EXTI->PR & (1 << pin_userbutton.reg)) {
 		EXTI->PR = (1 << pin_userbutton.reg);
 		{
 			BaseType_t yield = pdFALSE;
-			xTaskNotifyFromISR(nrf1_task_data.task_handle, 1, eSetBits, &yield);
+			xTaskNotifyFromISR(nrf2_task_data.task_handle, 1, eSetBits, &yield);
 			portYIELD_FROM_ISR(yield);
 		}
 	}
 }
+#endif
 
 
 StaticTask_t xTaskBufferIdle;
-task_stack_t<64> idle_task_stack;
+freertos_utils::task_stack_t<64> idle_task_stack;
 extern "C"
 void vApplicationGetIdleTaskMemory(StaticTask_t **tcbIdle, StackType_t **stackIdle, uint32_t *stackSizeIdle)
 {
@@ -170,10 +164,9 @@ void vApplicationIdleHook(void)
 }
 
 
-freertos_utils::pin_toggle_task_t g_pin_green2("blink_green2", pin_led_green2, PRIO_BLINK);
 freertos_utils::pin_toggle_task_t g_pin_blue("blink_blue", pin_led_blue, PRIO_BLINK);
-freertos_utils::pin_toggle_task_t g_pin_red("blink_red", pin_led_red, PRIO_BLINK);
 freertos_utils::pin_toggle_task_t g_pin_green("blink_green", pin_led_green, PRIO_BLINK);
+freertos_utils::pin_toggle_task_t g_pin_red("blink_red", pin_led_red, PRIO_BLINK);
 
 
 char* print_bits(uint8_t x, char* buf)
@@ -189,72 +182,32 @@ char* print_bits(uint8_t x, char* buf)
 }
 
 
-void init_radio_pin(const stm32_lib::gpio::gpio_pin_t& pin)
+void spi_nrf_init(const nrf24::hw_conf_t& cf)
 {
-	pin.set(
-		stm32_lib::gpio::mode_t::output,
-		stm32_lib::gpio::otype_t::push_pull,
-		stm32_lib::gpio::pupd_t::no_pupd,
-		stm32_lib::gpio::speed_t::bits_11
-	);
-}
-
-
-void spi_nrf_init()
-{
-	stm32_lib::spi::init_pin_nss(pin_nrfspi_nss);
+	stm32_lib::spi::init_pin_nss(cf.pin_spi_nss);
 	stm32_lib::spi::init_pins(
-		pin_nrfspi_mosi, SPI_NRF_AF,
-		pin_nrfspi_miso, SPI_NRF_AF,
-		pin_nrfspi_sck, SPI_NRF_AF
+		cf.pin_spi_mosi, cf.spi_af,
+		cf.pin_spi_miso, cf.spi_af,
+		cf.pin_spi_sck, cf.spi_af
 	);
 
 	// CPOL=0 CPHA=0, Motorola mode
-	SPI2->CR1 = 0;
+	cf.spi->CR1 = 0;
 	constexpr uint32_t cr1 =
-		//SPI_CR1_DFF_Msk
 		(0b111 << SPI_CR1_BR_Pos)
 		| SPI_CR1_MSTR_Msk
 		| SPI_CR1_SSM_Msk
-		//| SPI_CR1_SSI_Msk
 		;
-	SPI2->CR1 = cr1;
-
-	SPI_NRF->CR2 = SPI_CR2_SSOE;
-
-	SPI_NRF->CR1 = cr1 | SPI_CR1_SPE;
+	cf.spi->CR1 = cr1;
+	cf.spi->CR2 = SPI_CR2_SSOE;
+	cf.spi->CR1 = cr1 | SPI_CR1_SPE;
 }
 
 
-uint8_t spi_nrf_write(
-		SPI_TypeDef* const spi,
-		uint8_t size,
-		uint8_t cmd,
-		const uint8_t* mosi_buf,
-		uint8_t* miso_buf
-)
-{
-	stm32_lib::gpio::set_state(pin_nrfspi_nss, 0);
-	for (volatile int i=0; i<10; ++i) {} // 2ns
-
-	const uint8_t status = stm32_lib::spi::write<uint8_t>(spi, cmd);
-	for (uint8_t i=0; i<size; ++i) {
-		const uint8_t r = stm32_lib::spi::write<uint8_t>(spi, (mosi_buf ? mosi_buf[i] : 0));
-		if (miso_buf) {
-			miso_buf[i] = r;
-		}
-	}
-
-	for (volatile int i=0; i<10; ++i) {} // 2ns
-	stm32_lib::gpio::set_state(pin_nrfspi_nss, 1);
-	return status;
-}
-
-
-void nrf_st_cf()
+void nrf_st_cf(const nrf24::hw_conf_t& hwc)
 {
 	uint8_t cf;
-	const uint8_t st = spi_nrf_write(SPI_NRF, 1, reg_t::CMD_R_REGISTER | reg_t::REG_CONFIG, nullptr, &cf);
+	const uint8_t st = nrf24::spi_write(hwc, 1, nrf24::reg_t::CMD_R_REGISTER | nrf24::reg_t::REG_CONFIG, nullptr, &cf);
 
 	static char buf_st[8+3];
 	logger.log_async("NRF status\r\n");
@@ -268,46 +221,59 @@ void nrf_st_cf()
 
 	static char buf_fifost[8+3];
 	uint8_t fs;
-	spi_nrf_write(SPI_NRF, 1, reg_t::CMD_R_REGISTER | reg_t::REG_FIFO_STATUS, nullptr, &fs);
+	nrf24::spi_write(hwc, 1, nrf24::reg_t::CMD_R_REGISTER | nrf24::reg_t::REG_FIFO_STATUS, nullptr, &fs);
 	logger.log_async("NRF fifo_status\r\n");
 	print_bits(fs, buf_fifost);
 	logger.log_async(buf_fifost);
+
 	vTaskDelay(configTICK_RATE_HZ/10);
 }
 
 
-void nrf_task_function(void*)
+void nrf_task_function(void* arg)
 {
+	{
+		for(;;) {
+			g_pin_blue.pulse_many(configTICK_RATE_HZ/20, configTICK_RATE_HZ/10, 3);
+			logger.log_async("NRF keep-alive\r\n");
+			vTaskDelay(configTICK_RATE_HZ*2);
+		}
+	}
+
+	const nrf24::hw_conf_t* const hwc = reinterpret_cast<const nrf24::hw_conf_t*>(arg);
+
 	logger.log_async("NRF1 task started\r\n");
-	pin_nrf_irq.set(stm32_lib::gpio::mode_t::input, stm32_lib::gpio::pupd_t::pu);
-	spi_nrf_init();
-	stm32_lib::gpio::set_mode_output_lowspeed_pushpull(pin_nrf_ce);
+	hwc->pin_irq.set(stm32_lib::gpio::mode_t::input, stm32_lib::gpio::pupd_t::pu);
+	spi_nrf_init(*hwc);
+	stm32_lib::gpio::set_mode_output_lowspeed_pushpull(hwc->pin_ce);
 	vTaskDelay(configTICK_RATE_HZ/10);
 
 	logger.log_async("NRF1 init done\r\n");
 
-	nrf_st_cf();
+	nrf_st_cf(*hwc);
 
-	// switch to standby-1
-	stm32_lib::gpio::set_state(pin_nrf_ce, 1);
-	vTaskDelay(configTICK_RATE_HZ/10);
-
-	// pwr up
+	// pwr up, RX
 	{
 		logger.log_async("NRF1 pwr_up\r\n");
-		stm32_lib::gpio::set_state(pin_nrf_ce, 0); // standby-1
+		stm32_lib::gpio::set_state(hwc->pin_ce, 0); // standby-1
+		vTaskDelay(configTICK_RATE_HZ/10);
+
 		uint8_t cf;
-		spi_nrf_write(SPI_NRF, 1, reg_t::CMD_R_REGISTER | reg_t::REG_CONFIG, nullptr, &cf);
-		cf |= reg_t::REGV_CONFIG_PWR_UP;
-		spi_nrf_write(SPI_NRF, 1, reg_t::CMD_W_REGISTER | reg_t::REG_CONFIG, &cf, nullptr);
 
+		nrf24::spi_write(*hwc, 1, nrf24::reg_t::CMD_R_REGISTER | nrf24::reg_t::REG_CONFIG, nullptr, &cf);
+		cf |= nrf24::reg_t::REGV_CONFIG_PWR_UP;
+		nrf24::spi_write(*hwc, 1, nrf24::reg_t::CMD_W_REGISTER | nrf24::reg_t::REG_CONFIG, &cf, nullptr);
 		vTaskDelay(configTICK_RATE_HZ/10);
-		nrf_st_cf();
 
-		cf |= REGV_CONFIG_PRIM_RX_PRX;
-		spi_nrf_write(SPI_NRF, 1, reg_t::CMD_W_REGISTER | reg_t::REG_CONFIG, &cf, nullptr);
+		// RX
+		cf |= nrf24::reg_t::REGV_CONFIG_PRIM_RX_PRX;
+		nrf24::spi_write(*hwc, 1, nrf24::reg_t::CMD_W_REGISTER | nrf24::reg_t::REG_CONFIG, &cf, nullptr);
 		vTaskDelay(configTICK_RATE_HZ/10);
-		nrf_st_cf();
+
+		stm32_lib::gpio::set_state(hwc->pin_ce, 1);
+		vTaskDelay(configTICK_RATE_HZ/10);
+
+		nrf_st_cf(*hwc);
 	}
 
 
@@ -319,21 +285,22 @@ void nrf_task_function(void*)
 			}
 		}
 		g_pin_green.pulse_once(configTICK_RATE_HZ/16);
-		nrf_st_cf();
+		nrf_st_cf(*hwc);
 		logger.log_async("---\r\n");
 	}
 }
 
-void create_nrf_task(const char* task_name, UBaseType_t prio, nrf_task_data_t& args)
+
+void create_nrf_task(const char* task_name, UBaseType_t prio, nrf_task_data_t& task_data, const nrf24::hw_conf_t* const hwc)
 {
-	args.task_handle = xTaskCreateStatic(
+	task_data.task_handle = xTaskCreateStatic(
 		&nrf_task_function,
 		task_name,
-		args.stack.size(),
-		nullptr,
+		task_data.stack.size(),
+		const_cast<void*>(reinterpret_cast<const void*>(hwc)),
 		prio,
-		args.stack.data(),
-		&args.task_buffer
+		task_data.stack.data(),
+		&task_data.task_buffer
 	);
 }
 
@@ -341,6 +308,11 @@ void create_nrf_task(const char* task_name, UBaseType_t prio, nrf_task_data_t& a
 __attribute__ ((noreturn)) void main()
 {
 	bus_init();
+
+	g_pin_blue.init_pin();
+	g_pin_green.init_pin();
+	g_pin_red.init_pin();
+	g_pin_green.pulse_continuous(configTICK_RATE_HZ/10, configTICK_RATE_HZ/4);
 
 	usart_init(USART_LOG);
 	logger.set_usart(USART_LOG);
@@ -354,15 +326,9 @@ __attribute__ ((noreturn)) void main()
 	logger.create_task("logger", PRIO_LOGGER);
 	logger.log_sync("Created logger task\r\n");
 
-	g_pin_green.init_pin();
-	g_pin_green2.init_pin();
-	g_pin_green2.pulse_continuous(configTICK_RATE_HZ/50, configTICK_RATE_HZ/25);
-	g_pin_blue.init_pin();
-	g_pin_red.init_pin();
-
-	logger.log_sync("Creating NRF-1 task...\r\n");
-	create_nrf_task("nrf1_task", PRIO_NRF, nrf1_task_data);
-	logger.log_sync("Created NRF-1 task\r\n");
+	logger.log_sync("Creating NRF-2 task...\r\n");
+	create_nrf_task("nrf2_task", PRIO_NRF, nrf2_task_data, &nrf2_conf);
+	logger.log_sync("Created NRF-2 task\r\n");
 
 	logger.log_sync("Starting FreeRTOS scheduler\r\n");
 	vTaskStartScheduler();

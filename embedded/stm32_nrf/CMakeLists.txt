@@ -5,10 +5,10 @@ include("cmake/arm-none-eabi.cmake")
 project(nrf C CXX)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
-set(stm32l072_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/ld/stm32l072.ld)
-set(stm32l072_DEFINITIONS "-DTARGET_STM32L072")
-set(stm32l072_C_CXX_ARCH_FLAGS -mcpu=cortex-m0plus -mthumb)
-set(stm32l072_FREERTOS_PORT "GCC_ARM_CM0")
+set(stm32wb55_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/ld/stm32wb55.ld)
+set(stm32wb55_DEFINITIONS "-DTARGET_STM32WB55")
+set(stm32wb55_C_CXX_ARCH_FLAGS -mcpu=cortex-m4 -mthumb)
+set(stm32wb55_FREERTOS_PORT "GCC_ARM_CM3")
 
 set(FIRMWARE_ELF ${PROJECT_NAME}.elf)
 set(FIRMWARE_BIN ${PROJECT_NAME}.bin)
@@ -99,6 +99,6 @@ function(generate_targets T)
 endfunction()
 
 
-generate_targets("stm32l072")
+generate_targets("stm32wb55")
 
 ###
