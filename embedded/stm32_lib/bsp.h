@@ -10,14 +10,15 @@ namespace bsp {
 
 #define USART_STLINK USART1
 #define USART_STLINK_PIN_TX_AF 7
-extern const stm32_lib::gpio::gpio_pin_t usart_stlink_pin_tx;
+constexpr stm32_lib::gpio::gpio_pin_t usart_stlink_pin_tx{GPIOB_BASE, 6};
 
-extern const stm32_lib::gpio::gpio_pin_t pin_led_blue;
-extern const stm32_lib::gpio::gpio_pin_t pin_led_green;
-extern const stm32_lib::gpio::gpio_pin_t pin_led_red;
-extern const stm32_lib::gpio::gpio_pin_t pin_userbutton1;
-extern const stm32_lib::gpio::gpio_pin_t pin_userbutton2;
-extern const stm32_lib::gpio::gpio_pin_t pin_userbutton3;
+constexpr stm32_lib::gpio::gpio_pin_t pin_led_blue{GPIOB_BASE, 5};
+constexpr stm32_lib::gpio::gpio_pin_t pin_led_green{GPIOB_BASE, 0};
+constexpr stm32_lib::gpio::gpio_pin_t pin_led_red{GPIOB_BASE, 1};
+constexpr stm32_lib::gpio::gpio_pin_t pin_userbutton1{GPIOC_BASE, 4};
+constexpr stm32_lib::gpio::gpio_pin_t pin_userbutton2{GPIOD_BASE, 0};
+constexpr stm32_lib::gpio::gpio_pin_t pin_userbutton3{GPIOD_BASE, 1};
+
 #endif
 
 
@@ -25,15 +26,49 @@ extern const stm32_lib::gpio::gpio_pin_t pin_userbutton3;
 
 #define USART_STLINK USART2
 #define USART_STLINK_PIN_TX_AF 4
-extern const stm32_lib::gpio::gpio_pin_t usart_stlink_pin_tx;
+constexpr stm32_lib::gpio::gpio_pin_t usart_stlink_pin_tx{GPIOA_BASE, 2};
 
-extern const stm32_lib::gpio::gpio_pin_t pin_led_green;
-extern const stm32_lib::gpio::gpio_pin_t pin_led_blue;
-extern const stm32_lib::gpio::gpio_pin_t pin_led_red;
-extern const stm32_lib::gpio::gpio_pin_t pin_led_green2;
+constexpr stm32_lib::gpio::gpio_pin_t pin_led_green{GPIOB_BASE, 5};
+constexpr stm32_lib::gpio::gpio_pin_t pin_led_blue{GPIOB_BASE, 6};
+constexpr stm32_lib::gpio::gpio_pin_t pin_led_red{GPIOB_BASE, 7};
+constexpr stm32_lib::gpio::gpio_pin_t pin_led_green2{GPIOA_BASE, 5};
+
+constexpr stm32_lib::gpio::gpio_pin_t pin_userbutton{GPIOB_BASE, 2};
+
 #endif
-}
 
+
+#ifdef TARGET_STM32F103
+
+// FIXME f103 doesn't have built-in stlink, check it
+#define USART_STLINK USART1
+#define USART_STLINK_PIN_TX_AF 4
+constexpr stm32_lib::gpio::gpio_pin_t usart_stlink_pin_tx{GPIOA_BASE, 9};
+
+constexpr stm32_lib::gpio::gpio_pin_t pin_led{GPIOB, 12};
+
+#endif
+
+
+#if defined TARGET_STM32H745_CM4 || defined TARGET_STM32H745_CM7
+
+// TODO use/check stlink pin
+#define USART_STLINK USART3
+#define USART_STLINK_PIN_TX_AF 7
+constexpr stm32_lib::gpio::gpio_pin_t usart_stlink_pin_tx{GPIOB_BASE, 10};
+
+constexpr stm32_lib::gpio::gpio_pin_t pin_led_red{GPIOI_BASE, 13};
+constexpr stm32_lib::gpio::gpio_pin_t pin_led_green{GPIOJ_BASE, 2};
+constexpr stm32_lib::gpio::gpio_pin_t pin_led_green_arduino{GPIOD_BASE, 3};
+constexpr stm32_lib::gpio::gpio_pin_t pin_led_green_vbus_usb_fs{GPIOA_BASE, 9};
+constexpr stm32_lib::gpio::gpio_pin_t pin_led_red_otg_overcurrent{GPIOH_BASE, 11};
+
+//constexpr stm32_lib::gpio::gpio_pin_t pin_userbutton{GPIOD_BASE, 1};
+
+#endif
+
+
+} // namespace
 
 #endif
 
