@@ -27,23 +27,23 @@ usart_logger_t logger;
 const nrf24::hw_conf_t nrf1_conf{
 	.spi = SPI1,
 	.spi_af = 0,
-	.pin_spi_nss{GPIOB, 9},
-	.pin_spi_sck{GPIOA, 15},
-	.pin_spi_miso{GPIOA, 11},
-	.pin_spi_mosi{GPIOA, 12},
-	.pin_irq{GPIOB, 8},
-	.pin_ce{GPIOA, 4}
+	.pin_spi_nss{GPIOB_BASE, 9},
+	.pin_spi_sck{GPIOA_BASE, 15},
+	.pin_spi_miso{GPIOA_BASE, 11},
+	.pin_spi_mosi{GPIOA_BASE, 12},
+	.pin_irq{GPIOB_BASE, 8},
+	.pin_ce{GPIOA_BASE, 4}
 };
 
 const nrf24::hw_conf_t nrf2_conf{
 	.spi = SPI2,
 	.spi_af = 0,
-	.pin_spi_nss{GPIOB, 12},
-	.pin_spi_sck{GPIOB, 13},
-	.pin_spi_miso{GPIOB, 14},
-	.pin_spi_mosi{GPIOB, 15},
-	.pin_irq{GPIOA, 0},
-	.pin_ce{GPIOA, 4}
+	.pin_spi_nss{GPIOB_BASE, 12},
+	.pin_spi_sck{GPIOB_BASE, 13},
+	.pin_spi_miso{GPIOB_BASE, 14},
+	.pin_spi_mosi{GPIOB_BASE, 15},
+	.pin_irq{GPIOA_BASE, 0},
+	.pin_ce{GPIOA_BASE, 4}
 };
 
 
