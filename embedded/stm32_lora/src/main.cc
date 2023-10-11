@@ -1,4 +1,5 @@
 #include "lib_stm32.h"
+#include "bsp.h"
 #include "freertos_utils.h"
 #include "logging.h"
 
@@ -16,18 +17,7 @@
 #define PRIO_LORA 3
 #define PRIO_LOGGER 2
 
-const stm32_lib::gpio::gpio_pin_t pin_led_green(GPIOB, 5);
-const stm32_lib::gpio::gpio_pin_t pin_led_blue(GPIOB, 6);
-const stm32_lib::gpio::gpio_pin_t pin_led_red(GPIOB, 7);
-const stm32_lib::gpio::gpio_pin_t pin_led_green2(GPIOA, 5);
-const stm32_lib::gpio::gpio_pin_t pin_userbutton(GPIOB, 2);
 
-// USART2 (st-link vcom)
-#define USART_LOG USART2
-#define USART_LOG_AF 4
-const stm32_lib::gpio::gpio_pin_t usart_log_pin_tx(GPIOA, 2);
-
-#define CLOCK_SPEED configCPU_CLOCK_HZ
 #define USART_CON_BAUDRATE 115200
 
 namespace sx1276 {
@@ -44,8 +34,8 @@ void usart_init(USART_TypeDef* const usart)
 
 	constexpr uint32_t cr1 = USART_CR1_TE;
 
-	stm32_lib::gpio::set_mode_af_lowspeed_pu(usart_log_pin_tx, USART_LOG_AF);
-	usart->BRR = CLOCK_SPEED / USART_CON_BAUDRATE;
+	stm32_lib::gpio::set_mode_af_lowspeed_pu(bsp::usart_stlink_pin_tx, USART_STLINK_PIN_TX_AF);
+	usart->BRR = configCPU_CLOCK_HZ / USART_CON_BAUDRATE;
 
 	usart->CR1 = cr1;
 	usart->CR1 = cr1 | USART_CR1_UE;
@@ -110,9 +100,9 @@ void bus_init()
 volatile bool blue_state = false;
 extern "C" __attribute__ ((interrupt)) void IntHandler_EXTI23()
 {
-	if (EXTI->PR & (1 << pin_userbutton.reg)) {
+	if (EXTI->PR & (1 << bsp::pin_userbutton.reg)) {
 		//stm32_lib::gpio::set_state(pin_led_blue, (blue_state = !blue_state));
-		EXTI->PR = (1 << pin_userbutton.reg);
+		EXTI->PR = (1 << bsp::pin_userbutton.reg);
 	}
 }
 
@@ -137,18 +127,18 @@ void vApplicationIdleHook(void)
 lora::task_data_t lora_task_data;
 
 
-freertos_utils::pin_toggle_task_t g_pin_green2("blink_green2", pin_led_green2, PRIO_BLINK);
-freertos_utils::pin_toggle_task_t g_pin_blue("blink_blue", pin_led_blue, PRIO_BLINK);
-freertos_utils::pin_toggle_task_t g_pin_red("blink_red", pin_led_red, PRIO_BLINK);
-freertos_utils::pin_toggle_task_t g_pin_green("blink_green", pin_led_green, PRIO_BLINK);
+freertos_utils::pin_toggle_task_t g_pin_green2("blink_green2", bsp::pin_led_green2, PRIO_BLINK);
+freertos_utils::pin_toggle_task_t g_pin_blue("blink_blue", bsp::pin_led_blue, PRIO_BLINK);
+freertos_utils::pin_toggle_task_t g_pin_red("blink_red", bsp::pin_led_red, PRIO_BLINK);
+freertos_utils::pin_toggle_task_t g_pin_green("blink_green", bsp::pin_led_green, PRIO_BLINK);
 
 
 __attribute__ ((noreturn)) void main()
 {
 	bus_init();
 
-	usart_init(USART_LOG);
-	logger.set_usart(USART_LOG);
+	usart_init(USART_STLINK);
+	logger.set_usart(USART_STLINK);
 	logger.log_sync("\r\nLogger initialized (sync)\r\n");
 
 	logger.log_sync("Creating logger queue...\r\n");

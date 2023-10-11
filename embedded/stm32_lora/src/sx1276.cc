@@ -8,25 +8,25 @@ const hwconf_t hwc = {
 	.spi = SPI1,
 	.spi_af = 0,
 
-	.pin_spi_nss{GPIOA, 15},
-	.pin_spi_sck{GPIOB, 3},
-	.pin_spi_miso{GPIOA, 6},
-	.pin_spi_mosi{GPIOA, 7},
+	.pin_spi_nss{GPIOA_BASE, 15},
+	.pin_spi_sck{GPIOB_BASE, 3},
+	.pin_spi_miso{GPIOA_BASE, 6},
+	.pin_spi_mosi{GPIOA_BASE, 7},
 
 	.pins_dio{
-		stm32_lib::gpio::gpio_pin_t(GPIOB, 4),
-		stm32_lib::gpio::gpio_pin_t(GPIOB, 1),
-		stm32_lib::gpio::gpio_pin_t(GPIOB, 0),
-		stm32_lib::gpio::gpio_pin_t(GPIOC, 13)
+		stm32_lib::gpio::gpio_pin_t{GPIOB_BASE, 4},
+		stm32_lib::gpio::gpio_pin_t{GPIOB_BASE, 1},
+		stm32_lib::gpio::gpio_pin_t{GPIOB_BASE, 0},
+		stm32_lib::gpio::gpio_pin_t{GPIOC_BASE, 13}
 	},
-	.pin_radio_reset{GPIOC, 0},
+	.pin_radio_reset{GPIOC_BASE, 0},
 
-	//.pin_sx1276_reset{GPIOA, 11},
+	//.pin_sx1276_reset{GPIOA_BASE, 11},
 
-	//.pin_radio_tcxo_vcc{GPIOA, 12},
-	.pin_radio_ant_sw_rx{GPIOA, 1},
-	.pin_radio_ant_sw_tx_boost{GPIOC, 1},
-	.pin_radio_ant_sw_tx_rfo{GPIOC, 2}
+	//.pin_radio_tcxo_vcc{GPIOA_BASE, 12},
+	.pin_radio_ant_sw_rx{GPIOA_BASE, 1},
+	.pin_radio_ant_sw_tx_boost{GPIOC_BASE, 1},
+	.pin_radio_ant_sw_tx_rfo{GPIOC_BASE, 2}
 
 };
 
