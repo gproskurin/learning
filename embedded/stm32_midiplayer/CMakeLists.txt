@@ -71,6 +71,7 @@ function(generate_targets T)
 		${STM32_LIB_ROOT}/logging.cc
 		${STM32_LIB_ROOT}/my_stdlib.c
 		${STM32_LIB_ROOT}/freertos_utils.cc
+		${STM32_LIB_ROOT}/bsp.cc
 	)
 
 	set_source_files_properties("src/player.cc"

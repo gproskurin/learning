@@ -1,4 +1,5 @@
 #include "lib_stm32.h"
+#include "bsp.h"
 #include "nrf24.h"
 #include "freertos_utils.h"
 #include "logging.h"
@@ -15,21 +16,6 @@
 #define PRIO_BLINK 1
 #define PRIO_NRF 3
 #define PRIO_LOGGER 2
-
-
-const stm32_lib::gpio::gpio_pin_t pin_led_blue(GPIOB, 5);
-const stm32_lib::gpio::gpio_pin_t pin_led_green(GPIOB, 0);
-const stm32_lib::gpio::gpio_pin_t pin_led_red(GPIOB, 1);
-
-const stm32_lib::gpio::gpio_pin_t pin_userbutton1(GPIOC, 4);
-const stm32_lib::gpio::gpio_pin_t pin_userbutton2(GPIOD, 0);
-const stm32_lib::gpio::gpio_pin_t pin_userbutton3(GPIOD, 1);
-
-
-// USART (st-link vcom)
-#define USART_LOG USART1
-#define USART_LOG_AF 7
-const stm32_lib::gpio::gpio_pin_t usart_log_pin_tx(GPIOB, 6);
 
 
 #define USART_CON_BAUDRATE 115200
@@ -78,7 +64,7 @@ void usart_init(USART_TypeDef* const usart)
 
 	constexpr uint32_t cr1 = USART_CR1_FIFOEN | USART_CR1_TE;
 
-	stm32_lib::gpio::set_mode_af_lowspeed_pu(usart_log_pin_tx, USART_LOG_AF);
+	stm32_lib::gpio::set_mode_af_lowspeed_pu(bsp::usart_stlink_pin_tx, USART_STLINK_PIN_TX_AF);
 	usart->BRR = configCPU_CLOCK_HZ / USART_CON_BAUDRATE;
 
 	usart->CR1 = cr1;
@@ -164,9 +150,9 @@ void vApplicationIdleHook(void)
 }
 
 
-freertos_utils::pin_toggle_task_t g_pin_blue("blink_blue", pin_led_blue, PRIO_BLINK);
-freertos_utils::pin_toggle_task_t g_pin_green("blink_green", pin_led_green, PRIO_BLINK);
-freertos_utils::pin_toggle_task_t g_pin_red("blink_red", pin_led_red, PRIO_BLINK);
+freertos_utils::pin_toggle_task_t g_pin_blue("blink_blue", bsp::pin_led_blue, PRIO_BLINK);
+freertos_utils::pin_toggle_task_t g_pin_green("blink_green", bsp::pin_led_green, PRIO_BLINK);
+freertos_utils::pin_toggle_task_t g_pin_red("blink_red", bsp::pin_led_red, PRIO_BLINK);
 
 
 char* print_bits(uint8_t x, char* buf)
@@ -314,8 +300,8 @@ __attribute__ ((noreturn)) void main()
 	g_pin_red.init_pin();
 	g_pin_green.pulse_continuous(configTICK_RATE_HZ/10, configTICK_RATE_HZ/4);
 
-	usart_init(USART_LOG);
-	logger.set_usart(USART_LOG);
+	usart_init(USART_STLINK);
+	logger.set_usart(USART_STLINK);
 	logger.log_sync("\r\nLogger initialized (sync)\r\n");
 
 	logger.log_sync("Creating logger queue...\r\n");

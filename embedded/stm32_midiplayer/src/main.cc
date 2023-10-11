@@ -1,6 +1,7 @@
 #include "player.h"
 
 #include "lib_stm32.h"
+#include "bsp.h"
 #include "logging.h"
 #include "freertos_utils.h"
 
@@ -17,22 +18,9 @@
 #define PRIO_LOGGER 3
 #define PRIO_PLAYER 4
 
-#if defined TARGET_STM32L072
-	const stm32_lib::gpio::gpio_pin_t pin_led_green2(GPIOA, 5);
 
-	// USART2 (st-link vcom)
-	#define USART_LOG USART2
-	#define USART_LOG_AF 4
-	const stm32_lib::gpio::gpio_pin_t usart_log_pin_tx(GPIOA, 2);
-#endif
-
-
-#define CLOCK_SPEED configCPU_CLOCK_HZ
 #define USART_CON_BAUDRATE 115200
 
-
-template <size_t StackSize>
-using task_stack_t = std::array<StackType_t, StackSize>;
 
 usart_logger_t logger;
 
@@ -44,8 +32,8 @@ void usart_init(USART_TypeDef* const usart)
 	constexpr uint32_t cr1 = USART_CR1_TE;
 
 #ifndef TARGET_STM32F103
-	stm32_lib::gpio::set_mode_af_lowspeed_pu(usart_log_pin_tx, USART_LOG_AF);
-	usart->BRR = CLOCK_SPEED / USART_CON_BAUDRATE;
+	stm32_lib::gpio::set_mode_af_lowspeed_pu(bsp::usart_stlink_pin_tx, USART_STLINK_PIN_TX_AF);
+	usart->BRR = configCPU_CLOCK_HZ / USART_CON_BAUDRATE;
 #endif
 
 	usart->CR1 = cr1;
@@ -96,7 +84,7 @@ void bus_init()
 
 
 StaticTask_t xTaskBufferIdle;
-task_stack_t<128> idle_task_stack;
+freertos_utils::task_stack_t<128> idle_task_stack;
 extern "C"
 void vApplicationGetIdleTaskMemory(StaticTask_t **tcbIdle, StackType_t **stackIdle, uint32_t *stackSizeIdle)
 {
@@ -112,7 +100,7 @@ void vApplicationIdleHook(void)
 }
 
 
-freertos_utils::pin_toggle_task_t g_pin_green2("blink_green2", pin_led_green2, PRIO_BLINK);
+freertos_utils::pin_toggle_task_t g_pin_green2("blink_green2", bsp::pin_led_green2, PRIO_BLINK);
 
 
 struct note_t {
@@ -312,8 +300,8 @@ __attribute__ ((noreturn)) void main()
 {
 	bus_init();
 
-	usart_init(USART_LOG);
-	logger.set_usart(USART_LOG);
+	usart_init(USART_STLINK);
+	logger.set_usart(USART_STLINK);
 	logger.log_sync("\r\nLogger initialized (sync)\r\n");
 
 	logger.log_sync("Creating logger queue...\r\n");
