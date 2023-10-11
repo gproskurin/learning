@@ -2,6 +2,7 @@
 
 #include "cmsis_device.h"
 #include "lib_stm32.h"
+#include "bsp.h"
 #include "freertos_utils.h"
 #include "logging.h"
 
@@ -13,15 +14,11 @@ extern usart_logger_t logger;
 #define DDS_FREQ 40000 // keep in sync with python generator
 #define TIM_DAC TIM6
 
-const stm32_lib::gpio::gpio_pin_t pin_dac(GPIOA, 4);
+const stm32_lib::gpio::gpio_pin_t pin_dac(GPIOA_BASE, 4);
 
-const stm32_lib::gpio::gpio_pin_t pin_led_green(GPIOB, 5);
-const stm32_lib::gpio::gpio_pin_t pin_led_blue(GPIOB, 6);
-const stm32_lib::gpio::gpio_pin_t pin_led_red(GPIOB, 7);
-
-freertos_utils::pin_toggle_task_t pin_green("pin_toggle_green", pin_led_green, 1);
-freertos_utils::pin_toggle_task_t pin_blue("pin_toggle_blue", pin_led_blue, 1);
-freertos_utils::pin_toggle_task_t pin_red("pin_toggle_red", pin_led_red, 1);
+freertos_utils::pin_toggle_task_t pin_green("pin_toggle_green", bsp::pin_led_green, 1);
+freertos_utils::pin_toggle_task_t pin_blue("pin_toggle_blue", bsp::pin_led_blue, 1);
+freertos_utils::pin_toggle_task_t pin_red("pin_toggle_red", bsp::pin_led_red, 1);
 
 typedef uint16_t dds_value_t;
 #include "lookup_tables.cc.h"
