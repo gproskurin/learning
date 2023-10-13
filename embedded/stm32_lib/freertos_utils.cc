@@ -142,5 +142,40 @@ void pin_toggle_task_t::init_pin() const
 }
 
 
+void pinpoll::impl::task_function(pin_info_t* const pin_info, size_t size)
+{
+	logger.log_async("PINPOLL task started\r\n");
+
+	constexpr auto poll_delay = configTICK_RATE_HZ/20;
+	static_assert(poll_delay*20 == configTICK_RATE_HZ); // ensure no truncation
+
+	for (size_t i=0; i<size; ++i) {
+		stm32_lib::gpio::set_mode_button(pin_info[i].pin);
+	}
+
+	logger.log_async("PINPOLL start polling\r\n");
+	for(;;) {
+		for (size_t i=0; i<size; ++i) {
+			auto& pi = pin_info[i];
+			const auto& pin = pi.pin;
+			const auto idr = pin.gpio()->IDR;
+			const bool status_now = idr & (1 << pin.reg);
+			pi.poll_history <<= 1;
+			if (status_now) {
+				pi.poll_history |= 1;
+			}
+			if (pi.pin_status==true && (pi.poll_history & poll_history_mask)==0) {
+				// released
+				pi.cb(pin, (pi.pin_status=false));
+			} else if (pi.pin_status==false && (pi.poll_history & poll_history_mask)==poll_history_mask) {
+				// pressed
+				pi.cb(pin, (pi.pin_status=true));
+			}
+		}
+		vTaskDelay(poll_delay);
+	}
+}
+
+
 } // namespace
 
