@@ -12,9 +12,10 @@
 
 
 #define PRIO_BLINK 1
-#define PRIO_NRF 3
-#define PRIO_BUTTONS_POLL 4
-#define PRIO_LOGGER 2
+#define PRIO_NRF1 5
+#define PRIO_NRF2 5
+#define PRIO_BUTTONS_POLL 2
+#define PRIO_LOGGER 3
 
 
 #define USART_CON_BAUDRATE 115200
@@ -25,24 +26,24 @@ usart_logger_t logger;
 
 const nrf24::hw_conf_t nrf1_conf{
 	.spi = SPI1,
-	.spi_af = 0,
-	.pin_spi_nss{GPIOB_BASE, 9},
-	.pin_spi_sck{GPIOA_BASE, 15},
-	.pin_spi_miso{GPIOA_BASE, 11},
-	.pin_spi_mosi{GPIOA_BASE, 12},
-	.pin_irq{GPIOB_BASE, 8},
-	.pin_ce{GPIOA_BASE, 4}
+	.spi_af = 5,
+	.pin_spi_nss{GPIOA_BASE, 4},
+	.pin_spi_sck{GPIOA_BASE, 5},
+	.pin_spi_miso{GPIOA_BASE, 6},
+	.pin_spi_mosi{GPIOA_BASE, 7},
+	.pin_irq{GPIOC_BASE, 2},
+	.pin_ce{GPIOC_BASE, 3}
 };
 
 const nrf24::hw_conf_t nrf2_conf{
 	.spi = SPI2,
-	.spi_af = 0,
+	.spi_af = 5,
 	.pin_spi_nss{GPIOB_BASE, 12},
 	.pin_spi_sck{GPIOB_BASE, 13},
 	.pin_spi_miso{GPIOB_BASE, 14},
 	.pin_spi_mosi{GPIOB_BASE, 15},
-	.pin_irq{GPIOA_BASE, 0},
-	.pin_ce{GPIOA_BASE, 4}
+	.pin_irq{GPIOA_BASE, 14},
+	.pin_ce{GPIOA_BASE, 13}
 };
 
 
@@ -227,6 +228,8 @@ char* print_bits(uint8_t x, char* buf)
 
 void spi_nrf_init(const nrf24::hw_conf_t& cf)
 {
+	cf.spi->CR1 = 0;
+
 	stm32_lib::spi::init_pin_nss(cf.pin_spi_nss);
 	stm32_lib::spi::init_pins(
 		cf.pin_spi_mosi, cf.spi_af,
@@ -235,14 +238,16 @@ void spi_nrf_init(const nrf24::hw_conf_t& cf)
 	);
 
 	// CPOL=0 CPHA=0, Motorola mode
-	cf.spi->CR1 = 0;
 	constexpr uint32_t cr1 =
 		(0b111 << SPI_CR1_BR_Pos)
 		| SPI_CR1_MSTR_Msk
 		| SPI_CR1_SSM_Msk
 		;
 	cf.spi->CR1 = cr1;
-	cf.spi->CR2 = SPI_CR2_SSOE;
+	cf.spi->CR2 =
+		(0b0111 << SPI_CR2_DS_Pos)
+		| SPI_CR2_FRXTH
+		| SPI_CR2_SSOE;
 	cf.spi->CR1 = cr1 | SPI_CR1_SPE;
 }
 
@@ -273,27 +278,20 @@ void nrf_st_cf(const nrf24::hw_conf_t& hwc)
 }
 
 
-void nrf_task_function(void* arg)
+void nrf1_task_function(void* arg)
 {
-	{
-		for(;;) {
-			g_pin_blue.pulse_many(configTICK_RATE_HZ/20, configTICK_RATE_HZ/10, 3);
-			logger.log_async("NRF keep-alive\r\n");
-			vTaskDelay(configTICK_RATE_HZ*10);
-		}
-	}
-
+	logger.log_async("NRF1 task started\r\n");
 	const nrf24::hw_conf_t* const hwc = reinterpret_cast<const nrf24::hw_conf_t*>(arg);
 
-	logger.log_async("NRF1 task started\r\n");
 	hwc->pin_irq.set(stm32_lib::gpio::mode_t::input, stm32_lib::gpio::pupd_t::pu);
 	spi_nrf_init(*hwc);
 	stm32_lib::gpio::set_mode_output_lowspeed_pushpull(hwc->pin_ce);
-	vTaskDelay(configTICK_RATE_HZ/10);
 
 	logger.log_async("NRF1 init done\r\n");
+	vTaskDelay(configTICK_RATE_HZ/10);
 
 	nrf_st_cf(*hwc);
+	logger.log_async("NRF1 st done\r\n");
 
 	// pwr up, RX
 	{
@@ -319,25 +317,98 @@ void nrf_task_function(void* arg)
 		nrf_st_cf(*hwc);
 	}
 
-
 	for(;;) {
 		uint32_t events = 0;
 		if (xTaskNotifyWait(0, 0xffffffff, &events, configTICK_RATE_HZ * 5 /*5sec*/) == pdTRUE) {
-			if (events) {
-				g_pin_blue.pulse_once(configTICK_RATE_HZ/2);
-			}
+			//if (events) {
+			//	g_pin_blue.pulse_once(configTICK_RATE_HZ/2);
+			//} else {
+			//	g_pin_red.pulse_once(configTICK_RATE_HZ/2);
+			//}
 		}
-		g_pin_green.pulse_once(configTICK_RATE_HZ/16);
-		nrf_st_cf(*hwc);
-		logger.log_async("---\r\n");
+		g_pin_blue.pulse_once(configTICK_RATE_HZ/16);
+		logger.log_async("NRF1 keep-alive\r\n");
+		//nrf_st_cf(*hwc);
+		//logger.log_async("---\r\n");
 	}
 }
 
 
-void create_nrf_task(const char* task_name, UBaseType_t prio, nrf_task_data_t& task_data, const nrf24::hw_conf_t* const hwc)
+void create_nrf1_task(const char* task_name, UBaseType_t prio, nrf_task_data_t& task_data, const nrf24::hw_conf_t* const hwc)
 {
 	task_data.task_handle = xTaskCreateStatic(
-		&nrf_task_function,
+		&nrf1_task_function,
+		task_name,
+		task_data.stack.size(),
+		const_cast<void*>(reinterpret_cast<const void*>(hwc)),
+		prio,
+		task_data.stack.data(),
+		&task_data.task_buffer
+	);
+}
+
+
+void nrf2_task_function(void* arg)
+{
+	logger.log_async("NRF2 task started\r\n");
+	const nrf24::hw_conf_t* const hwc = reinterpret_cast<const nrf24::hw_conf_t*>(arg);
+	vTaskDelay(configTICK_RATE_HZ*5);
+
+	hwc->pin_irq.set(stm32_lib::gpio::mode_t::input, stm32_lib::gpio::pupd_t::pu);
+	spi_nrf_init(*hwc);
+	stm32_lib::gpio::set_mode_output_lowspeed_pushpull(hwc->pin_ce);
+	vTaskDelay(configTICK_RATE_HZ/10);
+
+	logger.log_async("NRF2 init done\r\n");
+
+	nrf_st_cf(*hwc);
+
+	// pwr up, RX
+	{
+		logger.log_async("NRF2 pwr_up\r\n");
+		stm32_lib::gpio::set_state(hwc->pin_ce, 0); // standby-1
+		vTaskDelay(configTICK_RATE_HZ/10);
+
+		uint8_t cf;
+
+		nrf24::spi_write(*hwc, 1, nrf24::reg_t::CMD_R_REGISTER | nrf24::reg_t::REG_CONFIG, nullptr, &cf);
+		cf |= nrf24::reg_t::REGV_CONFIG_PWR_UP;
+		nrf24::spi_write(*hwc, 1, nrf24::reg_t::CMD_W_REGISTER | nrf24::reg_t::REG_CONFIG, &cf, nullptr);
+		vTaskDelay(configTICK_RATE_HZ/10);
+
+		// RX
+		cf |= nrf24::reg_t::REGV_CONFIG_PRIM_RX_PRX;
+		nrf24::spi_write(*hwc, 1, nrf24::reg_t::CMD_W_REGISTER | nrf24::reg_t::REG_CONFIG, &cf, nullptr);
+		vTaskDelay(configTICK_RATE_HZ/10);
+
+		stm32_lib::gpio::set_state(hwc->pin_ce, 1);
+		vTaskDelay(configTICK_RATE_HZ/10);
+
+		nrf_st_cf(*hwc);
+	}
+
+
+	for(;;) {
+		uint32_t events = 0;
+		if (xTaskNotifyWait(0, 0xffffffff, &events, configTICK_RATE_HZ * 5 /*5sec*/) == pdTRUE) {
+			//if (events) {
+			//	g_pin_blue.pulse_once(configTICK_RATE_HZ/2);
+			//} else {
+			//	g_pin_red.pulse_once(configTICK_RATE_HZ/2);
+			//}
+		}
+		g_pin_red.pulse_once(configTICK_RATE_HZ/16);
+		logger.log_async("NRF2 keep-alive\r\n");
+		//nrf_st_cf(*hwc);
+		//logger.log_async("---\r\n");
+	}
+}
+
+
+void create_nrf2_task(const char* task_name, UBaseType_t prio, nrf_task_data_t& task_data, const nrf24::hw_conf_t* const hwc)
+{
+	task_data.task_handle = xTaskCreateStatic(
+		&nrf2_task_function,
 		task_name,
 		task_data.stack.size(),
 		const_cast<void*>(reinterpret_cast<const void*>(hwc)),
@@ -355,7 +426,9 @@ __attribute__ ((noreturn)) void main()
 	g_pin_blue.init_pin();
 	g_pin_green.init_pin();
 	g_pin_red.init_pin();
-	g_pin_green.pulse_continuous(configTICK_RATE_HZ/10, configTICK_RATE_HZ/4);
+	g_pin_green.pulse_continuous(configTICK_RATE_HZ/20, configTICK_RATE_HZ/10);
+	g_pin_red.pulse_once(configTICK_RATE_HZ/10);
+	g_pin_blue.pulse_once(configTICK_RATE_HZ/10);
 
 	usart_init(USART_STLINK);
 	logger.set_usart(USART_STLINK);
@@ -373,8 +446,12 @@ __attribute__ ((noreturn)) void main()
 	freertos_utils::pinpoll::create_task("pinpoll", PRIO_BUTTONS_POLL, &pinpoll_task_arg);
 	logger.log_sync("Created pinpoll task\r\n");
 
+	logger.log_sync("Creating NRF-1 task...\r\n");
+	create_nrf1_task("nrf1_task", PRIO_NRF1, nrf1_task_data, &nrf1_conf);
+	logger.log_sync("Created NRF-1 task\r\n");
+
 	logger.log_sync("Creating NRF-2 task...\r\n");
-	create_nrf_task("nrf2_task", PRIO_NRF, nrf2_task_data, &nrf2_conf);
+	create_nrf2_task("nrf2_task", PRIO_NRF2, nrf2_task_data, &nrf2_conf);
 	logger.log_sync("Created NRF-2 task\r\n");
 
 	logger.log_sync("Starting FreeRTOS scheduler\r\n");
