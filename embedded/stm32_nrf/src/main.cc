@@ -9,12 +9,11 @@
 
 #include <stdint.h>
 #include <string.h>
-#include <array>
-#include <optional>
 
 
 #define PRIO_BLINK 1
 #define PRIO_NRF 3
+#define PRIO_BUTTONS_POLL 4
 #define PRIO_LOGGER 2
 
 
@@ -88,8 +87,18 @@ void bus_init()
 	RCC->CR = (RCC->CR & ~RCC_CR_MSIRANGE_Msk) | (0b1011 << RCC_CR_MSIRANGE_Pos);
 
 	// GPIOs
-	RCC->AHB2ENR |= RCC_AHB2ENR_GPIOAEN_Msk | RCC_AHB2ENR_GPIOBEN_Msk;
-	toggle_bits_10(&RCC->AHB2RSTR, RCC_AHB2RSTR_GPIOARST | RCC_AHB2RSTR_GPIOBRST);
+	RCC->AHB2ENR |=
+		RCC_AHB2ENR_GPIOAEN_Msk
+		| RCC_AHB2ENR_GPIOBEN_Msk
+		| RCC_AHB2ENR_GPIOCEN_Msk
+		| RCC_AHB2ENR_GPIODEN_Msk;
+	toggle_bits_10(
+		&RCC->AHB2RSTR,
+		RCC_AHB2RSTR_GPIOARST
+			| RCC_AHB2RSTR_GPIOBRST
+			| RCC_AHB2RSTR_GPIOCRST
+			| RCC_AHB2RSTR_GPIODRST
+	);
 
 	// SPI2
 	RCC->APB1ENR1 |= RCC_APB1ENR1_SPI2EN_Msk;
@@ -153,6 +162,54 @@ void vApplicationIdleHook(void)
 freertos_utils::pin_toggle_task_t g_pin_blue("blink_blue", bsp::pin_led_blue, PRIO_BLINK);
 freertos_utils::pin_toggle_task_t g_pin_green("blink_green", bsp::pin_led_green, PRIO_BLINK);
 freertos_utils::pin_toggle_task_t g_pin_red("blink_red", bsp::pin_led_red, PRIO_BLINK);
+
+
+void pinpoll_cb1(const stm32_lib::gpio::pin_t& pin, bool new_status)
+{
+	if (new_status) {
+		logger.log_async("CB1: up\r\n");
+	} else {
+		logger.log_async("CB1: down\r\n");
+	}
+}
+
+
+void pinpoll_cb2(const stm32_lib::gpio::pin_t& pin, bool new_status)
+{
+	if (new_status) {
+		logger.log_async("CB2: up\r\n");
+	} else {
+		logger.log_async("CB2: down\r\n");
+	}
+}
+
+
+void pinpoll_cb3(const stm32_lib::gpio::pin_t& pin, bool new_status)
+{
+	if (new_status) {
+		logger.log_async("CB3: up\r\n");
+	} else {
+		logger.log_async("CB3: down\r\n");
+	}
+}
+
+
+void pinpoll_cb_a(const stm32_lib::gpio::pin_t& pin, bool new_status)
+{
+	if (new_status) {
+		logger.log_async("CB_A: up\r\n");
+	} else {
+		logger.log_async("CB_A: down\r\n");
+	}
+}
+
+
+auto pinpoll_task_arg = freertos_utils::pinpoll::make_task_arg(
+	freertos_utils::pinpoll::make_pin_info(bsp::pin_userbutton1, &pinpoll_cb1),
+	freertos_utils::pinpoll::make_pin_info(bsp::pin_userbutton2, &pinpoll_cb2),
+	freertos_utils::pinpoll::make_pin_info(bsp::pin_userbutton3, &pinpoll_cb3),
+	freertos_utils::pinpoll::make_pin_info(stm32_lib::gpio::pin_t{GPIOC_BASE,13}, &pinpoll_cb_a)
+);
 
 
 char* print_bits(uint8_t x, char* buf)
@@ -222,7 +279,7 @@ void nrf_task_function(void* arg)
 		for(;;) {
 			g_pin_blue.pulse_many(configTICK_RATE_HZ/20, configTICK_RATE_HZ/10, 3);
 			logger.log_async("NRF keep-alive\r\n");
-			vTaskDelay(configTICK_RATE_HZ*2);
+			vTaskDelay(configTICK_RATE_HZ*10);
 		}
 	}
 
@@ -311,6 +368,10 @@ __attribute__ ((noreturn)) void main()
 	logger.log_sync("Creating logger task...\r\n");
 	logger.create_task("logger", PRIO_LOGGER);
 	logger.log_sync("Created logger task\r\n");
+
+	logger.log_sync("Creating pinpoll task...\r\n");
+	freertos_utils::pinpoll::create_task("pinpoll", PRIO_BUTTONS_POLL, &pinpoll_task_arg);
+	logger.log_sync("Created pinpoll task\r\n");
 
 	logger.log_sync("Creating NRF-2 task...\r\n");
 	create_nrf_task("nrf2_task", PRIO_NRF, nrf2_task_data, &nrf2_conf);
