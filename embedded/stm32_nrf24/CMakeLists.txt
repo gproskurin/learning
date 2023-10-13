@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.25)
 
 include("cmake/arm-none-eabi.cmake")
 
-project(nrf C CXX)
+project(nrf24 C CXX)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
 set(stm32wb55_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/ld/stm32wb55.ld)
