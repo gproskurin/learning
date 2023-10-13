@@ -75,7 +75,7 @@ struct gpio_pin_t {
 	uint8_t const reg;
 	constexpr gpio_pin_t(uint32_t base_addr, uint8_t r) : gpio_base(base_addr), reg(r) {}
 
-	GPIO_TypeDef* gpio() const { return reinterpret_cast<GPIO_TypeDef*>(gpio_base); }
+	constexpr GPIO_TypeDef* gpio() const { return reinterpret_cast<GPIO_TypeDef*>(gpio_base); }
 
 #ifdef TARGET_STM32F103
 	void set(mode_t m, cnf_t c) const
@@ -138,6 +138,7 @@ private:
 	}
 #endif
 };
+using pin_t = gpio_pin_t; // compat
 
 
 inline
@@ -210,6 +211,13 @@ void set_mode_output_analog(const gpio_pin_t& pin)
 #else
 	pin.set(mode_t::analog);
 #endif
+}
+
+
+inline
+void set_mode_button(const gpio_pin_t& pin)
+{
+	pin.set(mode_t::input, pupd_t::pu);
 }
 
 
