@@ -174,9 +174,9 @@ void vApplicationIdleHook(void)
 }
 
 
-freertos_utils::pin_toggle_task_t g_pin_blue("blink_blue", bsp::pin_led_blue, PRIO_BLINK);
-freertos_utils::pin_toggle_task_t g_pin_green("blink_green", bsp::pin_led_green, PRIO_BLINK);
-freertos_utils::pin_toggle_task_t g_pin_red("blink_red", bsp::pin_led_red, PRIO_BLINK);
+auto g_pin_blue = freertos_utils::make_pin_toggle_task("blink_blue", bsp::pin_led_blue, PRIO_BLINK);
+auto g_pin_green = freertos_utils::make_pin_toggle_task("blink_green", bsp::pin_led_green, PRIO_BLINK);
+auto g_pin_red = freertos_utils::make_pin_toggle_task("blink_red", bsp::pin_led_red, PRIO_BLINK);
 
 
 void pinpoll_cb1(const stm32_lib::gpio::pin_t& pin, bool new_status)
@@ -219,12 +219,12 @@ void pinpoll_cb_a(const stm32_lib::gpio::pin_t& pin, bool new_status)
 }
 
 
-auto pinpoll_task_arg = freertos_utils::pinpoll::make_task_arg(
+freertos_utils::pinpoll::task_arg_t<stm32_lib::gpio::pin_t, 4> pinpoll_task_arg{
 	freertos_utils::pinpoll::make_pin_info(bsp::pin_userbutton1, &pinpoll_cb1),
 	freertos_utils::pinpoll::make_pin_info(bsp::pin_userbutton2, &pinpoll_cb2),
 	freertos_utils::pinpoll::make_pin_info(bsp::pin_userbutton3, &pinpoll_cb3),
 	freertos_utils::pinpoll::make_pin_info(stm32_lib::gpio::pin_t{GPIOC_BASE,13}, &pinpoll_cb_a)
-);
+};
 
 
 char* print_bits(uint8_t x, char* buf)
@@ -356,8 +356,8 @@ void nrf1_task_function(void* arg)
 	const nrf24::hw_conf_t* const hwc = reinterpret_cast<const nrf24::hw_conf_t*>(arg);
 
 	hwc->pin_irq.set(stm32_lib::gpio::mode_t::input, stm32_lib::gpio::pupd_t::pu); // IRQ pin
-	stm32_lib::gpio::set_mode_output_lowspeed_pushpull(hwc->pin_ce);
-	stm32_lib::gpio::set_state(hwc->pin_ce, 0); // standby-1
+	hwc->pin_ce.set_mode_output_lowspeed_pushpull();
+	hwc->pin_ce.set_state(0); // standby-1
 
 	spi_nrf_init(*hwc);
 	vTaskDelay(configTICK_RATE_HZ/10);
@@ -466,8 +466,8 @@ void nrf2_task_function(void* arg)
 	const nrf24::hw_conf_t* const hwc = reinterpret_cast<const nrf24::hw_conf_t*>(arg);
 
 	hwc->pin_irq.set(stm32_lib::gpio::mode_t::input, stm32_lib::gpio::pupd_t::pu); // IRQ pin
-	stm32_lib::gpio::set_mode_output_lowspeed_pushpull(hwc->pin_ce);
-	stm32_lib::gpio::set_state(hwc->pin_ce, 0); // standby-1
+	hwc->pin_ce.set_mode_output_lowspeed_pushpull();
+	hwc->pin_ce.set_state(0); // standby-1
 
 	spi_nrf_init(*hwc);
 	vTaskDelay(configTICK_RATE_HZ/10);
@@ -564,9 +564,9 @@ __attribute__ ((noreturn)) void main()
 	logger.create_task("logger", PRIO_LOGGER);
 	logger.log_sync("Created logger task\r\n");
 
-	//logger.log_sync("Creating pinpoll task...\r\n");
-	//freertos_utils::pinpoll::create_task("pinpoll", PRIO_BUTTONS_POLL, &pinpoll_task_arg);
-	//logger.log_sync("Created pinpoll task\r\n");
+	logger.log_sync("Creating pinpoll task...\r\n");
+	freertos_utils::pinpoll::create_task("pinpoll", PRIO_BUTTONS_POLL, &pinpoll_task_arg);
+	logger.log_sync("Created pinpoll task\r\n");
 
 	logger.log_sync("Creating NRF-1 task...\r\n");
 	create_nrf1_task("nrf1_task", PRIO_NRF1, nrf1_task_data, &nrf1_conf);
