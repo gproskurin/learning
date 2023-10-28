@@ -13,6 +13,14 @@ template <size_t StackSize>
 using task_stack_t = std::array<StackType_t, StackSize>;
 
 
+template <size_t StackSize>
+struct task_data_t {
+	task_stack_t<StackSize> stack;
+	TaskHandle_t task_handle = nullptr;
+	StaticTask_t task_buffer;
+};
+
+
 class pin_toggle_task_t {
 public:
 	pin_toggle_task_t(const char* task_name, const stm32_lib::gpio::gpio_pin_t&, UBaseType_t prio);
@@ -42,34 +50,34 @@ namespace pinpoll {
 typedef void (*pin_cb_t)(const stm32_lib::gpio::gpio_pin_t& pin, bool new_status);
 
 namespace impl {
-        constexpr uint8_t poll_history_mask = 0b1111;
+	constexpr uint8_t poll_history_mask = 0b1111;
 
-        struct pin_info_t {
-                const stm32_lib::gpio::gpio_pin_t pin;
-                const pin_cb_t cb;
-                pin_info_t(const stm32_lib::gpio::pin_t& p, pin_cb_t c) : pin(p), cb(c) {}
+	struct pin_info_t {
+		const stm32_lib::gpio::gpio_pin_t pin;
+		const pin_cb_t cb;
+		pin_info_t(const stm32_lib::gpio::pin_t& p, pin_cb_t c) : pin(p), cb(c) {}
 
-                // internal data for poll function
-                uint8_t poll_history = 0xff;
-                bool pin_status = true;
-        };
+		// internal data for poll function
+		uint8_t poll_history = 0xff;
+		bool pin_status = true;
+	};
 }
 
 template <typename... Args>
 impl::pin_info_t make_pin_info(Args&&... args)
 {
-        return impl::pin_info_t(std::forward<Args>(args)...);
+	return impl::pin_info_t(std::forward<Args>(args)...);
 }
 
 
 template <size_t Size>
 struct task_arg_t {
-        std::array<impl::pin_info_t, Size> pin_info;
+	std::array<impl::pin_info_t, Size> pin_info;
 
-        template <typename ...Args>
-        task_arg_t(Args&&... args) : pin_info{std::forward<Args>(args)...} {}
+	template <typename ...Args>
+	task_arg_t(Args&&... args) : pin_info{std::forward<Args>(args)...} {}
 
-        task_stack_t<128> task_stack_;
+	task_stack_t<128> task_stack_;
 	StaticTask_t task_buffer_;
 	TaskHandle_t task_handle_ = nullptr;
 };
@@ -78,21 +86,21 @@ struct task_arg_t {
 template <typename ...Args>
 task_arg_t<sizeof...(Args)> make_task_arg(Args&&... args)
 {
-        return task_arg_t<sizeof...(Args)>(std::forward<Args>(args)...);
+	return task_arg_t<sizeof...(Args)>(std::forward<Args>(args)...);
 }
 
 
 namespace impl {
-        void task_function(pin_info_t* pin_info_items, size_t size);
+	void task_function(pin_info_t* pin_info_items, size_t size);
 }
 
 
 template <size_t Size>
 void task_function(void *arg)
 {
-        using arg_t = task_arg_t<Size>;
-        arg_t* const task_arg = reinterpret_cast<arg_t*>(arg);
-        return impl::task_function(task_arg->pin_info.data(), Size);
+	using arg_t = task_arg_t<Size>;
+	arg_t* const task_arg = reinterpret_cast<arg_t*>(arg);
+	return impl::task_function(task_arg->pin_info.data(), Size);
 }
 
 
