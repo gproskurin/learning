@@ -1,4 +1,6 @@
 #include "lib_stm32.h"
+#include "bsp.h"
+#include "freertos_utils.h"
 #include "logging.h"
 #include "ad5932.h"
 
@@ -7,7 +9,6 @@
 
 #include <stdint.h>
 #include <string.h>
-#include <array>
 
 
 #define PRIO_BLINK 1
@@ -15,78 +16,32 @@
 #define PRIO_LOGGER 2
 
 #if defined TARGET_STM32F103
-	const stm32_lib::gpio::gpio_pin_t pin_led(GPIOB, 12);
-
-	// USART1, tx(PA9)
-	#define USART_LOG USART1
-	const stm32_lib::gpio::gpio_pin_t usart_log_pin_tx(GPIOA, 9);
-
 	// ad5932 spi
 	#define AD_SPI SPI1
-	const stm32_lib::gpio::gpio_pin_t ad_spi_mosi(GPIOA, 7);
-	const stm32_lib::gpio::gpio_pin_t ad_spi_miso(GPIOA, 6);
-	const stm32_lib::gpio::gpio_pin_t ad_spi_sck(GPIOA, 5);
-	const stm32_lib::gpio::gpio_pin_t ad_spi_ss(GPIOA, 4);
+	constexpr stm32_lib::gpio::gpio_pin_t pin_ad_spi_mosi{GPIOA_BASE, 7};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_ad_spi_miso{GPIOA_BASE, 6};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_ad_spi_sck{GPIOA_BASE, 5};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_ad_spi_ss{GPIOA_BASE, 4};
 
-	const stm32_lib::gpio::gpio_pin_t pin_ad_pwm_mclk(GPIOA, 2);
+	constexpr stm32_lib::gpio::gpio_pin_t pin_ad_pwm_mclk{GPIOA_BASE, 2};
 	#define TIM_AD_PWM_MCLK TIM2
 
 #elif defined TARGET_STM32L072
-	const stm32_lib::gpio::gpio_pin_t pin_led_green(GPIOB, 5);
-	const stm32_lib::gpio::gpio_pin_t pin_led_blue(GPIOB, 6);
-	const stm32_lib::gpio::gpio_pin_t pin_led_red(GPIOB, 7);
-	const stm32_lib::gpio::gpio_pin_t pin_led_green2(GPIOA, 5);
-
-	// USART1, tx(PA9)
-	#define USART_LOG USART1
-	const stm32_lib::gpio::gpio_pin_t usart_log_pin_tx(GPIOA, 9);
-	//#define USART_LOG_PIN_RX 10
-	#define USART_LOG_AF 4
-
 	// ad5932 spi
 	#define AD_SPI SPI1
-	const stm32_lib::gpio::gpio_pin_t ad_spi_mosi(GPIOA, 7);
+	const stm32_lib::gpio::gpio_pin_t pin_ad_spi_mosi{GPIOA_BASE, 7};
 	#define AD_SPI_MOSI_AF 0
-	const stm32_lib::gpio::gpio_pin_t ad_spi_miso(GPIOA, 6);
+	const stm32_lib::gpio::gpio_pin_t pin_ad_spi_miso{GPIOA_BASE, 6};
 	#define AD_SPI_MISO_AF 0
-	const stm32_lib::gpio::gpio_pin_t ad_spi_sck(GPIOB, 3);
+	const stm32_lib::gpio::gpio_pin_t pin_ad_spi_sck{GPIOB_BASE, 3};
 	#define AD_SPI_SCK_AF 0
-	const stm32_lib::gpio::gpio_pin_t ad_spi_ss(GPIOA, 4);
-	#define AD_SPI_SS_AF 0
 
-#elif defined TARGET_STM32L432
-	const stm32_lib::gpio::gpio_pin_t pin_led_green(GPIOB, 3);
-
-	// USART1
-	#define USART_LOG USART1
-	#define USART_LOG_AF 7
-	const stm32_lib::gpio::gpio_pin_t usart_log_pin_tx(GPIOB, 6);
-
-	// ad5932 spi
-	#define AD_SPI SPI1
-	const stm32_lib::gpio::gpio_pin_t ad_spi_mosi(GPIOA, 7);
-	#define AD_SPI_MOSI_AF 5
-	const stm32_lib::gpio::gpio_pin_t ad_spi_miso(GPIOA, 6);
-	#define AD_SPI_MISO_AF 5
-	const stm32_lib::gpio::gpio_pin_t ad_spi_sck(GPIOA, 5);
-	#define AD_SPI_SCK_AF 5
-	const stm32_lib::gpio::gpio_pin_t ad_spi_ss(GPIOA, 4);
-	#define AD_SPI_SS_AF 5
-
-	const stm32_lib::gpio::gpio_pin_t pin_ad_pwm_mclk(GPIOA, 2);
-	#define AD_PWM_MCLK_AF 14
-	#define TIM_AD_PWM_MCLK TIM15
-	const stm32_lib::gpio::gpio_pin_t pin_ad_ctrl(GPIOA, 3);
-
+	const stm32_lib::gpio::gpio_pin_t pin_ad_spi_ss{GPIOA_BASE, 4};
 #endif
 
 
-#define CLOCK_SPEED configCPU_CLOCK_HZ
 #define USART_CON_BAUDRATE 115200
 
-
-template <size_t StackSize>
-using task_stack_t = std::array<StackType_t, StackSize>;
 
 usart_logger_t logger;
 
@@ -98,12 +53,12 @@ void usart_init(USART_TypeDef* const usart)
 	constexpr uint32_t cr1 = USART_CR1_TE;
 
 #ifdef TARGET_STM32F103
-	stm32_lib::gpio::set_mode_af_lowspeed_pu(usart_log_pin_tx);
-	const uint32_t div = CLOCK_SPEED / USART_CON_BAUDRATE;
+	stm32_lib::gpio::set_mode_af_lowspeed_pu(usart_stlink_pin_tx);
+	const uint32_t div = configCPU_CLOCK_HZ / USART_CON_BAUDRATE;
 	usart->BRR = ((div / 16) << USART_BRR_DIV_Mantissa_Pos) | ((div % 16) << USART_BRR_DIV_Fraction_Pos);
 #else
-	stm32_lib::gpio::set_mode_af_lowspeed_pu(usart_log_pin_tx, USART_LOG_AF);
-	usart->BRR = CLOCK_SPEED / USART_CON_BAUDRATE;
+	stm32_lib::gpio::set_mode_af_lowspeed_pu(bsp::usart_stlink_pin_tx, USART_STLINK_PIN_TX_AF);
+	usart->BRR = configCPU_CLOCK_HZ / USART_CON_BAUDRATE;
 #endif
 
 	usart->CR1 = cr1;
@@ -138,14 +93,6 @@ void ad_pwm_mclk_init(TIM_TypeDef* const tim, uint16_t prescaler, uint16_t arr)
 		| TIM_CCMR2_OC3FE // output compare fast
 		;
 	tim->CCER |= TIM_CCER_CC3E;
-#elif defined TARGET_STM32L432
-	tim->CCR1 = ccr;
-	tim->CCMR1 = (tim->CCMR1 & ~(TIM_CCMR1_CC1S_Msk | TIM_CCMR1_OC1M_Msk))
-		| (0b00 << TIM_CCMR1_CC1S_Pos) // output channel
-		| (TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1) // 0110 = PWM mode 1
-		| TIM_CCMR1_OC1FE // output compare fast
-		;
-	tim->CCER |= TIM_CCER_CC1E;
 #else
 	tim->CCR1 = ccr;
 	tim->CCMR1 = (tim->CCMR1 & ~(TIM_CCMR1_CC1S_Msk | TIM_CCMR1_OC1M_Msk))
@@ -162,36 +109,18 @@ void ad_pwm_mclk_init(TIM_TypeDef* const tim, uint16_t prescaler, uint16_t arr)
 void ad_spi_init()
 {
 #ifdef TARGET_STM32F103
-	stm32_lib::spi::init_pins(ad_spi_mosi, ad_spi_miso, ad_spi_sck, ad_spi_ss);
+	stm32_lib::spi::init_pins(pin_ad_spi_mosi, pin_ad_spi_miso, pin_ad_spi_sck);
 #else
 	stm32_lib::spi::init_pins(
-		ad_spi_mosi, AD_SPI_MOSI_AF,
-		ad_spi_miso, AD_SPI_MISO_AF,
-		ad_spi_sck, AD_SPI_SCK_AF,
-		ad_spi_ss, AD_SPI_SS_AF
+		pin_ad_spi_mosi, AD_SPI_MOSI_AF,
+		pin_ad_spi_miso, AD_SPI_MISO_AF,
+		pin_ad_spi_sck, AD_SPI_SCK_AF
 	);
 #endif
+	stm32_lib::spi::init_pin_nss(pin_ad_spi_ss);
+
 	// MODE = 2 (POL = 1, PHASE = 0) TODO check
-
 	//AD_SPI->CR1 = (AD_SPI->CR1 & ~(SPI_CR1_CPHA_Msk)) | SPI_CR1_POL_Msk; // FIXME
-
-#ifdef TARGET_STM32L432
-	AD_SPI->CR1 = 0;
-	constexpr uint32_t cr1 =
-		(0b111 << SPI_CR1_BR_Pos)
-		| SPI_CR1_MSTR_Msk
-		| SPI_CR1_CPOL_Msk;
-	AD_SPI->CR1 = cr1;
-
-	AD_SPI->CR2 = (AD_SPI->CR2 & ~(SPI_CR2_DS_Msk))
-		| SPI_CR2_SSOE
-		| (0b1111 << SPI_CR2_DS_Pos)
-		;
-
-	AD_SPI->CR1 = cr1 | SPI_CR1_SPE;
-
-#elif defined TARGET_STM32L072
-#endif
 }
 
 
@@ -284,7 +213,7 @@ void do_blink(const stm32_lib::gpio::gpio_pin_t& pin, int n)
 
 
 StaticTask_t xTaskBufferIdle;
-using idle_task_stack_t = task_stack_t<128>;
+using idle_task_stack_t = freertos_utils::task_stack_t<128>;
 idle_task_stack_t idle_task_stack;
 extern "C"
 void vApplicationGetIdleTaskMemory(StaticTask_t **tcbIdle, StackType_t **stackIdle, uint32_t *stackSizeIdle)
@@ -301,82 +230,11 @@ void vApplicationIdleHook(void)
 }
 
 
-// LED blinking tasks
-struct blink_task_data_t {
-	const char* const task_name;
-	const stm32_lib::gpio::gpio_pin_t pin;
-	const TickType_t ticks_on;
-	const TickType_t ticks_off;
-	blink_task_data_t(const char* tname, const stm32_lib::gpio::gpio_pin_t& p, TickType_t ton, TickType_t toff)
-		: task_name(tname), pin(p), ticks_on(ton), ticks_off(toff)
-	{}
-
-	task_stack_t<128> stack;
-	TaskHandle_t task_handle = nullptr;
-	StaticTask_t task_buffer;
-};
-
-struct blink_tasks_t {
 #ifdef TARGET_STM32F103
-	std::array<blink_task_data_t, 1> tasks = {
-		blink_task_data_t(
-			"blink",
-			pin_led,
-			configTICK_RATE_HZ/8,
-			configTICK_RATE_HZ/16
-		)
-	};
-#elif defined TARGET_STM32L072
-	std::array<blink_task_data_t, 3> tasks = {
-		blink_task_data_t(
-			"blink_green",
-			pin_led_green,
-			configTICK_RATE_HZ/2,
-			configTICK_RATE_HZ/2
-		)
-		, blink_task_data_t(
-			"blink_blue",
-			pin_led_blue,
-			configTICK_RATE_HZ/3,
-			configTICK_RATE_HZ/3
-		)
-		, blink_task_data_t(
-			"blink_red",
-			pin_led_red,
-			configTICK_RATE_HZ/32,
-			configTICK_RATE_HZ - configTICK_RATE_HZ/32
-		)
-	};
+freertos_utils::pin_toggle_task_t g_pin_led("blink_led", bsp::pin_led, PRIO_BLINK);
 #else
-	std::array<blink_task_data_t, 1> tasks = {
-		blink_task_data_t(
-			"blink_green",
-			pin_led_green,
-			configTICK_RATE_HZ/32,
-			configTICK_RATE_HZ/4
-		)
-	};
+freertos_utils::pin_toggle_task_t g_pin_led("blink_green", bsp::pin_led_green, PRIO_BLINK);
 #endif
-} blink_tasks;
-
-
-void blink_task_function(void* arg)
-{
-	const blink_task_data_t* const args = reinterpret_cast<blink_task_data_t*>(arg);
-	for(int i=0;;++i) {
-		const bool do_log = (i % 64 == 0);
-		if (do_log) {
-			logger.log_async("LED -> on\r\n");
-		}
-		stm32_lib::gpio::set_state(args->pin, true);
-		vTaskDelay(args->ticks_on);
-		if (do_log) {
-			logger.log_async("LED -> off\r\n");
-		}
-		stm32_lib::gpio::set_state(args->pin, false);
-		vTaskDelay(args->ticks_off);
-	}
-}
 
 
 void str_cpy_3(char* dst, const char* s1, const char* s2, const char* s3)
@@ -387,28 +245,6 @@ void str_cpy_3(char* dst, const char* s1, const char* s2, const char* s3)
 }
 
 
-void create_blink_task(blink_task_data_t& args)
-{
-	char log_buf[64];
-
-	str_cpy_3(log_buf, "Creating blink task \"", args.task_name, "\" ...\r\n");
-	logger.log_sync(log_buf);
-
-	args.task_handle = xTaskCreateStatic(
-		&blink_task_function,
-		args.task_name,
-		args.stack.size(),
-		reinterpret_cast<void*>(&args),
-		PRIO_BLINK,
-		args.stack.data(),
-		&args.task_buffer
-	);
-
-	str_cpy_3(log_buf, "Created blink task \"", args.task_name, "\"\r\n");
-	logger.log_sync(log_buf);
-}
-
-
 struct ad_task_data_t {
 	const char* const task_name;
 	SPI_TypeDef* const spi;
@@ -416,7 +252,7 @@ struct ad_task_data_t {
 		: task_name(tname), spi(s)
 	{}
 
-	task_stack_t<128> stack;
+	freertos_utils::task_stack_t<128> stack;
 	TaskHandle_t task_handle = nullptr;
 	StaticTask_t task_buffer;
 };
@@ -482,12 +318,8 @@ __attribute__ ((noreturn)) void main()
 	logger.log_sync("Initialized ad5932 periph\r\n");
 	create_ad_task(ad_task.task);
 
-	logger.log_sync("Creating blink tasks...\r\n");
-	for (auto& bt : blink_tasks.tasks) {
-		stm32_lib::gpio::set_mode_output_lowspeed_pushpull(bt.pin);
-		create_blink_task(bt);
-	}
-	logger.log_sync("Created blink tasks\r\n");
+	g_pin_led.init_pin();
+	g_pin_led.pulse_continuous(configTICK_RATE_HZ/10, configTICK_RATE_HZ/4);
 
 	//logger.log_sync("Initializing interrupts\r\n");
 	//nvic_init_tim();
