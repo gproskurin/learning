@@ -5,7 +5,8 @@
 
 extern void main();
 extern void _estack(void);
-//extern void IntHandler_EXTI23();
+extern void IntHandler_EXTI2();
+extern void IntHandler_EXTI10_15();
 
 
 __attribute__((naked, noreturn)) void _reset(void)
@@ -41,7 +42,7 @@ extern void xPortPendSVHandler(void);
 extern void xPortSysTickHandler(void);
 
 #if defined TARGET_STM32WB55
-__attribute__((section(".vectors"))) void (*tab[16 + 32])(void) =
+__attribute__((section(".vectors"))) void (*tab[16 + 62])(void) =
 {
 	_estack,
 	_reset,
@@ -66,7 +67,40 @@ __attribute__((section(".vectors"))) void (*tab[16 + 32])(void) =
 	0,
 	0,
 	0,
-	//IntHandler_EXTI23,
-	0
+	0,
+	0,
+	IntHandler_EXTI2,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	IntHandler_EXTI10_15
 };
 #endif
