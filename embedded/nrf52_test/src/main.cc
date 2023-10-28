@@ -1,32 +1,27 @@
-//#include "freertos_utils.h"
-//#include "logging.h"
-
 #include "FreeRTOS.h"
 #include "task.h"
+
+#include "freertos_utils.h"
+//#include "logging.h"
+#include "lib_nrf5.h"
+#include "bsp.h"
+
 
 #include <stdint.h>
 #include <string.h>
 
-#include <array>
-
-#include <nrf52.h>
-
-#define PRIO_NRF52 1
+#define PRIO_BLINK 1
+#define PRIO_NRF52 2
 
 
 //#define USART_CON_BAUDRATE 115200
 
-const std::array<uint8_t, 4> pin_leds{17, 19, 20, 18};
 
-template <size_t StackSize>
-using task_stack_t = std::array<StackType_t, StackSize>;
+auto g_pin_led1 = freertos_utils::make_pin_toggle_task("blink_led1", bsp::pin_led_1, PRIO_BLINK);
+auto g_pin_led2 = freertos_utils::make_pin_toggle_task("blink_led2", bsp::pin_led_2, PRIO_BLINK);
+auto g_pin_led3 = freertos_utils::make_pin_toggle_task("blink_led3", bsp::pin_led_3, PRIO_BLINK);
+auto g_pin_led4 = freertos_utils::make_pin_toggle_task("blink_led4", bsp::pin_led_4, PRIO_BLINK);
 
-template <size_t StackSize>
-struct task_data_t {
-	task_stack_t<StackSize> stack;
-	TaskHandle_t task_handle = nullptr;
-	StaticTask_t task_buffer;
-};
 
 #if 0
 usart_logger_t logger;
@@ -59,14 +54,11 @@ void toggle_bits_10(volatile uint32_t* const ptr, const uint32_t mask)
 
 void periph_init()
 {
-	for (const auto p : pin_leds) {
-		NRF_P0->PIN_CNF[p] = 0b11;
-	}
 }
 
 
 StaticTask_t xTaskBufferIdle;
-task_stack_t<64> idle_task_stack;
+freertos_utils::task_stack_t<64> idle_task_stack;
 extern "C"
 void vApplicationGetIdleTaskMemory(StaticTask_t **tcbIdle, StackType_t **stackIdle, uint32_t *stackSizeIdle)
 {
@@ -82,46 +74,33 @@ void vApplicationIdleHook(void)
 }
 
 
-char* print_bits(uint8_t x, char* buf)
-{
-	for (size_t i=0; i<8; ++i) {
-		*buf++ = (x & 0b10000000) ? '1' : '0';
-		x <<= 1;
-	}
-	*buf++ = '\r';
-	*buf++ = '\n';
-	*buf = 0;
-	return buf;
-}
-
-
 void nrf52_task_function(void* arg)
 {
 	//logger.log_async("NRF-52 task started\r\n");
+
+	g_pin_led1.pulse_continuous(configTICK_RATE_HZ/50, configTICK_RATE_HZ/50*49);
+	g_pin_led2.pulse_continuous(configTICK_RATE_HZ/50, configTICK_RATE_HZ);
+	g_pin_led3.pulse_continuous(configTICK_RATE_HZ/50, configTICK_RATE_HZ);
+	g_pin_led4.pulse_continuous(configTICK_RATE_HZ/50, configTICK_RATE_HZ/5);
+
 	for (;;) {
-		for (const auto p : pin_leds) {
-			NRF_P0->OUTCLR = (1 << p);
-			vTaskDelay(configTICK_RATE_HZ/10);
-			NRF_P0->OUTSET = (1 << p);
-			vTaskDelay(configTICK_RATE_HZ/5);
-		}
-		vTaskDelay(configTICK_RATE_HZ/2);
+		vTaskDelay(configTICK_RATE_HZ);
 	}
 }
 
 
-task_data_t<1024> task_data;
+freertos_utils::task_data_t<128> nrf52_task_data;
 
 void create_nrf52_task(const char* task_name, UBaseType_t prio)
 {
-	task_data.task_handle = xTaskCreateStatic(
+	nrf52_task_data.task_handle = xTaskCreateStatic(
 		&nrf52_task_function,
 		task_name,
-		task_data.stack.size(),
+		nrf52_task_data.stack.size(),
 		nullptr,
 		prio,
-		task_data.stack.data(),
-		&task_data.task_buffer
+		nrf52_task_data.stack.data(),
+		&nrf52_task_data.task_buffer
 	);
 }
 
@@ -129,6 +108,10 @@ void create_nrf52_task(const char* task_name, UBaseType_t prio)
 __attribute__ ((noreturn)) void main()
 {
 	periph_init();
+	g_pin_led1.init_pin();
+	g_pin_led2.init_pin();
+	g_pin_led3.init_pin();
+	g_pin_led4.init_pin();
 
 	//logger.log_sync("Creating NRF-52 task...\r\n");
 	create_nrf52_task("nrf52_task", PRIO_NRF52);
