@@ -15,11 +15,6 @@ set(stm32l072_DEFINITIONS "-DTARGET_STM32L072")
 set(stm32l072_C_CXX_ARCH_FLAGS -mcpu=cortex-m0plus -mthumb)
 set(stm32l072_FREERTOS_PORT "GCC_ARM_CM0")
 
-set(stm32l432_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/ld/stm32l432.ld)
-set(stm32l432_DEFINITIONS "-DTARGET_STM32L432")
-set(stm32l432_C_CXX_ARCH_FLAGS -mcpu=cortex-m4 -mthumb)
-set(stm32l432_FREERTOS_PORT "GCC_ARM_CM3")
-
 set(FIRMWARE_ELF ${PROJECT_NAME}.elf)
 set(FIRMWARE_BIN ${PROJECT_NAME}.bin)
 #set(FIRMWARE_IHEX ${PROJECT_NAME}.ihex)
@@ -62,7 +57,6 @@ function(generate_targets T)
 		INTERFACE ${T_C_FLAGS}
 	)
 	set(FREERTOS_PORT ${${T}_FREERTOS_PORT})
-	#set(FREERTOS_HEAP "1")
 	add_subdirectory("${CMAKE_SOURCE_DIR}/../FreeRTOS-Kernel" "${T}_FreeRTOS")
 	###
 
@@ -111,7 +105,6 @@ endfunction()
 
 
 #generate_targets("stm32f103")
-#generate_targets("stm32l072")
-generate_targets("stm32l432")
+generate_targets("stm32l072")
 
 ###

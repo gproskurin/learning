@@ -60,7 +60,6 @@ function(generate_targets T)
 		INTERFACE ${T_C_FLAGS}
 	)
 	set(FREERTOS_PORT ${${T}_FREERTOS_PORT})
-	#set(FREERTOS_HEAP "1")
 	add_subdirectory("${CMAKE_SOURCE_DIR}/../FreeRTOS-Kernel" "${T}_FreeRTOS")
 	###
 

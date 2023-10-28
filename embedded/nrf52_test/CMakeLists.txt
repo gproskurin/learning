@@ -47,7 +47,6 @@ target_compile_options(freertos_config
 	INTERFACE ${T_C_FLAGS}
 )
 set(FREERTOS_PORT ${target_FREERTOS_PORT})
-#set(FREERTOS_HEAP "1")
 add_subdirectory("${CMAKE_SOURCE_DIR}/../FreeRTOS-Kernel" "FreeRTOS")
 ###
 

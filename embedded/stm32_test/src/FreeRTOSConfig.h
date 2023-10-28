@@ -13,8 +13,6 @@
 	#define configCPU_CLOCK_HZ			8000000
 #elif defined TARGET_STM32L072
 	#define configCPU_CLOCK_HZ			2100000
-#elif defined TARGET_STM32L432
-	#define configCPU_CLOCK_HZ			4000000
 #endif
 
 //#define configSYSTICK_CLOCK_HZ			1000000
@@ -45,7 +43,7 @@
 #define configSUPPORT_STATIC_ALLOCATION			1
 #define configSUPPORT_DYNAMIC_ALLOCATION		0
 //#define configTOTAL_HEAP_SIZE				1024 // FIXME
-#//define configAPPLICATION_ALLOCATED_HEAP		1
+//#define configAPPLICATION_ALLOCATED_HEAP		1
 #define configSTACK_ALLOCATION_FROM_SEPARATE_HEAP	0
 
 /* Hook function related definitions. */
