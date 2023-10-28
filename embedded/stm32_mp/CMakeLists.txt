@@ -5,11 +5,11 @@ include("cmake/arm-none-eabi.cmake")
 project(mp C CXX)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
-set(CMSIS_ROOT "${CMAKE_SOURCE_DIR}/../CMSIS_5")
+set(CMSIS_ROOT "${CMAKE_SOURCE_DIR}/../_deps/CMSIS_5")
 set(CMSIS_ARM_INCLUDE "${CMSIS_ROOT}/CMSIS/Core/Include")
 set(CMSIS_DEVICE_ROOT "${CMSIS_ROOT}/..")
 set(STM32_LIB_ROOT "${CMAKE_SOURCE_DIR}/../stm32_lib")
-set(FREERTOS_ROOT "${CMAKE_SOURCE_DIR}/../FreeRTOS-Kernel")
+set(FREERTOS_ROOT "${CMAKE_SOURCE_DIR}/../_deps/FreeRTOS-Kernel")
 
 set(COMMON_C_CXX_FLAGS
 	-D_POSIX_C_SOURCE=200809

@@ -19,8 +19,8 @@ set(FIRMWARE_ELF ${PROJECT_NAME}.elf)
 set(FIRMWARE_BIN ${PROJECT_NAME}.bin)
 #set(FIRMWARE_IHEX ${PROJECT_NAME}.ihex)
 
-set(CMSIS_ROOT "${CMAKE_SOURCE_DIR}/..")
-set(CMSIS_ARM_INCLUDE "${CMAKE_SOURCE_DIR}/../CMSIS_5/CMSIS/Core/Include")
+set(CMSIS_ROOT "${CMAKE_SOURCE_DIR}/../_deps")
+set(CMSIS_ARM_INCLUDE "${CMAKE_SOURCE_DIR}/../_deps/CMSIS_5/CMSIS/Core/Include")
 
 set(STM32_LIB_ROOT "${CMAKE_SOURCE_DIR}/../stm32_lib")
 
@@ -40,7 +40,7 @@ function(generate_targets T)
 		-I${CMSIS_ROOT}
 		-I${CMSIS_ARM_INCLUDE}
 		-I${STM32_LIB_ROOT}
-		-I${CMAKE_SOURCE_DIR}/../FreeRTOS-Kernel/include
+		-I${CMAKE_SOURCE_DIR}/../_deps/FreeRTOS-Kernel/include
 		-I${CMAKE_SOURCE_DIR}/src
 	)
 
@@ -57,7 +57,7 @@ function(generate_targets T)
 		INTERFACE ${T_C_FLAGS}
 	)
 	set(FREERTOS_PORT ${${T}_FREERTOS_PORT})
-	add_subdirectory("${CMAKE_SOURCE_DIR}/../FreeRTOS-Kernel" "${T}_FreeRTOS")
+	add_subdirectory("${CMAKE_SOURCE_DIR}/../_deps/FreeRTOS-Kernel" "${T}_FreeRTOS")
 	###
 
 	add_executable(${T_FIRMWARE_ELF}

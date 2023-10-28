@@ -17,7 +17,7 @@ target_compile_options(freertos_config
 	INTERFACE ${COMMON_C_CXX_FLAGS}
 )
 set(FREERTOS_PORT "GCC_ARM_CM3")
-add_subdirectory("${CMAKE_SOURCE_DIR}/../FreeRTOS-Kernel" "FreeRTOS")
+add_subdirectory("${CMAKE_SOURCE_DIR}/../_deps/FreeRTOS-Kernel" "FreeRTOS")
 ###
 
 add_executable(${FIRMWARE_ELF}

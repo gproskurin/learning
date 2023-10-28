@@ -5,7 +5,7 @@ include("cmake/arm-none-eabi.cmake")
 project(nrf52_test C CXX)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
-set(NRFX_ROOT "${CMAKE_SOURCE_DIR}/../nrfx")
+set(NRFX_ROOT "${CMAKE_SOURCE_DIR}/../_deps/nrfx")
 set(MDK_ROOT "${NRFX_ROOT}/mdk")
 
 set(target_LINKER_SCRIPT "${CMAKE_SOURCE_DIR}/ld/nrf52dk.ld")
@@ -16,7 +16,7 @@ set(target_FREERTOS_PORT "GCC_ARM_CM3")
 set(FIRMWARE_ELF ${PROJECT_NAME}.elf)
 set(FIRMWARE_BIN ${PROJECT_NAME}.bin)
 
-set(CMSIS_ARM_INCLUDE "${CMAKE_SOURCE_DIR}/../CMSIS_5/CMSIS/Core/Include")
+set(CMSIS_ARM_INCLUDE "${CMAKE_SOURCE_DIR}/../_deps/CMSIS_5/CMSIS/Core/Include")
 
 set(STM32_LIB_ROOT "${CMAKE_SOURCE_DIR}/../stm32_lib")
 
@@ -27,7 +27,7 @@ set(T_C_CXX_FLAGS
 	-g -Og -ffreestanding -Wall -Wno-unused-but-set-variable -Wno-unused-variable
 	-fno-builtin-memset -fno-builtin-memcpy -fno-builtin-stpcpy
 	${target_DEFINITIONS}
-	-I${CMAKE_SOURCE_DIR}/../FreeRTOS-Kernel/include
+	-I${CMAKE_SOURCE_DIR}/../_deps/FreeRTOS-Kernel/include
 	-I${CMAKE_SOURCE_DIR}/src
 	-I${MDK_ROOT}
 	-I${CMSIS_ARM_INCLUDE}
@@ -47,7 +47,7 @@ target_compile_options(freertos_config
 	INTERFACE ${T_C_FLAGS}
 )
 set(FREERTOS_PORT ${target_FREERTOS_PORT})
-add_subdirectory("${CMAKE_SOURCE_DIR}/../FreeRTOS-Kernel" "FreeRTOS")
+add_subdirectory("${CMAKE_SOURCE_DIR}/../_deps/FreeRTOS-Kernel" "FreeRTOS")
 ###
 
 add_executable(${FIRMWARE_ELF}
