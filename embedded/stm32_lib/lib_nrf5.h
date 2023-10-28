@@ -28,12 +28,16 @@ enum class pull_t {
 	pu = 3
 };
 
-struct pin_t {
+
+template <bool Invert>
+struct pin_impl_t {
 	uint8_t const reg;
+
+	explicit constexpr pin_impl_t(uint8_t r) : reg(r) {}
 
 	void set_state(bool s) const
 	{
-		if (s) {
+		if (s ^ Invert) {
 			NRF_P0->OUTSET = (1UL << reg);
 		} else {
 			NRF_P0->OUTCLR = (1UL << reg);
@@ -43,7 +47,7 @@ struct pin_t {
 	template <typename... Targs>
 	void set(dir_t d, Targs... args) const
 	{
-		auto const p = ((d == input) ? &NRF_P0->DIRCLR : &NRF_P0-> DIRSET);
+		auto const p = ((d == dir_t::input) ? &NRF_P0->DIRCLR : &NRF_P0-> DIRSET);
 		*p = mask1(reg);
 		set(args...);
 	}
@@ -51,13 +55,21 @@ struct pin_t {
 	template <typename... Targs>
 	void set(pull_t p, Targs... args) const
 	{
-		NRF_P0[reg] = (NRF_P0[reg] & ~0b1100) | (p << 2);
+		NRF_P0->PIN_CNF[reg] = (NRF_P0->PIN_CNF[reg] & ~0b1100) | (static_cast<uint32_t>(p) << 2);
 		set(args...);
+	}
+
+	void set_mode_output_lowspeed_pushpull() const
+	{
+		set(dir_t::output, pull_t::no_pull);
 	}
 
 private:
 	void set() const {} // terminate arguments recursion
 };
+
+using pin_t = pin_impl_t<false>;
+using pin_inverted_t = pin_impl_t<true>;
 
 
 }

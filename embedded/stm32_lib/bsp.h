@@ -1,7 +1,11 @@
 #ifndef _my_bsp_h_included_
 #define _my_bsp_h_included_
 
+#ifdef TARGET_NRF52DK
+#include "lib_nrf5.h"
+#else
 #include "lib_stm32.h"
+#endif
 
 namespace bsp {
 
@@ -45,7 +49,7 @@ constexpr stm32_lib::gpio::gpio_pin_t pin_userbutton{GPIOB_BASE, 2};
 #define USART_STLINK_PIN_TX_AF 4
 constexpr stm32_lib::gpio::gpio_pin_t usart_stlink_pin_tx{GPIOA_BASE, 9};
 
-constexpr stm32_lib::gpio::gpio_pin_t pin_led{GPIOB, 12};
+constexpr stm32_lib::gpio::pin_inverted_t pin_led{GPIOB, 12};
 
 #endif
 
@@ -68,11 +72,11 @@ constexpr stm32_lib::gpio::gpio_pin_t pin_led_red_otg_overcurrent{GPIOH_BASE, 11
 #endif
 
 
-#if defined NRF52DK
-constexpr nrf5_lib::gpio::gpio_pin_t pin_led_1{17};
-constexpr nrf5_lib::gpio::gpio_pin_t pin_led_2{18};
-constexpr nrf5_lib::gpio::gpio_pin_t pin_led_3{19};
-constexpr nrf5_lib::gpio::gpio_pin_t pin_led_4{20};
+#if defined TARGET_NRF52DK
+constexpr nrf5_lib::gpio::pin_inverted_t pin_led_1{17};
+constexpr nrf5_lib::gpio::pin_inverted_t pin_led_2{18};
+constexpr nrf5_lib::gpio::pin_inverted_t pin_led_3{19};
+constexpr nrf5_lib::gpio::pin_inverted_t pin_led_4{20};
 #endif
 
 

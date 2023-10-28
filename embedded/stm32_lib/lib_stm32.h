@@ -70,12 +70,19 @@ struct af_t {
 };
 #endif
 
-struct gpio_pin_t {
+template <bool Invert>
+struct pin_impl_t {
 	uint32_t const gpio_base; // store addr to avoid "unsafe" type cast and keep it constexpr
 	uint8_t const reg;
-	constexpr gpio_pin_t(uint32_t base_addr, uint8_t r) : gpio_base(base_addr), reg(r) {}
+	constexpr pin_impl_t(uint32_t base_addr, uint8_t r) : gpio_base(base_addr), reg(r) {}
 
 	constexpr GPIO_TypeDef* gpio() const { return reinterpret_cast<GPIO_TypeDef*>(gpio_base); }
+
+	void set_state(bool s) const
+	{
+		uint32_t const mask = ((s ^ Invert) ? (1U << reg) : (1U << reg) << 16);
+		gpio()->BSRR = mask;
+	}
 
 #ifdef TARGET_STM32F103
 	void set(mode_t m, cnf_t c) const
@@ -129,6 +136,20 @@ struct gpio_pin_t {
 		set(args...);
 	}
 
+	void set_mode_output_lowspeed_pushpull() const
+	{
+		#ifdef TARGET_STM32F103
+		set(mode_t::output_2mhz, cnf_t::output_pushpull);
+		#else
+		set(mode_t::output, otype_t::push_pull, speed_t::bits_00);
+		#endif
+	}
+
+	void set_mode_button() const
+	{
+		set(mode_t::input, pupd_t::pu);
+	}
+
 private:
 	void set() const {} // terminate arguments recursion
 
@@ -138,28 +159,16 @@ private:
 	}
 #endif
 };
-using pin_t = gpio_pin_t; // compat
+using pin_t = pin_impl_t<false>;
+using pin_inverted_t = pin_impl_t<true>;
+using gpio_pin_t = pin_t; // compat
 
 
-inline
-void set_state(const gpio_pin_t& pin, bool high)
+// compat
+template <typename Pin>
+void set_state(const Pin& pin, bool s)
 {
-#ifdef TARGET_STM32F103
-	high = !high; // FIXME better?
-#endif
-	uint32_t const mask = (high ? (1U << pin.reg) : (1U << pin.reg) << 16);
-	pin.gpio()->BSRR = mask;
-}
-
-
-inline
-void set_mode_output_lowspeed_pushpull(const gpio_pin_t& pin)
-{
-#ifdef TARGET_STM32F103
-	pin.set(mode_t::output_2mhz, cnf_t::output_pushpull);
-#else
-	pin.set(mode_t::output, otype_t::push_pull, speed_t::bits_00);
-#endif
+	return pin.set_state(s);
 }
 
 
@@ -211,13 +220,6 @@ void set_mode_output_analog(const gpio_pin_t& pin)
 #else
 	pin.set(mode_t::analog);
 #endif
-}
-
-
-inline
-void set_mode_button(const gpio_pin_t& pin)
-{
-	pin.set(mode_t::input, pupd_t::pu);
 }
 
 
