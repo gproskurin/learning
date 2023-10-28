@@ -110,26 +110,26 @@ void bus_init()
 	toggle_bits_10(&RCC->APB2RSTR, RCC_APB2RSTR_SPI1RST_Msk | RCC_APB2RSTR_USART1RST_Msk);
 
 	// nrf1 irq pin: A14
-        {
-                auto const cr = &SYSCFG->EXTICR[nrf1_conf.pin_irq.reg / 4];
-                *cr = (*cr & ~SYSCFG_EXTICR4_EXTI14_Msk) | (/*PA14*/0b000 << SYSCFG_EXTICR4_EXTI14_Pos);
-                EXTI->IMR1 |= (1 << nrf1_conf.pin_irq.reg);
-                EXTI->RTSR1 &= ~(1 << nrf1_conf.pin_irq.reg);
-                EXTI->FTSR1 |= (1 << nrf1_conf.pin_irq.reg);
-                NVIC_SetPriority(EXTI15_10_IRQn, 40); // FIXME prio
-                NVIC_EnableIRQ(EXTI15_10_IRQn);
-        }
+	{
+		auto const cr = &SYSCFG->EXTICR[nrf1_conf.pin_irq.reg / 4];
+		*cr = (*cr & ~SYSCFG_EXTICR4_EXTI14_Msk) | (/*PA14*/0b000 << SYSCFG_EXTICR4_EXTI14_Pos);
+		EXTI->IMR1 |= (1 << nrf1_conf.pin_irq.reg);
+		EXTI->RTSR1 &= ~(1 << nrf1_conf.pin_irq.reg);
+		EXTI->FTSR1 |= (1 << nrf1_conf.pin_irq.reg);
+		NVIC_SetPriority(EXTI15_10_IRQn, 40); // FIXME prio
+		NVIC_EnableIRQ(EXTI15_10_IRQn);
+	}
 
 	// nrf2 irq pin: C2
-        {
-                auto const cr = &SYSCFG->EXTICR[nrf2_conf.pin_irq.reg / 4];
-                *cr = (*cr & ~SYSCFG_EXTICR1_EXTI2_Msk) | (/*PC2*/0b010 << SYSCFG_EXTICR1_EXTI2_Pos);
-                EXTI->IMR1 |= (1 << nrf2_conf.pin_irq.reg);
-                EXTI->RTSR1 &= ~(1 << nrf2_conf.pin_irq.reg);
-                EXTI->FTSR1 |= (1 << nrf2_conf.pin_irq.reg);
-                NVIC_SetPriority(EXTI2_IRQn, 13);
-                NVIC_EnableIRQ(EXTI2_IRQn);
-        }
+	{
+		auto const cr = &SYSCFG->EXTICR[nrf2_conf.pin_irq.reg / 4];
+		*cr = (*cr & ~SYSCFG_EXTICR1_EXTI2_Msk) | (/*PC2*/0b010 << SYSCFG_EXTICR1_EXTI2_Pos);
+		EXTI->IMR1 |= (1 << nrf2_conf.pin_irq.reg);
+		EXTI->RTSR1 &= ~(1 << nrf2_conf.pin_irq.reg);
+		EXTI->FTSR1 |= (1 << nrf2_conf.pin_irq.reg);
+		NVIC_SetPriority(EXTI2_IRQn, 13);
+		NVIC_EnableIRQ(EXTI2_IRQn);
+	}
 
 #endif
 }
@@ -268,29 +268,29 @@ void spi_nrf_init(const nrf24::hw_conf_t& cf)
 
 void nrf_init_common(const nrf24::hw_conf_t& hwc)
 {
-        {
-                auto cf = nrf24::reg_get(hwc, nrf24::reg_t::REG_CONFIG);
-                cf =
-                        ((cf & ~(
-                                //nrf24::reg_t::REGV_CONFIG_EN_CRC
-                                nrf24::reg_t::REGV_CONFIG_MASK_RX_DR
-                                | nrf24::reg_t::REGV_CONFIG_MASK_TX_DS
-                                | nrf24::reg_t::REGV_CONFIG_MASK_MAX_RT
-                        ))
-                                | nrf24::reg_t::REGV_CONFIG_EN_CRC
-                        );
-                nrf24::reg_set(hwc, nrf24::reg_t::REG_CONFIG, cf);
-                vTaskDelay(1);
-        }
+	{
+		auto cf = nrf24::reg_get(hwc, nrf24::reg_t::REG_CONFIG);
+		cf =
+			((cf & ~(
+				//nrf24::reg_t::REGV_CONFIG_EN_CRC
+				nrf24::reg_t::REGV_CONFIG_MASK_RX_DR
+				| nrf24::reg_t::REGV_CONFIG_MASK_TX_DS
+				| nrf24::reg_t::REGV_CONFIG_MASK_MAX_RT
+			))
+				| nrf24::reg_t::REGV_CONFIG_EN_CRC
+			);
+		nrf24::reg_set(hwc, nrf24::reg_t::REG_CONFIG, cf);
+		vTaskDelay(1);
+	}
 
 	nrf24::reg_set(hwc, nrf24::reg_t::REG_SETUP_AW, nrf24::reg_t::REGV_SETUP_AW_5BYTES);
 	vTaskDelay(1);
 
-        {
-                const auto sr = nrf24::reg_get(hwc, nrf24::reg_t::REG_SETUP_RETR);
-                nrf24::reg_set(hwc, nrf24::reg_t::REG_SETUP_RETR, sr & ~nrf24::reg_t::REGV_SETUP_RETR_ARC_Msk);
-                vTaskDelay(1);
-        }
+	{
+		const auto sr = nrf24::reg_get(hwc, nrf24::reg_t::REG_SETUP_RETR);
+		nrf24::reg_set(hwc, nrf24::reg_t::REG_SETUP_RETR, sr & ~nrf24::reg_t::REGV_SETUP_RETR_ARC_Msk);
+		vTaskDelay(1);
+	}
 
 	nrf24::reg_set(hwc, nrf24::reg_t::REG_EN_RXADDR, 0);
 	vTaskDelay(1);
@@ -303,15 +303,15 @@ void nrf_init_common(const nrf24::hw_conf_t& hwc)
 	nrf24::reg_set(hwc, nrf24::reg_t::REG_RX_PW_P1, 32),
 	vTaskDelay(1);
 
-        {
-                const auto rfs = nrf24::reg_get(hwc, nrf24::reg_t::REG_RF_SETUP);
-                nrf24::reg_set(
-                        hwc,
-                        nrf24::reg_t::REG_RF_SETUP,
-                        rfs & ~(nrf24::reg_t::REGV_RF_SETUP_DR_LOW | nrf24::reg_t::REGV_RF_SETUP_DR_HIGH) // 00 - 1M
-                );
-                vTaskDelay(1);
-        }
+	{
+		const auto rfs = nrf24::reg_get(hwc, nrf24::reg_t::REG_RF_SETUP);
+		nrf24::reg_set(
+			hwc,
+			nrf24::reg_t::REG_RF_SETUP,
+			rfs & ~(nrf24::reg_t::REGV_RF_SETUP_DR_LOW | nrf24::reg_t::REGV_RF_SETUP_DR_HIGH) // 00 - 1M
+		);
+		vTaskDelay(1);
+	}
 
 	nrf24::reg_set(hwc, nrf24::reg_t::REG_RF_CH, 55);
 	vTaskDelay(1);
@@ -362,35 +362,35 @@ void nrf1_task_function(void* arg)
 	spi_nrf_init(*hwc);
 	vTaskDelay(configTICK_RATE_HZ/10);
 
-        nrf_init_common(*hwc);
+	nrf_init_common(*hwc);
 	logger.log_async("NRF1 init done\r\n");
 
 	nrf24::reg_set(*hwc, nrf24::reg_t::REG_EN_RXADDR, 0b10); // TODO -> defs
 	vTaskDelay(1);
 
-        nrf24::spi_write(
-                *hwc,
-                addr0.size(),
-                nrf24::reg_t::CMD_W_REGISTER | nrf24::reg_t::REG_RX_ADDR_P1,
-                addr0.data(),
-                nullptr
-        );
-        vTaskDelay(1);
+	nrf24::spi_write(
+		*hwc,
+		addr0.size(),
+		nrf24::reg_t::CMD_W_REGISTER | nrf24::reg_t::REG_RX_ADDR_P1,
+		addr0.data(),
+		nullptr
+	);
+	vTaskDelay(1);
 
 	logger.log_async("NRF1 powering up\r\n");
 	{
-                // set RX mode, power up
+		// set RX mode, power up
 		const auto cf = nrf24::reg_get(*hwc, nrf24::reg_t::REG_CONFIG);
 		nrf24::reg_set(
-                        *hwc,
-                        nrf24::reg_t::REG_CONFIG,
-                        cf | nrf24::reg_t::REGV_CONFIG_PWR_UP | nrf24::reg_t::REGV_CONFIG_PRIM_RX_PRX
-                );
+			*hwc,
+			nrf24::reg_t::REG_CONFIG,
+			cf | nrf24::reg_t::REGV_CONFIG_PWR_UP | nrf24::reg_t::REGV_CONFIG_PRIM_RX_PRX
+		);
 		vTaskDelay(configTICK_RATE_HZ/10);
 	}
 
 	stm32_lib::gpio::set_state(hwc->pin_ce, 1);
-        vTaskDelay(configTICK_RATE_HZ/10);
+	vTaskDelay(configTICK_RATE_HZ/10);
 	nrf_st_cf(*hwc);
 
 	logger.log_async("NRF1 loop\r\n");
@@ -407,39 +407,39 @@ void nrf1_task_function(void* arg)
 		logger.log_async("--- NRF1 wakeup\r\n");
 		g_pin_blue.pulse_once(configTICK_RATE_HZ/16);
 		nrf_st_cf(*hwc);
-                {
-                        const uint8_t st = nrf24::reg_get(*hwc, nrf24::reg_t::REG_STATUS);
-                        if (st & nrf24::reg_t::REGV_STATUS_RX_DR) {
-                                logger.log_async("NRF-1: RX_DR\r\n");
-                                bool rx_fifo_empty = false;
-                                while (!rx_fifo_empty) {
-                                        std::array<uint8_t, 32> buf;
-                                        const auto st1 = nrf24::spi_write(
-                                                *hwc,
-                                                buf.size(),
-                                                nrf24::reg_t::CMD_R_RX_PAYLOAD,
-                                                nullptr,
-                                                buf.data()
-                                        );
-                                        nrf24::reg_set(
-                                                *hwc,
-                                                nrf24::reg_t::REG_STATUS,
-                                                ~nrf24::reg_t::REGV_STATUS_RX_DR // write 1 to clear this bit
-                                        );
-                                        logger.log_async("*** NRF1 data\r\n");
-                                        logger.log_async(reinterpret_cast<const char*>(buf.data()));
-                                        vTaskDelay(configTICK_RATE_HZ/4);
-                                        const uint8_t fs = nrf24::reg_get(*hwc, nrf24::reg_t::REG_FIFO_STATUS);
-                                        if (fs & nrf24::reg_t::REGV_FIFO_STATUS_RX_EMPTY) {
-                                                rx_fifo_empty = true;
-                                                logger.log_async("^^^ NRF-1 RX_FIFO_EMPTY\r\n");
-                                                nrf_st_cf(*hwc);
-                                        }
-                                }
-                        } else {
-                                logger.log_async("... NRF1 no data\r\n");
-                        }
-                }
+		{
+			const uint8_t st = nrf24::reg_get(*hwc, nrf24::reg_t::REG_STATUS);
+			if (st & nrf24::reg_t::REGV_STATUS_RX_DR) {
+				logger.log_async("NRF-1: RX_DR\r\n");
+				bool rx_fifo_empty = false;
+				while (!rx_fifo_empty) {
+					std::array<uint8_t, 32> buf;
+					const auto st1 = nrf24::spi_write(
+						*hwc,
+						buf.size(),
+						nrf24::reg_t::CMD_R_RX_PAYLOAD,
+						nullptr,
+						buf.data()
+					);
+					nrf24::reg_set(
+						*hwc,
+						nrf24::reg_t::REG_STATUS,
+						~nrf24::reg_t::REGV_STATUS_RX_DR // write 1 to clear this bit
+					);
+					logger.log_async("*** NRF1 data\r\n");
+					logger.log_async(reinterpret_cast<const char*>(buf.data()));
+					vTaskDelay(configTICK_RATE_HZ/4);
+					const uint8_t fs = nrf24::reg_get(*hwc, nrf24::reg_t::REG_FIFO_STATUS);
+					if (fs & nrf24::reg_t::REGV_FIFO_STATUS_RX_EMPTY) {
+						rx_fifo_empty = true;
+						logger.log_async("^^^ NRF-1 RX_FIFO_EMPTY\r\n");
+						nrf_st_cf(*hwc);
+					}
+				}
+			} else {
+				logger.log_async("... NRF1 no data\r\n");
+			}
+		}
 		logger.log_async("--- goto wait\r\n");
 	}
 }
@@ -472,33 +472,33 @@ void nrf2_task_function(void* arg)
 	spi_nrf_init(*hwc);
 	vTaskDelay(configTICK_RATE_HZ/10);
 
-        nrf_init_common(*hwc);
+	nrf_init_common(*hwc);
 
 	{
-                // activate TX mode
+		// activate TX mode
 		uint8_t cf = nrf24::reg_get(*hwc, nrf24::reg_t::REG_CONFIG);
 		nrf24::reg_set(*hwc, nrf24::reg_t::REG_CONFIG, cf & ~nrf24::reg_t::REGV_CONFIG_PRIM_RX_PRX);
 		vTaskDelay(1);
 	}
 
-        nrf24::spi_write(
-                *hwc,
-                addr0.size(),
-                nrf24::reg_t::CMD_W_REGISTER | nrf24::reg_t::REG_TX_ADDR,
-                addr0.data(),
-                nullptr
-        );
-        vTaskDelay(1);
+	nrf24::spi_write(
+		*hwc,
+		addr0.size(),
+		nrf24::reg_t::CMD_W_REGISTER | nrf24::reg_t::REG_TX_ADDR,
+		addr0.data(),
+		nullptr
+	);
+	vTaskDelay(1);
 
-        {
-                const auto rfs = nrf24::reg_get(*hwc, nrf24::reg_t::REG_RF_SETUP);
-                nrf24::reg_set(
-                        *hwc,
-                        nrf24::reg_t::REG_RF_SETUP,
-                        (rfs & ~nrf24::reg_t::REGV_RF_SETUP_RF_PWR_Msk) | nrf24::reg_t::REGV_RF_SETUP_RF_PWR_00
-                );
-                vTaskDelay(1);
-        }
+	{
+		const auto rfs = nrf24::reg_get(*hwc, nrf24::reg_t::REG_RF_SETUP);
+		nrf24::reg_set(
+			*hwc,
+			nrf24::reg_t::REG_RF_SETUP,
+			(rfs & ~nrf24::reg_t::REGV_RF_SETUP_RF_PWR_Msk) | nrf24::reg_t::REGV_RF_SETUP_RF_PWR_00
+		);
+		vTaskDelay(1);
+	}
 
 	logger.log_async("NRF2 powering up\r\n");
 	{
@@ -520,7 +520,7 @@ void nrf2_task_function(void* arg)
 		vTaskDelay(10);
 		stm32_lib::gpio::set_state(hwc->pin_ce, 0);
 		vTaskDelay(configTICK_RATE_HZ/10);
-                nrf_st_cf(*hwc);
+		nrf_st_cf(*hwc);
 
 		vTaskDelay(configTICK_RATE_HZ*10);
 	}
