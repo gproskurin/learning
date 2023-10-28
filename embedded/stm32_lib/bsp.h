@@ -68,6 +68,14 @@ constexpr stm32_lib::gpio::gpio_pin_t pin_led_red_otg_overcurrent{GPIOH_BASE, 11
 #endif
 
 
+#if defined NRF52DK
+constexpr nrf5_lib::gpio::gpio_pin_t pin_led_1{17};
+constexpr nrf5_lib::gpio::gpio_pin_t pin_led_2{18};
+constexpr nrf5_lib::gpio::gpio_pin_t pin_led_3{19};
+constexpr nrf5_lib::gpio::gpio_pin_t pin_led_4{20};
+#endif
+
+
 } // namespace
 
 #endif
