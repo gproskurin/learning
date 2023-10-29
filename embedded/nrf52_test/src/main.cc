@@ -12,6 +12,7 @@
 
 #define PRIO_BLINK 1
 #define PRIO_NRF52 2
+#define PRIO_PINPOLL 3
 
 
 //#define USART_CON_BAUDRATE 115200
@@ -21,6 +22,33 @@ auto g_pin_led1 = freertos_utils::make_pin_toggle_task("blink_led1", bsp::pin_le
 auto g_pin_led2 = freertos_utils::make_pin_toggle_task("blink_led2", bsp::pin_led_2, PRIO_BLINK);
 auto g_pin_led3 = freertos_utils::make_pin_toggle_task("blink_led3", bsp::pin_led_3, PRIO_BLINK);
 auto g_pin_led4 = freertos_utils::make_pin_toggle_task("blink_led4", bsp::pin_led_4, PRIO_BLINK);
+
+
+template <typename BlinkTask>
+void handle_btn(BlinkTask& t, bool s)
+{
+	if (s) {
+		// release
+		t.pulse_once(configTICK_RATE_HZ/10);
+	} else {
+		// press
+		t.pulse_many(configTICK_RATE_HZ/10, configTICK_RATE_HZ/10, 3);
+	}
+}
+
+using btn_t = nrf5_lib::gpio::pin_t;
+
+void btn_cb_1(const btn_t&, bool s) { handle_btn(g_pin_led1, s); }
+void btn_cb_2(const btn_t&, bool s) { handle_btn(g_pin_led2, s); }
+void btn_cb_3(const btn_t&, bool s) { handle_btn(g_pin_led3, s); }
+void btn_cb_4(const btn_t&, bool s) { handle_btn(g_pin_led4, s); }
+
+freertos_utils::pinpoll::task_arg_t<btn_t, 4> pinpoll_task_args{
+	freertos_utils::pinpoll::make_pin_info(bsp::pin_button_1, btn_cb_1),
+	freertos_utils::pinpoll::make_pin_info(bsp::pin_button_2, btn_cb_2),
+	freertos_utils::pinpoll::make_pin_info(bsp::pin_button_3, btn_cb_3),
+	freertos_utils::pinpoll::make_pin_info(bsp::pin_button_4, btn_cb_4)
+};
 
 
 #if 0
@@ -77,14 +105,9 @@ void vApplicationIdleHook(void)
 void nrf52_task_function(void* arg)
 {
 	//logger.log_async("NRF-52 task started\r\n");
-
-	g_pin_led1.pulse_continuous(configTICK_RATE_HZ/50, configTICK_RATE_HZ/50*49);
-	g_pin_led2.pulse_continuous(configTICK_RATE_HZ/50, configTICK_RATE_HZ);
-	g_pin_led3.pulse_continuous(configTICK_RATE_HZ/50, configTICK_RATE_HZ);
-	g_pin_led4.pulse_continuous(configTICK_RATE_HZ/50, configTICK_RATE_HZ/5);
-
 	for (;;) {
-		vTaskDelay(configTICK_RATE_HZ);
+		g_pin_led4.pulse_continuous(configTICK_RATE_HZ/10, configTICK_RATE_HZ/5);
+		vTaskDelay(configTICK_RATE_HZ*5);
 	}
 }
 
@@ -116,6 +139,10 @@ __attribute__ ((noreturn)) void main()
 	//logger.log_sync("Creating NRF-52 task...\r\n");
 	create_nrf52_task("nrf52_task", PRIO_NRF52);
 	//logger.log_sync("Created NRF-52 task\r\n");
+
+	//logger.log_sync("Creating PINPOLL task...\r\n");
+	freertos_utils::pinpoll::create_task("pinpoll", PRIO_PINPOLL, &pinpoll_task_args);
+	//logger.log_sync("Created PINPOLL task\r\n");
 
 	//logger.log_sync("Starting FreeRTOS scheduler\r\n");
 	vTaskStartScheduler();
