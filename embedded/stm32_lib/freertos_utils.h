@@ -63,6 +63,7 @@ public:
 
 	void init_pin() const
 	{
+		pin_.set_state(0);
 		pin_.set_mode_output_lowspeed_pushpull();
 	}
 
@@ -271,8 +272,7 @@ void pinpoll_impl::task_function(pin_info_t<Pin>* const pin_info, size_t size)
 		for (size_t i=0; i<size; ++i) {
 			auto& pi = pin_info[i];
 			const auto& pin = pi.pin;
-			const auto idr = pin.gpio()->IDR;
-			const bool status_now = idr & (1 << pin.reg);
+			const bool status_now = pin.get_state();
 			pi.poll_history <<= 1;
 			if (status_now) {
 				pi.poll_history |= 1;

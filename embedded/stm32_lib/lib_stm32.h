@@ -150,6 +150,11 @@ struct pin_impl_t {
 		set(mode_t::input, pupd_t::pu);
 	}
 
+	bool get_state() const
+	{
+		return gpio()->IDR & (1UL << reg);
+	}
+
 private:
 	void set() const {} // terminate arguments recursion
 

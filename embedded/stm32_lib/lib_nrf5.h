@@ -22,6 +22,11 @@ enum class dir_t {
 	output = 1,
 };
 
+enum class input_buffer_t {
+	connect = 0,
+	disconnect = 1
+};
+
 enum class pull_t {
 	no_pull = 0,
 	pd = 1,
@@ -53,6 +58,13 @@ struct pin_impl_t {
 	}
 
 	template <typename... Targs>
+	void set(input_buffer_t b, Targs... args) const
+	{
+		NRF_P0->PIN_CNF[reg] = (NRF_P0->PIN_CNF[reg] & ~0b10) | (static_cast<uint32_t>(b) << 1);
+		set(args...);
+	}
+
+	template <typename... Targs>
 	void set(pull_t p, Targs... args) const
 	{
 		NRF_P0->PIN_CNF[reg] = (NRF_P0->PIN_CNF[reg] & ~0b1100) | (static_cast<uint32_t>(p) << 2);
@@ -62,6 +74,16 @@ struct pin_impl_t {
 	void set_mode_output_lowspeed_pushpull() const
 	{
 		set(dir_t::output, pull_t::no_pull);
+	}
+
+	void set_mode_button() const
+	{
+		set(dir_t::input, input_buffer_t::connect, pull_t::pu);
+	}
+
+	bool get_state() const
+	{
+		return NRF_P0->IN & (1UL << reg);
 	}
 
 private:

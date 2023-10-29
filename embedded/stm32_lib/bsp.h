@@ -73,6 +73,11 @@ constexpr stm32_lib::gpio::gpio_pin_t pin_led_red_otg_overcurrent{GPIOH_BASE, 11
 
 
 #if defined TARGET_NRF52DK
+constexpr nrf5_lib::gpio::pin_t pin_button_1{13};
+constexpr nrf5_lib::gpio::pin_t pin_button_2{14};
+constexpr nrf5_lib::gpio::pin_t pin_button_3{15};
+constexpr nrf5_lib::gpio::pin_t pin_button_4{16};
+
 constexpr nrf5_lib::gpio::pin_inverted_t pin_led_1{17};
 constexpr nrf5_lib::gpio::pin_inverted_t pin_led_2{18};
 constexpr nrf5_lib::gpio::pin_inverted_t pin_led_3{19};
