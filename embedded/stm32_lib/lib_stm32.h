@@ -272,26 +272,85 @@ void init_pin_nss(const gpio::gpio_pin_t& pin)
 
 
 template <typename T>
-T write(SPI_TypeDef* const spi, T data)
+void write(SPI_TypeDef* const spi, size_t const size, const T* const tx_buf, T* const rx_buf)
 {
 	static_assert(sizeof(T) == 1 || sizeof(T) == 2); // FIXME
 #if defined TARGET_STM32H745_CM4 || defined TARGET_STM32H745_CM7
-	volatile T* const tx = reinterpret_cast<volatile T*>(&spi->TXDR);
-	*tx = data;
-	spi->CR1 |= SPI_CR1_CSTART_Msk;
-	volatile T* const rx = reinterpret_cast<volatile T*>(&spi->RXDR);
-	const T r = *rx;
+	auto const txdr = reinterpret_cast<volatile T*>(&spi->TXDR);
+	auto const rxdr = reinterpret_cast<volatile T*>(&spi->RXDR);
+	bool tx_started = false;
 #else
-	volatile T* const dr = reinterpret_cast<volatile T*>(&spi->DR);
-
-	while(! (spi->SR & SPI_SR_TXE)) {}
-	*dr = data;
-
-	while(! (spi->SR & SPI_SR_RXNE)) {}
-	const T r = *dr;
-	while(spi->SR & SPI_SR_BSY) {}
+	auto const txdr = reinterpret_cast<volatile T*>(&spi->DR);
+	auto const rxdr = txdr;
 #endif
-	return r;
+
+	size_t tx_done = 0, rx_done = 0;
+	constexpr size_t max_count = 1000000;
+	size_t count_without_progress = 0; // count iterations without progress
+
+	while (tx_done < size || rx_done < size) {
+		bool progress = false; // did something in current iteration?
+
+#if defined TARGET_STM32H745_CM4 || defined TARGET_STM32H745_CM7
+		while (tx_done < size && (spi->SR & SPI_SR_TXP)) // fill tx buffer
+#else
+		if (tx_done < size && (spi->SR & SPI_SR_TXE)) // write one item to tx buffer
+#endif
+		{
+			*txdr = (tx_buf ? tx_buf[tx_done] : 0);
+			++tx_done;
+			progress = true;
+		}
+#if defined TARGET_STM32H745_CM4 || defined TARGET_STM32H745_CM7
+		if (!tx_started && tx_done>0) {
+			// something was written to tx buffer, start transfer
+			spi->CR1 |= SPI_CR1_CSTART_Msk;
+			tx_started = true;
+		}
+#endif
+
+#if defined TARGET_STM32H745_CM4 || defined TARGET_STM32H745_CM7
+		while (rx_done < size && (spi->SR & SPI_SR_RXP))
+#else
+		if (rx_done < size && (spi->SR & SPI_SR_RXNE))
+#endif
+		{
+			const T d = *rxdr;
+			if (rx_buf) {
+				rx_buf[rx_done] = d;
+			}
+			++rx_done;
+			progress = true;
+		}
+
+		if (progress) {
+			count_without_progress = 0; // done something, reset counter
+		} else {
+			++count_without_progress;
+			if (count_without_progress >= max_count) {
+				// TODO handle timeout
+			}
+		}
+	}
+
+#if defined TARGET_STM32H745_CM4 || defined TARGET_STM32H745_CM7
+#else
+	count_without_progress = 0;
+	while(spi->SR & SPI_SR_BSY) {
+		++count_without_progress;
+		if (count_without_progress >= max_count) {
+			// TODO handle timeout
+		}
+	}
+#endif
+}
+
+template <typename T>
+T write(SPI_TypeDef* const spi, T data)
+{
+	T rx_buf = 0;
+	write(spi, 1, &data, &rx_buf);
+	return rx_buf;
 }
 
 
