@@ -9,7 +9,7 @@ namespace {
 void usart_tx(USART_TypeDef* const usart, const char* s)
 {
 	while (*s) {
-#if defined TARGET_STM32H745_CM4 || defined TARGET_STM32H745_CM7 || defined TARGET_STM32WB55 || defined TARGET_STM32G030
+#if defined TARGET_STM32H745_CM4 || defined TARGET_STM32H745_CM7 || defined TARGET_STM32WB55 || defined TARGET_STM32G030 || defined TARGET_STM32G031
 		while (! (usart->ISR & USART_ISR_TXE_TXFNF)) {}
 		usart->TDR = *s;
 #elif defined TARGET_STM32L072
