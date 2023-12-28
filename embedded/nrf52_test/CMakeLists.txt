@@ -8,7 +8,7 @@ set(CMAKE_VERBOSE_MAKEFILE ON)
 set(NRFX_ROOT "${CMAKE_SOURCE_DIR}/../_deps/nrfx")
 set(MDK_ROOT "${NRFX_ROOT}/mdk")
 
-set(target_LINKER_SCRIPT "${CMAKE_SOURCE_DIR}/ld/nrf52dk.ld")
+set(target_LINKER_SCRIPT "${CMAKE_SOURCE_DIR}/../ld/nrf52dk.ld")
 set(target_DEFINITIONS "-DTARGET_NRF52DK")
 set(target_C_CXX_ARCH_FLAGS -mcpu=cortex-m4 -mthumb)
 set(target_FREERTOS_PORT "GCC_ARM_CM3")

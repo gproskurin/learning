@@ -5,7 +5,7 @@ include("${CMAKE_SOURCE_DIR}/../cmake/arm-none-eabi.cmake")
 project(nrf24 C CXX)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
-set(stm32wb55_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/ld/stm32wb55.ld)
+set(stm32wb55_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/../ld/stm32wb55.ld)
 set(stm32wb55_DEFINITIONS "-DTARGET_STM32WB55")
 set(stm32wb55_C_CXX_ARCH_FLAGS -mcpu=cortex-m4 -mthumb)
 set(stm32wb55_FREERTOS_PORT "GCC_ARM_CM3")

@@ -1,6 +1,6 @@
 ###
 
-set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/ld/stm32h745_cm7.ld)
+set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/../ld/stm32h745_cm7.ld)
 
 set(FIRMWARE_ELF ${PROJECT_NAME}.elf)
 set(FIRMWARE_BIN ${PROJECT_NAME}.bin)

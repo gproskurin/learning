@@ -5,7 +5,7 @@ include("${CMAKE_SOURCE_DIR}/../cmake/arm-none-eabi.cmake")
 project(tl C CXX)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
-set(stm32g030_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/ld/stm32g030.ld)
+set(stm32g030_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/../ld/stm32g030.ld)
 set(stm32g030_DEFINITIONS "-DTARGET_STM32G030")
 set(stm32g030_C_CXX_ARCH_FLAGS -mcpu=cortex-m0plus -mthumb)
 set(stm32g030_FREERTOS_PORT "GCC_ARM_CM0")
