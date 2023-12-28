@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
-include("cmake/arm-none-eabi.cmake")
+include("${CMAKE_SOURCE_DIR}/../cmake/arm-none-eabi.cmake")
 
 project(mp C CXX)
 set(CMAKE_VERBOSE_MAKEFILE ON)
