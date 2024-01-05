@@ -14,9 +14,10 @@ enum reg_t : uint8_t {
 	CMD_W_REGISTER = 0b00100000,
 	CMD_R_RX_PAYLOAD = 0b01100001,
 	CMD_W_TX_PAYLOAD = 0b10100000,
-	CMD_W_TX_PAYLOAD_NO_ACK = 0b10110000,
+	CMD_W_TX_PAYLOAD_NOACK = 0b10110000,
 	CMD_FLUSH_TX = 0b11100001,
 	CMD_FLUSH_RX = 0b11100010,
+	CMD_R_RX_PL_WID = 0b01100000,
 	CMD_NOP = 0b11111111,
 
 	REG_CONFIG = 0x00,
@@ -38,7 +39,8 @@ enum reg_t : uint8_t {
 	REGV_SETUP_AW_5BYTES = 0b11,
 
 	REG_SETUP_RETR = 0x04,
-	REGV_SETUP_RETR_ARC_Msk = 0b1111,
+	REGV_SETUP_RETR_ARD_Pos = 4,
+	REGV_SETUP_RETR_ARC_Pos = 0,
 
 	REG_RF_CH = 0x05,
 
@@ -56,6 +58,9 @@ enum reg_t : uint8_t {
 	REGV_STATUS_MAX_RT = 1 << 4,
 	REGV_STATUS_RX_P_NO_Pos = 1,
 	REGV_STATUS_RX_P_NO_Msk = 0b111 << REGV_STATUS_RX_P_NO_Pos,
+	REGV_STATUS_TX_FULL = 1 << 0,
+
+	REG_OBSERVE_TX = 0x08,
 
 	REG_RX_ADDR_P0 = 0x0A,
 	REG_RX_ADDR_P1 = 0x0B,
@@ -77,6 +82,8 @@ enum reg_t : uint8_t {
 	REGV_FIFO_STATUS_RX_EMPTY = 1 << 0,
 
 	REG_FEATURE = 0x1D,
+	REGV_FEATURE_EN_DPL = 1 << 2,
+	REGV_FEATURE_EN_ACK_PAY = 1 << 1,
 	REGV_FEATURE_EN_DYN_ACK = 1 << 0
 };
 
@@ -104,7 +111,7 @@ uint8_t spi_write(
 )
 {
 	stm32_lib::gpio::set_state(hwc.pin_spi_nss, 0);
-	for (volatile int i=0; i<10; ++i) {} // 2ns
+	for (volatile int i=0; i<20; ++i) {} // Tcc (CSN to SCK Setup), 2ns
 
 	const uint8_t status = stm32_lib::spi::write<uint8_t>(hwc.spi, cmd);
 	for (uint8_t i=0; i<size; ++i) {
@@ -114,7 +121,7 @@ uint8_t spi_write(
 		}
 	}
 
-	for (volatile int i=0; i<10; ++i) {} // 2ns
+	for (volatile int i=0; i<20; ++i) {} // Tcch (SCK to CSN Hold), 2ns
 	stm32_lib::gpio::set_state(hwc.pin_spi_nss, 1);
 	return status;
 }
@@ -149,6 +156,26 @@ void reg_set(const hw_conf_t& hwc, uint8_t reg, const uint8_t val)
 		&val,
 		nullptr
 	);
+}
+
+
+inline void sleep_50ns()
+{
+	for (volatile int i=0; i<50; ++i) {} // TODO better
+}
+
+
+void flush_tx(const hw_conf_t& hwc)
+{
+	cmd0(hwc, reg_t::CMD_FLUSH_TX);
+	sleep_50ns();
+}
+
+
+void flush_rx(const hw_conf_t& hwc)
+{
+	cmd0(hwc, reg_t::CMD_FLUSH_RX);
+	sleep_50ns();
 }
 
 

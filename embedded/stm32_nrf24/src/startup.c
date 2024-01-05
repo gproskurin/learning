@@ -6,7 +6,7 @@
 extern void main();
 extern void _estack(void);
 extern void IntHandler_EXTI2();
-extern void IntHandler_EXTI10_15();
+extern void IntHandler_EXTI5_9();
 
 
 __attribute__((naked, noreturn)) void _reset(void)
@@ -84,23 +84,7 @@ __attribute__((section(".vectors"))) void (*tab[16 + 62])(void) =
 	0,
 	0,
 	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	IntHandler_EXTI10_15
+	IntHandler_EXTI5_9,
+	0
 };
 #endif
