@@ -45,7 +45,7 @@ enum player_nf_t : uint32_t {
 template <typename LookupTable>
 dds_value_t lookup_sin_quarter(const LookupTable& t, size_t idx)
 {
-	constexpr auto sz = t.size();
+	constexpr auto sz = std::tuple_size<LookupTable>::value;
 	if (idx < sz)
 		return t[idx];
 	if (idx == sz)

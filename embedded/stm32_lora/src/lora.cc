@@ -1,10 +1,10 @@
 #include "lora.h"
 
 
-extern freertos_utils::pin_toggle_task_t g_pin_green2;
-extern freertos_utils::pin_toggle_task_t g_pin_blue;
-extern freertos_utils::pin_toggle_task_t g_pin_red;
-extern freertos_utils::pin_toggle_task_t g_pin_green;
+extern freertos_utils::pin_toggle_task_t<stm32_lib::gpio::pin_t> g_pin_green2;
+extern freertos_utils::pin_toggle_task_t<stm32_lib::gpio::pin_t> g_pin_blue;
+extern freertos_utils::pin_toggle_task_t<stm32_lib::gpio::pin_t> g_pin_red;
+extern freertos_utils::pin_toggle_task_t<stm32_lib::gpio::pin_t> g_pin_green;
 
 
 namespace lora {

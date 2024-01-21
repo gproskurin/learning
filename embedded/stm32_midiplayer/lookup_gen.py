@@ -84,7 +84,7 @@ print('};')
 for sz in [3, 4, 5, 10, 12]:
     count_full = 2**sz
     print(f'\n// sin{sz}')
-    print(f'const std::array<{DDS_VALUE_T}, {int(count_full/4)}> lookup_table_sin{sz} = ' + '{')
+    print(f'constexpr std::array<{DDS_VALUE_T}, {int(count_full/4)}> lookup_table_sin{sz} = ' + '{')
     print(f' ' + ", ".join([str(x) for x in sin_points_quarter(count_full)]))
     print('};\n')
 

@@ -63,6 +63,7 @@ function(generate_targets T)
 		src/lora.cc
 		${STM32_LIB_ROOT}/logging.cc
 		${STM32_LIB_ROOT}/my_stdlib.c
+		${STM32_LIB_ROOT}/startup.c
 	)
 
 	target_link_libraries(${T_FIRMWARE_ELF}

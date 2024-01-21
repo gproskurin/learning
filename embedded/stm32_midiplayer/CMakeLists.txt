@@ -47,7 +47,7 @@ function(generate_targets T)
 		-I${CMAKE_SOURCE_DIR}/src
 	)
 
-	set(T_CXX_FLAGS ${CMAKE_CXX_FLAGS} ${T_C_CXX_FLAGS} -std=c++17 -fno-rtti -fno-exceptions)
+	set(T_CXX_FLAGS ${CMAKE_CXX_FLAGS} ${T_C_CXX_FLAGS} -std=c++20 -fno-rtti -fno-exceptions)
 	#set(T_CXX_FLAGS ${CMAKE_CXX_FLAGS} ${T_C_CXX_FLAGS})
 	set(T_C_FLAGS ${CMAKE_C_FLAGS} ${T_C_CXX_FLAGS})
 
@@ -69,6 +69,7 @@ function(generate_targets T)
 		src/player.cc ${LOOKUP_TABLES_FILE}
 		${STM32_LIB_ROOT}/logging.cc
 		${STM32_LIB_ROOT}/my_stdlib.c
+		${STM32_LIB_ROOT}/startup.c
 	)
 
 	set_source_files_properties("src/player.cc"
