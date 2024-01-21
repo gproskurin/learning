@@ -34,6 +34,12 @@ enum class pull_t {
 };
 
 
+#ifdef TARGET_NRF52DK
+#define MY_P0 (NRF_P0)
+#elif defined TARGET_NRF5340DK_APP
+#define MY_P0 (NRF_P0_S)
+#endif
+
 template <bool Invert>
 struct pin_impl_t {
 	uint8_t const reg;
@@ -43,16 +49,16 @@ struct pin_impl_t {
 	void set_state(bool s) const
 	{
 		if (s ^ Invert) {
-			NRF_P0->OUTSET = (1UL << reg);
+			MY_P0->OUTSET = (1UL << reg);
 		} else {
-			NRF_P0->OUTCLR = (1UL << reg);
+			MY_P0->OUTCLR = (1UL << reg);
 		}
 	}
 
 	template <typename... Targs>
 	void set(dir_t d, Targs... args) const
 	{
-		auto const p = ((d == dir_t::input) ? &NRF_P0->DIRCLR : &NRF_P0-> DIRSET);
+		auto const p = ((d == dir_t::input) ? &MY_P0->DIRCLR : &MY_P0-> DIRSET);
 		*p = mask1(reg);
 		set(args...);
 	}
@@ -60,14 +66,14 @@ struct pin_impl_t {
 	template <typename... Targs>
 	void set(input_buffer_t b, Targs... args) const
 	{
-		NRF_P0->PIN_CNF[reg] = (NRF_P0->PIN_CNF[reg] & ~0b10) | (static_cast<uint32_t>(b) << 1);
+		MY_P0->PIN_CNF[reg] = (MY_P0->PIN_CNF[reg] & ~0b10) | (static_cast<uint32_t>(b) << 1);
 		set(args...);
 	}
 
 	template <typename... Targs>
 	void set(pull_t p, Targs... args) const
 	{
-		NRF_P0->PIN_CNF[reg] = (NRF_P0->PIN_CNF[reg] & ~0b1100) | (static_cast<uint32_t>(p) << 2);
+		MY_P0->PIN_CNF[reg] = (MY_P0->PIN_CNF[reg] & ~0b1100) | (static_cast<uint32_t>(p) << 2);
 		set(args...);
 	}
 
@@ -83,7 +89,7 @@ struct pin_impl_t {
 
 	bool get_state() const
 	{
-		return NRF_P0->IN & (1UL << reg);
+		return MY_P0->IN & (1UL << reg);
 	}
 
 private:

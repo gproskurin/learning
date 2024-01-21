@@ -1,7 +1,7 @@
 #ifndef _my_bsp_h_included_
 #define _my_bsp_h_included_
 
-#ifdef TARGET_NRF52DK
+#if defined(TARGET_NRF52DK) || defined(TARGET_NRF5340DK_APP)
 #include "lib_nrf5.h"
 #else
 #include "lib_stm32.h"
@@ -82,6 +82,18 @@ constexpr nrf5_lib::gpio::pin_inverted_t pin_led_1{17};
 constexpr nrf5_lib::gpio::pin_inverted_t pin_led_2{18};
 constexpr nrf5_lib::gpio::pin_inverted_t pin_led_3{19};
 constexpr nrf5_lib::gpio::pin_inverted_t pin_led_4{20};
+#endif
+
+#if defined TARGET_NRF5340DK_APP
+constexpr nrf5_lib::gpio::pin_t pin_button_1{23};
+constexpr nrf5_lib::gpio::pin_t pin_button_2{24};
+constexpr nrf5_lib::gpio::pin_t pin_button_3{8};
+constexpr nrf5_lib::gpio::pin_t pin_button_4{9};
+
+constexpr nrf5_lib::gpio::pin_inverted_t pin_led_1{28};
+constexpr nrf5_lib::gpio::pin_inverted_t pin_led_2{29};
+constexpr nrf5_lib::gpio::pin_inverted_t pin_led_3{30};
+constexpr nrf5_lib::gpio::pin_inverted_t pin_led_4{31};
 #endif
 
 
