@@ -18,6 +18,8 @@
 
 usart_logger_t logger;
 
+stm32_lib::hsem::hsem_t<0> hsem0;
+
 
 void usart_init(USART_TypeDef* const usart)
 {
@@ -49,7 +51,8 @@ void periph_init()
 		| RCC_AHB4ENR_GPIODEN_Msk
 		| RCC_AHB4ENR_GPIOHEN_Msk
 		| RCC_AHB4ENR_GPIOIEN_Msk
-		| RCC_AHB4ENR_GPIOJEN_Msk;
+		| RCC_AHB4ENR_GPIOJEN_Msk
+		| RCC_AHB4ENR_HSEMEN_Msk;
 	toggle_bits_10(
 		&RCC->AHB4RSTR,
 		RCC_AHB4RSTR_GPIOARST_Msk
@@ -58,6 +61,7 @@ void periph_init()
 			| RCC_AHB4RSTR_GPIOHRST_Msk
 			| RCC_AHB4RSTR_GPIOIRST_Msk
 			| RCC_AHB4RSTR_GPIOJRST_Msk
+			// | RCC_AHB4RSTR_HSEMRST_Msk // TODO
 	);
 
 	// USART
@@ -88,24 +92,44 @@ freertos_utils::pin_toggle_task_t g_pin_green_arduino("blink_green_arduino", bsp
 freertos_utils::pin_toggle_task_t g_pin_green_vbus("blink_green_vbus", bsp::pin_led_green_vbus_usb_fs, PRIO_BLINK);
 
 
+#if 1
+template <typename Pin>
+void blink(const Pin& pin, int n)
+{
+	return;
+	while (n-- > 0) {
+		pin.set_state(0);
+		for (volatile int i=0; i<2000000; ++i) {}
+		pin.set_state(1);
+		for (volatile int i=0; i<1000000; ++i) {}
+	}
+}
+#endif
+
+
 __attribute__ ((noreturn)) void main()
 {
+	//periph_init();
+	const auto& pin = bsp::pin_led_green;
 #if 0
-	// clear event
-	__SEV();
-	for (volatile int i=0; i<1000000; ++i) {}
-	__WFE();
-	for (volatile int i=0; i<1000000; ++i) {}
 
-	if (1) {
-		__WFE(); // wait for "START" event from CM4
+	pin.set_state(1);
+	pin.set_mode_output_lowspeed_pushpull();
 
-		__SEV(); // wakeup CM4
-		__WFE(); // clear our wakeup event
-	}
+	blink(pin, 1);
 #endif
+#if 1
+	while (RCC->CR & RCC_CR_D2CKRDY) { blink(pin,3); for (volatile int i=0; i<5000000;++i) {}; } // wait for cpu2 to stop
+	//blink(pin, 1);
 	periph_init();
+	// wakeup cpu2 by generating hsem interrupt
+	hsem0.fast_take();
+	hsem0.release();
+	while (!(RCC->CR & RCC_CR_D2CKRDY)) {} // wait for cpu2 to start
+#endif
 
+	hsem0.fast_take();
+	hsem0.release();
 	g_pin_green.init_pin();
 	g_pin_green.pulse_continuous(configTICK_RATE_HZ, configTICK_RATE_HZ*2);
 

@@ -356,6 +356,33 @@ T write(SPI_TypeDef* const spi, T data)
 
 } // namespace spi
 
+
+#if defined TARGET_STM32H745_CM4 || defined TARGET_STM32H745_CM7
+namespace hsem {
+
+
+template <size_t N>
+struct hsem_t {
+	static_assert(N >= HSEM_SEMID_MIN);
+	static_assert(N <= HSEM_SEMID_MAX);
+	bool fast_take() // return false (to match with HAL_OK) on successful lock
+	{
+		if (HSEM->RLR[N] == (HSEM_CR_COREID_CURRENT | HSEM_RLR_LOCK)) {
+			return false; // taken successfully
+		}
+		return true;
+	}
+
+	void release()
+	{
+		HSEM->R[N] = HSEM_CR_COREID_CURRENT;
+	}
+};
+
+
+} // namespace hsem
+#endif
+
 } // namespace stm32_lib
 
 
