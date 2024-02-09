@@ -69,6 +69,50 @@ constexpr stm32_lib::gpio::gpio_pin_t pin_led_red_otg_overcurrent{GPIOH_BASE, 11
 
 //constexpr stm32_lib::gpio::gpio_pin_t pin_userbutton{GPIOD_BASE, 1};
 
+namespace lcd {
+	constexpr stm32_lib::gpio::gpio_pin_t pin_disp{GPIOD_BASE, 7};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_int{GPIOG_BASE, 2};
+
+	// i2c4
+	constexpr uint8_t af_i2c = 4;
+	constexpr stm32_lib::gpio::gpio_pin_t pin_scl{GPIOD_BASE, 12};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_sda{GPIOD_BASE, 13};
+
+	constexpr uint8_t af = 14;
+
+	constexpr stm32_lib::gpio::gpio_pin_t pin_de{GPIOK_BASE, 7};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_vsync{GPIOI_BASE, 9};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_hsync{GPIOI_BASE, 12};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_clk{GPIOI_BASE, 14};
+
+	constexpr stm32_lib::gpio::gpio_pin_t pin_r0{GPIOI_BASE, 15};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_r1{GPIOJ_BASE, 0};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_r2{GPIOJ_BASE, 1};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_r3{GPIOH_BASE, 9};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_r4{GPIOJ_BASE, 3};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_r5{GPIOJ_BASE, 4};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_r6{GPIOJ_BASE, 5};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_r7{GPIOJ_BASE, 6};
+
+	constexpr stm32_lib::gpio::gpio_pin_t pin_g0{GPIOJ_BASE, 7};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_g1{GPIOJ_BASE, 8};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_g2{GPIOJ_BASE, 9};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_g3{GPIOJ_BASE, 10};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_g4{GPIOJ_BASE, 11};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_g5{GPIOI_BASE, 0};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_g6{GPIOI_BASE, 1};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_g7{GPIOK_BASE, 2};
+
+	constexpr stm32_lib::gpio::gpio_pin_t pin_b0{GPIOJ_BASE, 12};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_b1{GPIOJ_BASE, 13};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_b2{GPIOJ_BASE, 14};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_b3{GPIOJ_BASE, 15};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_b4{GPIOK_BASE, 3};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_b5{GPIOK_BASE, 4};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_b6{GPIOK_BASE, 5};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_b7{GPIOK_BASE, 6};
+}
+
 #endif
 
 

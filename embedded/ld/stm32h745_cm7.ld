@@ -2,6 +2,7 @@ ENTRY(_reset);
 MEMORY {
   flash1(rx): ORIGIN = 0x08000000, LENGTH = 1024k
   flash2(rx): ORIGIN = 0x08100000, LENGTH = 1024k
+  sram_axi(rwx): ORIGIN = 0x24000000, LENGTH = 512k,
   dtcm(rwx) : ORIGIN = 0x20000000, LENGTH = 128k
 }
 _estack     = ORIGIN(dtcm) + LENGTH(dtcm);    /* stack points to end of DTCM */
@@ -34,14 +35,14 @@ SECTIONS {
     *(.first_data)
     *(.data SORT(.data.*))
     _edata = .;
-  } > dtcm AT > flash1
+  } > sram_axi AT > flash1
   _sidata = LOADADDR(.data);
 
   .bss(NOLOAD) : {
     _sbss = .;              /* .bss section start */
     *(.bss SORT(.bss.*) COMMON)
     _ebss = .;              /* .bss section end */
-  } > dtcm
+  } > sram_axi
 
   /* . = ALIGN(8); */
   /* _end = .; */    /* for cmsis_gcc.h  */

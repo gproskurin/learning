@@ -92,7 +92,7 @@ __attribute__ ((noreturn)) void main()
         //pin.set_mode_output_lowspeed_pushpull();
 
         //blink(pin, 1);
-#if 1
+#if 0
 	periph_init_hsem();
 	HSEM_COMMON->IER |= (1 << 0); // enable interrupt for sem0
 	// goto STOP mode and wait for CM7 to init periph and wakeup us

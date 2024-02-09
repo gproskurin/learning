@@ -10,7 +10,8 @@
 
 
 #define PRIO_BLINK 1
-#define PRIO_LOGGER 2
+#define PRIO_LCD 2
+#define PRIO_LOGGER 3
 
 
 #define USART_CON_BAUDRATE 115200
@@ -49,24 +50,29 @@ void periph_init()
 		RCC_AHB4ENR_GPIOAEN_Msk
 		| RCC_AHB4ENR_GPIOBEN_Msk
 		| RCC_AHB4ENR_GPIODEN_Msk
+		| RCC_AHB4ENR_GPIOGEN_Msk
 		| RCC_AHB4ENR_GPIOHEN_Msk
 		| RCC_AHB4ENR_GPIOIEN_Msk
 		| RCC_AHB4ENR_GPIOJEN_Msk
+		| RCC_AHB4ENR_GPIOKEN_Msk
 		| RCC_AHB4ENR_HSEMEN_Msk;
 	toggle_bits_10(
 		&RCC->AHB4RSTR,
 		RCC_AHB4RSTR_GPIOARST_Msk
 			| RCC_AHB4RSTR_GPIOBRST_Msk
 			| RCC_AHB4RSTR_GPIODRST_Msk
+			| RCC_AHB4RSTR_GPIOGRST_Msk
 			| RCC_AHB4RSTR_GPIOHRST_Msk
 			| RCC_AHB4RSTR_GPIOIRST_Msk
 			| RCC_AHB4RSTR_GPIOJRST_Msk
+			| RCC_AHB4RSTR_GPIOKRST_Msk
 			// | RCC_AHB4RSTR_HSEMRST_Msk // TODO
 	);
 
 	// USART
 	RCC->APB1LENR |= RCC_APB1LENR_USART3EN_Msk;
 	toggle_bits_10(&RCC->APB1LRSTR, RCC_APB1LRSTR_USART3RST_Msk);
+
 }
 
 
@@ -92,6 +98,212 @@ freertos_utils::pin_toggle_task_t g_pin_green_arduino("blink_green_arduino", bsp
 freertos_utils::pin_toggle_task_t g_pin_green_vbus("blink_green_vbus", bsp::pin_led_green_vbus_usb_fs, PRIO_BLINK);
 
 
+constexpr uint32_t display_w = 480;
+constexpr uint32_t display_h = 272;
+constexpr uint32_t l1_w = 320;
+constexpr uint32_t l1_h = 240;
+extern std::array<unsigned char, l1_w * l1_h * 3> fb; // RGB888
+
+namespace lcd {
+
+void init_pin_af(const stm32_lib::gpio::pin_t& pin, uint8_t af)
+{
+	pin.set(
+		stm32_lib::gpio::mode_t::af,
+		stm32_lib::gpio::otype_t::push_pull,
+		stm32_lib::gpio::pupd_t::no_pupd,
+		stm32_lib::gpio::speed_t::bits_11,
+		stm32_lib::gpio::af_t(af)
+	);
+}
+
+void init()
+{
+	// lcd pixel clock, PLL3 / 8, 64/8=8Mhz
+	RCC->PLL3DIVR = (RCC->PLL3DIVR & ~RCC_PLL3DIVR_R3_Msk) | ((/*div8*/8 - 1) << RCC_PLL3DIVR_R3_Pos);
+	RCC->CR |= RCC_CR_PLL3ON;
+	while (!(RCC->CR & RCC_CR_PLL3RDY)) {}
+
+	RCC->APB3ENR |= RCC_APB3ENR_LTDCEN_Msk;
+	toggle_bits_10(&RCC->APB3RSTR, RCC_APB3RSTR_LTDCRST_Msk);
+
+	bsp::lcd::pin_disp.set(stm32_lib::gpio::speed_t::bits_00);
+	bsp::lcd::pin_disp.set_state(1);
+	bsp::lcd::pin_disp.set(stm32_lib::gpio::mode_t::output);
+
+	init_pin_af(bsp::lcd::pin_de, bsp::lcd::af);
+	init_pin_af(bsp::lcd::pin_vsync, bsp::lcd::af);
+	init_pin_af(bsp::lcd::pin_hsync, bsp::lcd::af);
+	init_pin_af(bsp::lcd::pin_clk, bsp::lcd::af);
+
+	init_pin_af(bsp::lcd::pin_r0, bsp::lcd::af);
+	init_pin_af(bsp::lcd::pin_r1, bsp::lcd::af);
+	init_pin_af(bsp::lcd::pin_r2, bsp::lcd::af);
+	init_pin_af(bsp::lcd::pin_r3, bsp::lcd::af);
+	init_pin_af(bsp::lcd::pin_r4, bsp::lcd::af);
+	init_pin_af(bsp::lcd::pin_r5, bsp::lcd::af);
+	init_pin_af(bsp::lcd::pin_r6, bsp::lcd::af);
+	init_pin_af(bsp::lcd::pin_r7, bsp::lcd::af);
+
+	init_pin_af(bsp::lcd::pin_g0, bsp::lcd::af);
+	init_pin_af(bsp::lcd::pin_g1, bsp::lcd::af);
+	init_pin_af(bsp::lcd::pin_g2, bsp::lcd::af);
+	init_pin_af(bsp::lcd::pin_g3, bsp::lcd::af);
+	init_pin_af(bsp::lcd::pin_g4, bsp::lcd::af);
+	init_pin_af(bsp::lcd::pin_g5, bsp::lcd::af);
+	init_pin_af(bsp::lcd::pin_g6, bsp::lcd::af);
+	init_pin_af(bsp::lcd::pin_g7, bsp::lcd::af);
+
+	init_pin_af(bsp::lcd::pin_b0, bsp::lcd::af);
+	init_pin_af(bsp::lcd::pin_b1, bsp::lcd::af);
+	init_pin_af(bsp::lcd::pin_b2, bsp::lcd::af);
+	init_pin_af(bsp::lcd::pin_b3, bsp::lcd::af);
+	init_pin_af(bsp::lcd::pin_b4, bsp::lcd::af);
+	init_pin_af(bsp::lcd::pin_b5, bsp::lcd::af);
+	init_pin_af(bsp::lcd::pin_b6, bsp::lcd::af);
+	init_pin_af(bsp::lcd::pin_b7, bsp::lcd::af);
+
+	constexpr uint32_t hs = 2;
+	constexpr uint32_t vs = 10;
+	// h/v front/back porch
+	constexpr uint32_t hbp = 43;
+	constexpr uint32_t vbp = 12;
+	constexpr uint32_t hfp = 8;
+	constexpr uint32_t vfp = 4;
+	// active width
+	constexpr uint32_t aaw = display_w;
+	constexpr uint32_t aah = display_h;
+
+	constexpr uint32_t l1_start_left = (display_w - l1_w) / 2;
+	constexpr uint32_t l1_start_top = (display_h - l1_h) / 2;
+
+	//LTDC->GCR |= LTDC_GCR_HSPOL;
+
+	// hsync, vsync
+	LTDC->SSCR = ((hs - 1) << 16) | (vs - 1);
+	LTDC->BPCR = ((hs + hbp - 1) << 16) | (vs + vbp - 1); // back porch
+	LTDC->AWCR = ((hs + hbp + aaw - 1) << 16) | (vs + vbp + aah - 1); // active width/height
+	LTDC->TWCR = ((hs + hbp + aaw + hfp - 1) << 16) | (vs + vbp + aah + vfp - 1); // total width/height
+
+	LTDC_Layer1->WHPCR = ((/*Hstop*/ hs + hbp + l1_start_left + l1_w - 1) << 16) | (/*Hstart*/ hs + hbp + l1_start_left);
+	LTDC_Layer1->WVPCR = ((/*Vstop*/ vs + vbp + l1_start_top + l1_h - 1) << 16) | (/*Vstart*/ vs + vbp + l1_start_top);
+
+	LTDC_Layer1->PFCR = 1; // RGB888
+
+	static_assert(sizeof(uint32_t) == sizeof(fb.data()));
+	LTDC_Layer1->CFBAR = reinterpret_cast<uint32_t>(fb.data());
+
+	LTDC_Layer1->CFBLR = ((l1_w*3) << 16) | (l1_w*3 + 7);
+	LTDC_Layer1->CFBLNR = l1_h;
+
+	LTDC_Layer1->DCCR = 0x00000000;
+	LTDC_Layer1->CACR = 0xFF;
+
+	LTDC_Layer1->CR = 1;
+	LTDC_Layer2->CR = 0;
+
+	LTDC->BCCR = 0x00FF0000;
+
+	//LTDC->LIPCR = 10000;
+	LTDC->IER = /*LTDC_IER_RRIE |*/ LTDC_IER_TERRIE | LTDC_IER_FUIE /*| LTDC_IER_LIE*/;
+
+	LTDC->SRCR = 0b01; // reload shadow registers
+
+	for (size_t i=0; i<fb.size(); i+=3) {
+		std::swap(fb[i], fb[i+2]);
+	}
+
+	LTDC->GCR |= LTDC_GCR_LTDCEN;
+	logger.log_async("LCD enabled\r\n");
+}
+
+} // namespace lcd
+
+
+freertos_utils::task_data_t<1024> task_data_lcd;
+
+
+uint32_t rnd = 314159;
+uint8_t count = 0;
+inline
+bool rnd_bool()
+{
+	if (count >= 30) {
+		rnd = rnd*uint32_t(69069) + 1;
+		count = 0;
+	} else {
+		++count;
+	}
+	return (rnd >> count) & 1;
+}
+
+int32_t d(int32_t dx, int32_t ddx, int32_t min, int32_t max)
+{
+	if (dx <= min) return 1;
+	if (dx >= max) return -1;
+	return rnd_bool() ? 1 : -1;
+}
+
+
+void task_function_lcd(void*)
+{
+	logger.log_async("LCD task started\r\n");
+	lcd::init();
+	int32_t dx = 0;
+	int32_t dy = 0;
+	int32_t ddx = 0;
+	int32_t ddy = 0;
+	for(;;) {
+		uint32_t icr = 0;
+		if (LTDC->ISR & LTDC_ISR_RRIF) {
+			logger.log_async("ISR: RRIF\r\n");
+			icr |= LTDC_ICR_CRRIF;
+		}
+		if (LTDC->ISR & LTDC_ISR_TERRIF) {
+			logger.log_async("ISR: TERRIF\r\n");
+			icr |= LTDC_ICR_CTERRIF;
+		}
+		if (LTDC->ISR & LTDC_ISR_FUIF) {
+			logger.log_async("ISR: FUIF\r\n");
+			icr |= LTDC_ICR_CFUIF;
+		}
+		if (LTDC->ISR & LTDC_ISR_LIF) {
+			logger.log_async("ISR: LIF\r\n");
+			icr |= LTDC_ICR_CLIF;
+		}
+		if (icr) {
+			LTDC->ICR = icr;
+		}
+		vTaskDelay(configTICK_RATE_HZ/100);
+
+		constexpr int32_t max_x = (display_w - l1_w) / 2;
+		constexpr int32_t max_y = (display_h - l1_h) / 2;
+		ddx = d(dx, ddx, -max_x, max_x);
+		dx += ddx;
+		ddy = d(dy, ddy, -max_y, max_y);
+		dy += ddy;
+		const uint32_t l1h = LTDC_Layer1->WHPCR;
+		LTDC_Layer1->WHPCR = (((l1h >> 16) + ddx) << 16) | ((l1h & 0xffff) + ddx);
+		const uint32_t l1v = LTDC_Layer1->WVPCR;
+		LTDC_Layer1->WVPCR = (((l1v >> 16) + ddy) << 16) | ((l1v & 0xffff) + ddy);
+		LTDC->SRCR = 0b10;
+	}
+}
+
+void create_task_lcd()
+{
+	task_data_lcd.task_handle = xTaskCreateStatic(
+		&task_function_lcd,
+		"LCD",
+		task_data_lcd.stack.size(),
+		nullptr,
+		PRIO_LCD,
+		task_data_lcd.stack.data(),
+		&task_data_lcd.task_buffer
+	);
+}
+
+
 #if 1
 template <typename Pin>
 void blink(const Pin& pin, int n)
@@ -109,16 +321,15 @@ void blink(const Pin& pin, int n)
 
 __attribute__ ((noreturn)) void main()
 {
+#if 1
 	//periph_init();
 	const auto& pin = bsp::pin_led_green;
-#if 0
-
 	pin.set_state(1);
 	pin.set_mode_output_lowspeed_pushpull();
 
 	blink(pin, 1);
 #endif
-#if 1
+#if 0
 	while (RCC->CR & RCC_CR_D2CKRDY) { blink(pin,3); for (volatile int i=0; i<5000000;++i) {}; } // wait for cpu2 to stop
 	//blink(pin, 1);
 	periph_init();
@@ -126,10 +337,12 @@ __attribute__ ((noreturn)) void main()
 	hsem0.fast_take();
 	hsem0.release();
 	while (!(RCC->CR & RCC_CR_D2CKRDY)) {} // wait for cpu2 to start
-#endif
-
 	hsem0.fast_take();
 	hsem0.release();
+#endif
+
+	periph_init();
+
 	g_pin_green.init_pin();
 	g_pin_green.pulse_continuous(configTICK_RATE_HZ, configTICK_RATE_HZ*2);
 
@@ -150,6 +363,10 @@ __attribute__ ((noreturn)) void main()
 	logger.log_sync("Creating logger task...\r\n");
 	logger.create_task("logger", PRIO_LOGGER);
 	logger.log_sync("Created logger task\r\n");
+
+	logger.log_sync("Creating LCD task...\r\n");
+	create_task_lcd();
+	logger.log_sync("Created LCD task\r\n");
 
 	logger.log_sync("Starting FreeRTOS scheduler\r\n");
 	vTaskStartScheduler();
