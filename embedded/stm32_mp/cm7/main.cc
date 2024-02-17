@@ -1,4 +1,5 @@
 #include "lib_stm32.h"
+#include "lcd.h"
 #include "bsp.h"
 #include "logging.h"
 #include "freertos_utils.h"
@@ -117,10 +118,13 @@ void init_pin_af(const stm32_lib::gpio::pin_t& pin, uint8_t af)
 	);
 }
 
+
+
+stm32_lib::lcd_t<480,272> lcd;
 void init()
 {
-	// lcd pixel clock, PLL3 / 8, 64/8=8Mhz
-	RCC->PLL3DIVR = (RCC->PLL3DIVR & ~RCC_PLL3DIVR_R3_Msk) | ((/*div8*/8 - 1) << RCC_PLL3DIVR_R3_Pos);
+	// lcd pixel clock, PLL3(=64)/div
+	RCC->PLL3DIVR = (RCC->PLL3DIVR & ~RCC_PLL3DIVR_R3_Msk) | ((/*div24*/24 - 1) << RCC_PLL3DIVR_R3_Pos);
 	RCC->CR |= RCC_CR_PLL3ON;
 	while (!(RCC->CR & RCC_CR_PLL3RDY)) {}
 
@@ -163,44 +167,32 @@ void init()
 	init_pin_af(bsp::lcd::pin_b6, bsp::lcd::af);
 	init_pin_af(bsp::lcd::pin_b7, bsp::lcd::af);
 
-	constexpr uint32_t hs = 2;
-	constexpr uint32_t vs = 10;
-	// h/v front/back porch
-	constexpr uint32_t hbp = 43;
-	constexpr uint32_t vbp = 12;
-	constexpr uint32_t hfp = 8;
-	constexpr uint32_t vfp = 4;
-	// active width
-	constexpr uint32_t aaw = display_w;
-	constexpr uint32_t aah = display_h;
+	lcd.init();
 
-	constexpr uint32_t l1_start_left = (display_w - l1_w) / 2;
-	constexpr uint32_t l1_start_top = (display_h - l1_h) / 2;
+	lcd.layer1.start_x = 20;
+	lcd.layer1.width = 320;
+	lcd.layer1.reconfig_x();
 
-	//LTDC->GCR |= LTDC_GCR_HSPOL;
+	lcd.layer1.start_y = 10;
+	lcd.layer1.height = 240;
+	lcd.layer1.reconfig_y();
 
-	// hsync, vsync
-	LTDC->SSCR = ((hs - 1) << 16) | (vs - 1);
-	LTDC->BPCR = ((hs + hbp - 1) << 16) | (vs + vbp - 1); // back porch
-	LTDC->AWCR = ((hs + hbp + aaw - 1) << 16) | (vs + vbp + aah - 1); // active width/height
-	LTDC->TWCR = ((hs + hbp + aaw + hfp - 1) << 16) | (vs + vbp + aah + vfp - 1); // total width/height
+	lcd.layer2.start_x = 120;
+	lcd.layer2.width = 320;
+	lcd.layer2.reconfig_x();
 
-	LTDC_Layer1->WHPCR = ((/*Hstop*/ hs + hbp + l1_start_left + l1_w - 1) << 16) | (/*Hstart*/ hs + hbp + l1_start_left);
-	LTDC_Layer1->WVPCR = ((/*Vstop*/ vs + vbp + l1_start_top + l1_h - 1) << 16) | (/*Vstart*/ vs + vbp + l1_start_top);
-
-	LTDC_Layer1->PFCR = 1; // RGB888
+	lcd.layer2.start_y = 100;
+	lcd.layer2.height = 240;
+	lcd.layer2.reconfig_y();
 
 	static_assert(sizeof(uint32_t) == sizeof(fb.data()));
 	LTDC_Layer1->CFBAR = reinterpret_cast<uint32_t>(fb.data());
-
-	LTDC_Layer1->CFBLR = ((l1_w*3) << 16) | (l1_w*3 + 7);
-	LTDC_Layer1->CFBLNR = l1_h;
+	LTDC_Layer2->CFBAR = reinterpret_cast<uint32_t>(fb.data());
 
 	LTDC_Layer1->DCCR = 0x00000000;
-	LTDC_Layer1->CACR = 0xFF;
-
-	LTDC_Layer1->CR = 1;
-	LTDC_Layer2->CR = 0;
+	LTDC_Layer1->CACR = 0xC0;
+	LTDC_Layer2->DCCR = 0x00000000;
+	LTDC_Layer2->CACR = 0xA0;
 
 	LTDC->BCCR = 0x00FF0000;
 
@@ -213,6 +205,8 @@ void init()
 		std::swap(fb[i], fb[i+2]);
 	}
 
+	lcd.layer1.enable();
+	lcd.layer2.enable();
 	LTDC->GCR |= LTDC_GCR_LTDCEN;
 	logger.log_async("LCD enabled\r\n");
 }
@@ -223,36 +217,14 @@ void init()
 freertos_utils::task_data_t<1024> task_data_lcd;
 
 
-uint32_t rnd = 314159;
-uint8_t count = 0;
-inline
-bool rnd_bool()
-{
-	if (count >= 30) {
-		rnd = rnd*uint32_t(69069) + 1;
-		count = 0;
-	} else {
-		++count;
-	}
-	return (rnd >> count) & 1;
-}
-
-int32_t d(int32_t dx, int32_t ddx, int32_t min, int32_t max)
-{
-	if (dx <= min) return 1;
-	if (dx >= max) return -1;
-	return rnd_bool() ? 1 : -1;
-}
-
-
 void task_function_lcd(void*)
 {
 	logger.log_async("LCD task started\r\n");
 	lcd::init();
-	int32_t dx = 0;
-	int32_t dy = 0;
-	int32_t ddx = 0;
-	int32_t ddy = 0;
+	int32_t dx1 = 1;
+	int32_t dy1 = 1;
+	int32_t dx2 = 2;
+	int32_t dy2 = -2;
 	for(;;) {
 		uint32_t icr = 0;
 		if (LTDC->ISR & LTDC_ISR_RRIF) {
@@ -274,18 +246,30 @@ void task_function_lcd(void*)
 		if (icr) {
 			LTDC->ICR = icr;
 		}
-		vTaskDelay(configTICK_RATE_HZ/100);
+		vTaskDelay(configTICK_RATE_HZ/50);
 
-		constexpr int32_t max_x = (display_w - l1_w) / 2;
-		constexpr int32_t max_y = (display_h - l1_h) / 2;
-		ddx = d(dx, ddx, -max_x, max_x);
-		dx += ddx;
-		ddy = d(dy, ddy, -max_y, max_y);
-		dy += ddy;
-		const uint32_t l1h = LTDC_Layer1->WHPCR;
-		LTDC_Layer1->WHPCR = (((l1h >> 16) + ddx) << 16) | ((l1h & 0xffff) + ddx);
-		const uint32_t l1v = LTDC_Layer1->WVPCR;
-		LTDC_Layer1->WVPCR = (((l1v >> 16) + ddy) << 16) | ((l1v & 0xffff) + ddy);
+		if (lcd::lcd.layer1.start_x < 2 || lcd::lcd.layer1.start_x > 450)
+			dx1 = -dx1;
+
+		if (lcd::lcd.layer1.start_y < 1 || lcd::lcd.layer1.start_y > 260)
+			dy1 = -dy1;
+
+		lcd::lcd.layer1.start_x += dx1;
+		lcd::lcd.layer1.reconfig_x();
+		lcd::lcd.layer1.start_y += dy1;
+		lcd::lcd.layer1.reconfig_y();
+
+		if (lcd::lcd.layer2.start_x < 2 || lcd::lcd.layer2.start_x > 453)
+			dx2 = -dx2;
+
+		if (lcd::lcd.layer2.start_y < 2 || lcd::lcd.layer2.start_y > 267)
+			dy2 = -dy2;
+
+		lcd::lcd.layer2.start_x += dx2;
+		lcd::lcd.layer2.reconfig_x();
+		lcd::lcd.layer2.start_y += dy2;
+		lcd::lcd.layer2.reconfig_y();
+
 		LTDC->SRCR = 0b10;
 	}
 }
