@@ -1,5 +1,8 @@
 ###
 
+set(UGUI_DIR "${CMAKE_SOURCE_DIR}/../_deps/UGUI")
+set(UGUI_SRC "${UGUI_DIR}/ugui.c")
+
 set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/../ld/stm32h745_cm7.ld)
 
 set(FIRMWARE_ELF ${PROJECT_NAME}.elf)
@@ -27,6 +30,7 @@ add_executable(${FIRMWARE_ELF}
 	${STM32_LIB_ROOT}/logging.cc
 	${STM32_LIB_ROOT}/my_stdlib.c
 	${STM32_LIB_ROOT}/startup.c
+	${UGUI_SRC}
 )
 
 target_link_libraries(${FIRMWARE_ELF}
@@ -34,7 +38,7 @@ target_link_libraries(${FIRMWARE_ELF}
 )
 
 target_include_directories(${FIRMWARE_ELF}
-	PRIVATE ${COMMON_INCLUDES}
+	PRIVATE ${COMMON_INCLUDES} ${UGUI_DIR}
 )
 
 set(link_options
