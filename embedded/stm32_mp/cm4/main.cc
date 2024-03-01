@@ -73,25 +73,25 @@ void periph_init_hsem()
 template <typename Pin>
 void blink(const Pin& pin, int n)
 {
-        while (n-- > 0) {
-                pin.set_state(0);
-                for (volatile int i=0; i<500000; ++i) {}
-                pin.set_state(1);
-                for (volatile int i=0; i<500000; ++i) {}
-        }
+	while (n-- > 0) {
+		pin.set_state(0);
+		for (volatile int i=0; i<500000; ++i) {}
+		pin.set_state(1);
+		for (volatile int i=0; i<500000; ++i) {}
+	}
 }
 
 
 __attribute__ ((noreturn)) void main()
 {
-        for (volatile int i=0; i<1000000; ++i) {}
+	for (volatile int i=0; i<1000000; ++i) {}
 
-        const auto& pin = bsp::pin_led_red;
+	const auto& pin = bsp::pin_led_red;
 
-        //pin.set_state(1);
-        //pin.set_mode_output_lowspeed_pushpull();
+	//pin.set_state(1);
+	//pin.set_mode_output_lowspeed_pushpull();
 
-        //blink(pin, 1);
+	//blink(pin, 1);
 #if 0
 	periph_init_hsem();
 	HSEM_COMMON->IER |= (1 << 0); // enable interrupt for sem0
@@ -100,18 +100,18 @@ __attribute__ ((noreturn)) void main()
 
 	PWR->CR1 &= ~PWR_CR1_LPDS;
 	PWR->CPU2CR &= ~PWR_CPU2CR_PDDS_D2_Msk; // keep STOP mode when in DEEPSLEEP
-        SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
-        __DSB();
-        __ISB();
-        //blink(pin, 1);
-        __WFE(); // sleep
+	SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
+	__DSB();
+	__ISB();
+	//blink(pin, 1);
+	__WFE(); // sleep
 
-        pin.set_state(1);
-        pin.set_mode_output_lowspeed_pushpull();
-        blink(pin, 1);
+	pin.set_state(1);
+	pin.set_mode_output_lowspeed_pushpull();
+	blink(pin, 1);
 
-        SCB->SCR &= ~SCB_SCR_SLEEPDEEP_Msk;
-        blink(pin, 1);
+	SCB->SCR &= ~SCB_SCR_SLEEPDEEP_Msk;
+	blink(pin, 1);
 
 	HSEM_COMMON->ICR = (1 << 0); // clear interrupt status flag for sem0
 #endif

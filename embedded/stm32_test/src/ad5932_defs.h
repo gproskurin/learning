@@ -28,12 +28,12 @@ enum ad5932_defs_t {
 	REG_delta_f_hi = 0b0011 << 12,
 	// TODO positive/negative
 
-	REG_t_int_num_cycles     = 0b01000 << 11,
-	REG_t_int_mclk_periods   = 0b01100 << 11,
-	REG_t_int_multiplier_1   = 0b00000 << 11,
-	REG_t_int_multiplier_5   = 0b00001 << 11,
-	REG_t_int_multiplier_100 = 0b00010 << 11,
-	REG_t_int_multiplier_500 = 0b00011 << 11,
+	REG_t_int_num_cycles =		0b01000 << 11,
+	REG_t_int_mclk_periods =	0b01100 << 11,
+	REG_t_int_multiplier_1 =	0b00000 << 11,
+	REG_t_int_multiplier_5 =	0b00001 << 11,
+	REG_t_int_multiplier_100 =	0b00010 << 11,
+	REG_t_int_multiplier_500 =	0b00011 << 11,
 
 	REG_f_start_lo = 0b1100 << 12,
 	REG_f_start_hi = 0b1101 << 12

@@ -15,11 +15,11 @@ set(COMMON_C_CXX_FLAGS
 	-D_POSIX_C_SOURCE=200809
 	-g -Og -ffreestanding -Wall -Wno-unused-but-set-variable -Wno-unused-variable
 	-fno-builtin-memset -fno-builtin-memcpy -fno-builtin-stpcpy
-        $<$<COMPILE_LANGUAGE:CXX>:-std=c++17 -fno-rtti -fno-exceptions>
+	$<$<COMPILE_LANGUAGE:CXX>:-std=c++17 -fno-rtti -fno-exceptions>
 )
 set(COMMON_INCLUDES
 	${CMSIS_ARM_INCLUDE}
-        ${CMSIS_DEVICE_ROOT}
+	${CMSIS_DEVICE_ROOT}
 	${STM32_LIB_ROOT}
 	${FREERTOS_ROOT}/Include
 )
