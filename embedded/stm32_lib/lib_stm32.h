@@ -231,6 +231,64 @@ void set_mode_output_analog(const gpio_pin_t& pin)
 } // namespace gpio
 
 
+namespace i2c {
+
+
+inline
+void init_pins(
+		const gpio::gpio_pin_t& scl, uint32_t af_scl,
+		const gpio::gpio_pin_t& sda, uint32_t af_sda
+	)
+{
+	using namespace gpio;
+	scl.set(af_t(af_scl), otype_t::open_drain, pupd_t::pu, speed_t::bits_01);
+	sda.set(af_t(af_sda), otype_t::open_drain, pupd_t::pu, speed_t::bits_01);
+}
+
+
+inline
+void write(I2C_TypeDef* const i2c, uint16_t addr, const uint8_t* const data, uint16_t size)
+{
+	//static_assert(addr < 0x80);
+	// TODO support size > 255, reload
+	uint16_t tx_done = 0;
+	i2c->CR2 = (i2c->CR2 & ~(I2C_CR2_SADD_Msk | I2C_CR2_NBYTES_Msk | I2C_CR2_RD_WRN))
+		| ((addr << 1) << I2C_CR2_SADD_Pos)
+		| (size << I2C_CR2_NBYTES_Pos)
+		| I2C_CR2_START_Msk
+		| I2C_CR2_AUTOEND_Msk
+		;
+	while (tx_done < size) {
+		while (!(i2c->ISR & I2C_ISR_TXE)) {} // TODO timeout
+		i2c->TXDR = data[tx_done];
+		++tx_done;
+	}
+	while (i2c->ISR & I2C_ISR_BUSY) {}
+}
+
+
+#if 0
+inline
+void read(I2C_TypeDef* const i2c, uint16_t addr, uint8_t* data, uint16_t size)
+{
+	uint16_t rx_done = 0;
+	i2c->CR2 = (i2c->CR2 & ~(I2C_CR2_SADD_Msk | I2C_CR2_NBYTES_Msk))
+		| I2C_CR2_AUTOEND_Msk
+		| I2C_CR2_START_Msk
+		| (((addr << 1) | 1) << I2C_CR2_SADD_Pos) // read
+		| (size << I2C_CR2_NBYTES_Pos);
+	while (rx_done < size) {
+		while (!(i2c->ISR & I2C_ISR_RXNE)) {} // TODO timeout
+		data[rx_done] = i2c->RXDR;
+		++rx_done;
+	}
+}
+#endif
+
+
+} // namespace i2c
+
+
 namespace spi {
 
 inline
