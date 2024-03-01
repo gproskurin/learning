@@ -69,6 +69,8 @@ public:
 		LTDC_Layer2->PFCR = 1; // RGB888, FIXME
 	}
 
+	static void update_now() { LTDC->SRCR = LTDC_SRCR_IMR; }
+	static void update_v() { LTDC->SRCR = LTDC_SRCR_VBR; }
 };
 
 
