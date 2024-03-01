@@ -5,6 +5,9 @@ include("${CMAKE_SOURCE_DIR}/../cmake/arm-none-eabi.cmake")
 project(lora C CXX)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
+set(UGUI_DIR "${CMAKE_SOURCE_DIR}/../_deps/UGUI")
+set(UGUI_SRC "${UGUI_DIR}/ugui.c")
+
 set(stm32l072_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/../ld/stm32l072.ld)
 set(stm32l072_DEFINITIONS "-DTARGET_STM32L072")
 set(stm32l072_C_CXX_ARCH_FLAGS -mcpu=cortex-m0plus -mthumb)
@@ -38,6 +41,7 @@ function(generate_targets T)
 		-I${STM32_LIB_ROOT}
 		-I${CMAKE_SOURCE_DIR}/../_deps/FreeRTOS-Kernel/include
 		-I${CMAKE_SOURCE_DIR}/src
+		-I${UGUI_DIR}
 	)
 
 	set(T_CXX_FLAGS ${CMAKE_CXX_FLAGS} ${T_C_CXX_FLAGS} -std=c++17 -fno-rtti -fno-exceptions)
@@ -64,6 +68,7 @@ function(generate_targets T)
 		${STM32_LIB_ROOT}/logging.cc
 		${STM32_LIB_ROOT}/my_stdlib.c
 		${STM32_LIB_ROOT}/startup.c
+		${UGUI_SRC}
 	)
 
 	target_link_libraries(${T_FIRMWARE_ELF}
