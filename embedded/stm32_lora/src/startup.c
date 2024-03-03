@@ -5,7 +5,8 @@ extern void vPortSVCHandler(void);
 extern void xPortPendSVHandler(void);
 extern void xPortSysTickHandler(void);
 
-extern void IntHandler_EXTI23();
+//extern void IntHandler_EXTI23();
+extern void IntHandler_EXTI4_15();
 
 
 #if defined TARGET_STM32L072
@@ -34,7 +35,8 @@ __attribute__((section(".vectors"))) void (*tab[16+32])(void) =
 	0,
 	0,
 	0,
-	IntHandler_EXTI23,
+	0,//IntHandler_EXTI23,
+	IntHandler_EXTI4_15,
 	0
 };
 #endif

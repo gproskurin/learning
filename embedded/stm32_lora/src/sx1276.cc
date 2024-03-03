@@ -1,3 +1,5 @@
+#include "bsp.h"
+
 #include "sx1276.h"
 
 
@@ -7,54 +9,27 @@ namespace sx1276 {
 constexpr hwconf_t hwc_emb = {
 	.spi = SPI1,
 	.spi_af = 0,
-
-	.pin_spi_nss{GPIOA_BASE, 15},
-	.pin_spi_sck{GPIOB_BASE, 3},
-	.pin_spi_miso{GPIOA_BASE, 6},
-	.pin_spi_mosi{GPIOA_BASE, 7}
-
-	//.pins_dio{
-	//	stm32_lib::gpio::gpio_pin_t{GPIOB_BASE, 4},
-	//	stm32_lib::gpio::gpio_pin_t{GPIOB_BASE, 1},
-	//	stm32_lib::gpio::gpio_pin_t{GPIOB_BASE, 0},
-	//	stm32_lib::gpio::gpio_pin_t{GPIOC_BASE, 13}
-	//},
+	.pin_spi_nss = bsp::sx1276::pin_spi_nss,
+	.pin_spi_sck = bsp::sx1276::pin_spi_sck,
+	.pin_spi_miso = bsp::sx1276::pin_spi_miso,
+	.pin_spi_mosi = bsp::sx1276::pin_spi_mosi,
+	.pin_dio0 = bsp::sx1276::pin_dio0,
 	//.pin_radio_reset{GPIOC_BASE, 0},
-
 	//.pin_sx1276_reset{GPIOA_BASE, 11},
-
 	//.pin_radio_tcxo_vcc{GPIOA_BASE, 12},
-	//.pin_radio_ant_sw_rx{GPIOA_BASE, 1},
-	//.pin_radio_ant_sw_tx_boost{GPIOC_BASE, 1},
-	//.pin_radio_ant_sw_tx_rfo{GPIOC_BASE, 2}
 };
 
 
 const hwconf_t hwc_ext = {
 	.spi = SPI2,
 	.spi_af = 0,
-
 	.pin_spi_nss{GPIOB_BASE, 12},
 	.pin_spi_sck{GPIOB_BASE, 13},
 	.pin_spi_miso{GPIOB_BASE, 14},
-	.pin_spi_mosi{GPIOB_BASE, 15}
-
-	//.pins_dio{
-	//	stm32_lib::gpio::gpio_pin_t{GPIOB_BASE, 4},
-	//	stm32_lib::gpio::gpio_pin_t{GPIOB_BASE, 1},
-	//	stm32_lib::gpio::gpio_pin_t{GPIOB_BASE, 0},
-	//	stm32_lib::gpio::gpio_pin_t{GPIOC_BASE, 13}
-	//},
-	//.pin_radio_reset{GPIOB_BASE, 6},
-
-	//.pin_sx1276_reset{GPIOA_BASE, 11},
-
-	//.pin_radio_tcxo_vcc{GPIOA_BASE, 12},
-	//.pin_radio_ant_sw_rx{GPIOA_BASE, 1},
-	//.pin_radio_ant_sw_tx_boost{GPIOC_BASE, 1},
-	//.pin_radio_ant_sw_tx_rfo{GPIOC_BASE, 2}
-
+	.pin_spi_mosi{GPIOB_BASE, 15},
+	.pin_dio0{GPIOB_BASE, 4}, // FIXME, not used yet
 };
+
 
 void init_radio_pin(const stm32_lib::gpio::gpio_pin_t& pin)
 {

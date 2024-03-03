@@ -1,6 +1,11 @@
+#include "FreeRTOS.h"
+#include "task.h"
+
 #include "lora.h"
+#include "bsp.h"
 
 
+extern void perif_init_irq_dio0();
 extern freertos_utils::pin_toggle_task_t<stm32_lib::gpio::pin_t> g_pin_green2;
 extern freertos_utils::pin_toggle_task_t<stm32_lib::gpio::pin_t> g_pin_blue;
 extern freertos_utils::pin_toggle_task_t<stm32_lib::gpio::pin_t> g_pin_red;
@@ -45,6 +50,26 @@ char* printf_byte(uint8_t x, char* buf)
 	return buf+2;
 }
 
+
+#if 0
+template <typename Pins>
+void printf_dio_status(const char* msg, const Pins& pins)
+{
+	static char buf[6+3 +11];
+	char* b = buf;
+	for (size_t i=0; i<pins.size(); ++i) {
+		*b++ = '0' + (pins[i].get_state() ? 1 : 0);
+	}
+	*b++ = '\r';
+	*b++ = '\n';
+	*b++ = 0;
+	logger.log_async(msg);
+	logger.log_async(buf);
+	vTaskDelay(1);
+}
+#endif
+
+
 void log_async_1(uint8_t x, char* const buf0)
 {
 	auto buf = buf0;
@@ -78,17 +103,21 @@ void reset_radio_pin(const stm32_lib::gpio::pin_t& pin)
 		stm32_lib::gpio::pupd_t::no_pupd,
 		stm32_lib::gpio::speed_t::bits_11
 	);
-	vTaskDelay(1);
+	vTaskDelay(1); // > 100 us
 
 	// make floating
 	pin.set(stm32_lib::gpio::mode_t::input);
-	vTaskDelay(configTICK_RATE_HZ/10);
+	vTaskDelay(configTICK_RATE_HZ/10); // > 5 ms
 }
 
 
 void lora_configure(const sx1276::hwconf_t& hwc)
 {
 	sx1276::spi_sx1276_t spi(hwc.spi, hwc.pin_spi_nss);
+
+	logger.log_async("--- version\r\n");
+	static char buf[8];
+	log_async_2(sx1276::regs_t::Reg_Version, spi.get_reg(sx1276::regs_t::Reg_Version), buf);
 
 	// RegOpMode
 	spi.set_reg(0x01, 0b10000000); // Lora, sleep mode
@@ -121,8 +150,7 @@ void lora_configure(const sx1276::hwconf_t& hwc)
 	spi.set_reg(0x20, (lora_config.preamble_length >> 8) & 0xFF); // msb
 	spi.set_reg(0x21, lora_config.preamble_length & 0xFF); // lsb
 
-	constexpr uint8_t reg_irq_flags = 0x12;
-	spi.set_reg(reg_irq_flags, 0xFF); // clear all
+	spi.set_reg(sx1276::regs_t::Reg_IrqFlags, 0xFF); // clear all
 }
 
 
@@ -144,35 +172,33 @@ void task_function_emb(void* arg)
 	//stm32_lib::gpio::set_state(hwp->pin_radio_tcxo_vcc, 1);
 
 	// init dio
-	//for (const auto& p : sx1276::pins_dio) {
-	//	p.set(stm32_lib::gpio::mode_t::input, stm32_lib::gpio::pupd_t::pd);
-	//}
+	hwp->pin_dio0.set(stm32_lib::gpio::mode_t::input, stm32_lib::gpio::pupd_t::no_pupd);
 
-	reset_radio_pin(/*hwp->pin_radio_reset*/ stm32_lib::gpio::pin_t(GPIOC_BASE,0));
-
-	sx1276::spi_sx1276_t spi(hwp->spi, hwp->pin_spi_nss);
-
-	logger.log_async("LORA_EMB\r\n");
-	{
-		logger.log_async("--- version\r\n");
-		static char buf[8];
-		constexpr uint8_t reg = 0x42;
-		log_async_2(reg, spi.get_reg(reg), buf);
-	}
+	reset_radio_pin(bsp::sx1276::pin_reset);
 
 	lora_configure(*hwp);
 
+	sx1276::spi_sx1276_t spi(hwp->spi, hwp->pin_spi_nss);
+
+	spi.set_reg(sx1276::regs_t::Reg_IrqFlagsMask, 0);
+	spi.set_reg(0x40, 0b00); // RegDioMapping1
+	//spi.set_reg(0x41, 0b00); // RegDioMapping2
+	perif_init_irq_dio0();
 	spi.set_reg(0x01, (spi.get_reg(0x01) & ~(0b111)) | 0b101); // RXCONT
 
+	//printf_dio_status("DIO after init\r\n", hwp->pins_dio);
 	for(;;) {
-		constexpr uint8_t reg_irq_flags = 0x12;
-		constexpr uint8_t flag_rxdone = 1 << 6;
-		const auto irq_flags = spi.get_reg(reg_irq_flags);
-		if (irq_flags & flag_rxdone) {
-			spi.set_reg(reg_irq_flags, flag_rxdone); // clear flag
+		xTaskNotifyWait(0, 0xffffffff, nullptr, configTICK_RATE_HZ /*1sec*/);
+		if (spi.get_reg(sx1276::regs_t::Reg_IrqFlags) & sx1276::reg_val_t::RegIrqFlags_RxDone)
+		{
+			// clear flag
+			spi.set_reg(sx1276::regs_t::Reg_IrqFlags, sx1276::reg_val_t::RegIrqFlags_RxDone);
+
+			// show off
 			g_pin_blue.pulse_once(configTICK_RATE_HZ/100);
 			logger.log_async("LORA_EMB: recv\r\n");
-			std::array<uint8_t, 256> rx_buf;
+
+			static std::array<uint8_t, 256> rx_buf;
 			const auto rx_size = spi.recv(rx_buf.data());
 			if (true || rx_size != 7) {
 				char buf[5];
@@ -180,41 +206,27 @@ void task_function_emb(void* arg)
 				logger.log_async(reinterpret_cast<const char*>(rx_buf.data()));
 			}
 		}
-		vTaskDelay(1);
 	}
 }
 
 
 void task_function_ext(void* arg)
 {
-	vTaskDelay(configTICK_RATE_HZ*3);
+	vTaskDelay(configTICK_RATE_HZ/2);
 	logger.log_async("LORA_EXT task started\r\n");
 	const sx1276::hwconf_t* const hwp = reinterpret_cast<const sx1276::hwconf_t*>(arg);
 
 	sx1276::spi_sx_init(*hwp, false /*slow*/);
 
-	// init dio
-	//for (const auto& p : sx1276::pins_dio) {
-	//	p.set(stm32_lib::gpio::mode_t::input, stm32_lib::gpio::pupd_t::pd);
-	//}
-
-	reset_radio_pin(/*hwp->pin_radio_reset*/ stm32_lib::gpio::pin_t(GPIOB_BASE,2));
+	reset_radio_pin(stm32_lib::gpio::pin_t(GPIOB_BASE, 2));
 
 	sx1276::spi_sx1276_t spi(hwp->spi, hwp->pin_spi_nss);
-
-	logger.log_async("LORA_EXT\r\n");
-	{
-		logger.log_async("--- version ext\r\n");
-		static char buf[8];
-		constexpr uint8_t reg = 0x42;
-		log_async_2(reg, spi.get_reg(reg), buf);
-	}
 
 	lora_configure(*hwp);
 
 	for(;;) {
 		static const std::array<uint8_t, 7> tx_buf{'B', 'z', 'y', 'k', '\r', '\n', 0};
-		vTaskDelay(configTICK_RATE_HZ*10);
+		vTaskDelay(configTICK_RATE_HZ*5);
 		spi.send(tx_buf.data(), tx_buf.size());
 		g_pin_green.pulse_once(configTICK_RATE_HZ/100);
 		logger.log_async("TX - done\r\n");

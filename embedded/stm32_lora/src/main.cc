@@ -25,8 +25,10 @@
 
 namespace sx1276 {
 	struct hwconf_t;
-	extern const hwconf_t hwc;
 };
+
+lora::task_data_t task_data_lora_emb;
+lora::task_data_t task_data_lora_ext;
 
 usart_logger_t logger;
 
@@ -100,6 +102,22 @@ void bus_init()
 }
 
 
+void perif_init_irq_dio0()
+{
+	// PB4 sx1276/dio0
+	auto const cr = &SYSCFG->EXTICR[bsp::sx1276::pin_dio0.reg / 4];
+	*cr = (*cr & ~(SYSCFG_EXTICR2_EXTI4_Msk)) | SYSCFG_EXTICR2_EXTI4_PB;
+
+	// EXTI
+	EXTI->IMR |= (1 << bsp::sx1276::pin_dio0.reg);
+	EXTI->RTSR |= (1 << bsp::sx1276::pin_dio0.reg); // irq on raising edge
+	EXTI->FTSR &= ~(1 << bsp::sx1276::pin_dio0.reg);
+	NVIC_SetPriority(EXTI4_15_IRQn, 0);
+	NVIC_EnableIRQ(EXTI4_15_IRQn);
+}
+
+
+#if 0
 //volatile bool blue_state = false;
 extern "C" __attribute__ ((interrupt)) void IntHandler_EXTI23()
 {
@@ -108,6 +126,19 @@ extern "C" __attribute__ ((interrupt)) void IntHandler_EXTI23()
 		EXTI->PR = (1 << bsp::pin_userbutton.reg);
 	}
 }
+#endif
+
+extern "C" __attribute__ ((interrupt)) void IntHandler_EXTI4_15()
+{
+	if (EXTI->PR & (1 << bsp::sx1276::pin_dio0.reg)) {
+		EXTI->PR = (1 << bsp::sx1276::pin_dio0.reg);
+
+		BaseType_t yield = pdFALSE;
+		xTaskNotifyFromISR(task_data_lora_emb.task_handle, 0, eSetBits, &yield);
+		portYIELD_FROM_ISR(yield);
+	}
+}
+
 
 
 StaticTask_t xTaskBufferIdle;
@@ -125,10 +156,6 @@ void vApplicationIdleHook(void)
 {
 	__WFI();
 }
-
-
-lora::task_data_t task_data_lora_emb;
-lora::task_data_t task_data_lora_ext;
 
 
 freertos_utils::pin_toggle_task_t g_pin_green2("blink_green2", bsp::pin_led_green2, PRIO_BLINK);

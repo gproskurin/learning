@@ -16,7 +16,7 @@ struct hwconf_t {
 	stm32_lib::gpio::gpio_pin_t pin_spi_miso;
 	stm32_lib::gpio::gpio_pin_t pin_spi_mosi;
 
-	//std::array<stm32_lib::gpio::gpio_pin_t, 6> pins_dio;
+	stm32_lib::gpio::gpio_pin_t pin_dio0;
 
 	//stm32_lib::gpio::gpio_pin_t pin_radio_reset;
 	//stm32_lib::gpio::gpio_pin_t pin_sx1276_reset;
@@ -78,8 +78,11 @@ enum regs_t : uint8_t {
 	Reg_FifoAddrPtr = 0x0D,
 	Reg_FifoTxBaseAddr = 0x0E,
 	Reg_FifoRxCurrentAddr = 0x10,
+	Reg_IrqFlagsMask = 0x11,
+	Reg_IrqFlags = 0x12,
 	Reg_FifoRxBytesNb = 0x13,
 	Reg_PayloadLength = 0x22,
+	Reg_Version = 0x42,
 };
 
 enum reg_val_t : uint8_t {
@@ -95,7 +98,9 @@ enum reg_val_t : uint8_t {
 	RegOpMode_Mode_FSRX = 0b100,
 	RegOpMode_Mode_RXCONTINUOUS = 0b101,
 	RegOpMode_Mode_RXSINGLE = 0b110,
-	RegOpMode_Mode_CAD = 0b111
+	RegOpMode_Mode_CAD = 0b111,
+
+	RegIrqFlags_RxDone = 1 << 6,
 };
 
 
