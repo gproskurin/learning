@@ -39,6 +39,29 @@ constexpr stm32_lib::gpio::gpio_pin_t pin_led_green2{GPIOA_BASE, 5};
 
 constexpr stm32_lib::gpio::gpio_pin_t pin_userbutton{GPIOB_BASE, 2};
 
+namespace sx1276 {
+	// Connection between STM32 and Semtech IC
+	constexpr stm32_lib::gpio::gpio_pin_t pin_dio0{GPIOB_BASE, 4};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_dio1{GPIOB_BASE, 1};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_dio2{GPIOB_BASE, 0};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_dio3{GPIOC_BASE, 13};
+	//constexpr stm32_lib::gpio::gpio_pin_t pin_dio4{GPIOA_BASE, 5};
+	//constexpr stm32_lib::gpio::gpio_pin_t pin_dio5{GPIOA_BASE, 4};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_reset{GPIOC_BASE, 0};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_spi_sck{GPIOB_BASE, 3};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_spi_miso{GPIOA_BASE, 6};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_spi_mosi{GPIOA_BASE, 7};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_spi_nss{GPIOA_BASE, 15};
+
+	//  Connection between STM32 and RF switch
+	constexpr stm32_lib::gpio::gpio_pin_t pin_vctl1{GPIOA_BASE, 1};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_vctl2{GPIOC_BASE, 2};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_vctl3{GPIOC_BASE, 1};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_radio_ant_sw_rx{pin_vctl1};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_radio_ant_sw_tx_boost{pin_vctl2};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_radio_ant_sw_tx_rfo{pin_vctl3};
+} // namespace
+
 #endif
 
 
