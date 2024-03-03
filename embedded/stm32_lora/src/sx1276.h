@@ -16,7 +16,7 @@ struct hwconf_t {
 	stm32_lib::gpio::gpio_pin_t pin_spi_miso;
 	stm32_lib::gpio::gpio_pin_t pin_spi_mosi;
 
-	//std::array<stm32_lib::gpio::gpio_pin_t, 4> pins_dio;
+	//std::array<stm32_lib::gpio::gpio_pin_t, 6> pins_dio;
 
 	//stm32_lib::gpio::gpio_pin_t pin_radio_reset;
 	//stm32_lib::gpio::gpio_pin_t pin_sx1276_reset;
@@ -25,6 +25,47 @@ struct hwconf_t {
 	//stm32_lib::gpio::gpio_pin_t pin_radio_ant_sw_rx;
 	//stm32_lib::gpio::gpio_pin_t pin_radio_ant_sw_tx_boost;
 	//stm32_lib::gpio::gpio_pin_t pin_radio_ant_sw_tx_rfo;
+};
+
+
+enum cf_t : uint8_t {
+	// for RegModemConfig1
+	bw_khz_7_8 = 0b0000,
+	bw_khz_10_4 = 0b0001,
+	bw_khz_15_6 = 0b0010,
+	bw_khz_20_8 = 0b0011,
+	bw_khz_31_25 = 0b0100,
+	bw_khz_41_7 = 0b0101,
+	bw_khz_62_5 = 0b0110,
+	bw_khz_125 = 0b0111,
+	bw_khz_250 = 0b1000,
+	bw_khz_500 = 0b1001,
+	bw_Msk = 0b11110000,
+	bw_Pos = 4,
+
+	// error coding rate
+	ecr_4_5 = 0b001,
+	ecr_4_6 = 0b010,
+	ecr_4_7 = 0b011,
+	ecr_4_8 = 0b100,
+	ecr_Msk = 0b1110,
+	ecr_Pos = 1,
+
+	sf_Pos = 4,
+
+	crc_Pos = 2,
+
+	implicit_header_Pos = 0
+};
+
+struct lora_config_t {
+	uint32_t freq;
+	uint8_t sf;
+	bool crc;
+	cf_t bw;
+	cf_t ecr;
+	uint16_t preamble_length;
+	bool implicit_header;
 };
 
 extern const hwconf_t hwc_emb;

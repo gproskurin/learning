@@ -22,6 +22,17 @@ constexpr uint32_t calc_freq_reg()
 }
 
 
+constexpr sx1276::lora_config_t lora_config = {
+	.freq = 866000000,
+	.sf = 7,
+	.crc = true,
+	.bw = sx1276::cf_t::bw_khz_125,
+	.ecr = sx1276::cf_t::ecr_4_5,
+	.preamble_length = 8,
+	.implicit_header = false
+};
+
+
 char prn_halfbyte(uint8_t x)
 {
 	return ((x <= 9) ? '0' : ('A'-10)) + x;
@@ -75,6 +86,46 @@ void reset_radio_pin(const stm32_lib::gpio::pin_t& pin)
 }
 
 
+void lora_configure(const sx1276::hwconf_t& hwc)
+{
+	sx1276::spi_sx1276_t spi(hwc.spi, hwc.pin_spi_nss);
+
+	// RegOpMode
+	spi.set_reg(0x01, 0b10000000); // Lora, sleep mode
+
+	// carrier frequency
+	// RegFrMsb, RegFrMid, RegFrLsb
+	{
+		constexpr uint32_t freq_reg = calc_freq_reg<lora_config.freq>();
+		static_assert(freq_reg == 0xD88000);
+		spi.set_reg(0x06, uint8_t((freq_reg >> 16) & 0xFF)); // msb
+		spi.set_reg(0x07, uint8_t((freq_reg >> 8) & 0xFF)); // mid
+		spi.set_reg(0x08, uint8_t(freq_reg & 0xFF)); // lsb
+	}
+
+	// RegModemConfig1
+	spi.set_reg(
+		0x1D,
+		(lora_config.bw << sx1276::cf_t::bw_Pos)
+			| (lora_config.ecr << sx1276::cf_t::ecr_Pos)
+			| ((lora_config.implicit_header ? 1 : 0) << sx1276::cf_t::implicit_header_Pos)
+	);
+	// RegModemConfig2
+	spi.set_reg(
+		0x1E,
+		(lora_config.sf << sx1276::cf_t::sf_Pos)
+			| ((lora_config.crc ? 1 : 0) << sx1276::cf_t::crc_Pos)
+	);
+
+	// RegPreamble
+	spi.set_reg(0x20, (lora_config.preamble_length >> 8) & 0xFF); // msb
+	spi.set_reg(0x21, lora_config.preamble_length & 0xFF); // lsb
+
+	constexpr uint8_t reg_irq_flags = 0x12;
+	spi.set_reg(reg_irq_flags, 0xFF); // clear all
+}
+
+
 } // namespace
 
 
@@ -91,7 +142,6 @@ void task_function_emb(void* arg)
 	//sx1276::init_radio_pin(hwp->pin_radio_ant_sw_tx_rfo);
 
 	//stm32_lib::gpio::set_state(hwp->pin_radio_tcxo_vcc, 1);
-	vTaskDelay(configTICK_RATE_HZ/10);
 
 	// init dio
 	//for (const auto& p : sx1276::pins_dio) {
@@ -103,11 +153,6 @@ void task_function_emb(void* arg)
 	sx1276::spi_sx1276_t spi(hwp->spi, hwp->pin_spi_nss);
 
 	logger.log_async("LORA_EMB\r\n");
-	static std::array<std::array<char, 8>, 127> bufs;
-	for (uint8_t reg=0x01; reg<=0x14; ++reg) {
-		const auto x = spi.get_reg(reg);
-		log_async_2(reg, x, bufs[reg].data());
-	}
 	{
 		logger.log_async("--- version\r\n");
 		static char buf[8];
@@ -115,32 +160,12 @@ void task_function_emb(void* arg)
 		log_async_2(reg, spi.get_reg(reg), buf);
 	}
 
-	// RegOpMode
-	spi.set_reg(0x01, 0b10000000); // Lora, sleep mode
-
-	// carrier frequency
-	// RegFrMsb, RegFrMid, RegFrLsb
-	constexpr uint32_t freq = calc_freq_reg<866000000>();
-	static_assert(freq == 0xD88000);
-	spi.set_reg(0x06, uint8_t((freq >> 16) & 0xFF)); // msb
-	spi.set_reg(0x07, uint8_t((freq >> 8) & 0xFF)); // mid
-	spi.set_reg(0x08, uint8_t(freq & 0xFF)); // lsb
-
-	// RegModemConfig1
-	spi.set_reg(0x1D, (0b0111 << 4) | (0b001 << 1) | 0); // 125kHz, 4/8 error coding, expilcit header
-	// RegModemConfig2
-	spi.set_reg(0x1E, (7/*SF*/ << 4) | (1 << 2/*crc on*/));
-
-	// RegPreamble
-	spi.set_reg(0x20, 0); // msb
-	spi.set_reg(0x21, 8); // lsb
-
-	constexpr uint8_t reg_irq_flags = 0x12;
-	spi.set_reg(reg_irq_flags, 0xFF); // clear all
+	lora_configure(*hwp);
 
 	spi.set_reg(0x01, (spi.get_reg(0x01) & ~(0b111)) | 0b101); // RXCONT
 
 	for(;;) {
+		constexpr uint8_t reg_irq_flags = 0x12;
 		constexpr uint8_t flag_rxdone = 1 << 6;
 		const auto irq_flags = spi.get_reg(reg_irq_flags);
 		if (irq_flags & flag_rxdone) {
@@ -178,11 +203,6 @@ void task_function_ext(void* arg)
 	sx1276::spi_sx1276_t spi(hwp->spi, hwp->pin_spi_nss);
 
 	logger.log_async("LORA_EXT\r\n");
-	static std::array<std::array<char, 8>, 127> bufs;
-	for (uint8_t reg=0x01; reg<=0x14; ++reg) {
-		const auto x = spi.get_reg(reg);
-		log_async_2(reg, x, bufs[reg].data());
-	}
 	{
 		logger.log_async("--- version ext\r\n");
 		static char buf[8];
@@ -190,28 +210,7 @@ void task_function_ext(void* arg)
 		log_async_2(reg, spi.get_reg(reg), buf);
 	}
 
-	// RegOpMode
-	spi.set_reg(0x01, 0b10000000); // Lora, sleep mode
-
-	// carrier frequency
-	// RegFrMsb, RegFrMid, RegFrLsb
-	constexpr uint32_t freq = calc_freq_reg<866000000>();
-	static_assert(freq == 0xD88000);
-	spi.set_reg(0x06, (freq >> 16) & 0xFF); // msb
-	spi.set_reg(0x07, (freq >> 8) & 0xFF); // mid
-	spi.set_reg(0x08, freq & 0xFF); // lsb
-
-	// RegModemConfig1
-	spi.set_reg(0x1D, (0b0111 << 4) | (0b001 << 1) | 0); // 125kHz, 4/8 error coding, expilcit header
-	// RegModemConfig2
-	spi.set_reg(0x1E, (7/*SF*/ << 4) | (1 << 2/*crc on*/));
-
-	// RegPreamble
-	spi.set_reg(0x20, 0); // msb
-	spi.set_reg(0x21, 8); // lsb
-
-	constexpr uint8_t reg_irq_flags = 0x12;
-	spi.set_reg(reg_irq_flags, 0xFF); // clear all
+	lora_configure(*hwp);
 
 	for(;;) {
 		static const std::array<uint8_t, 7> tx_buf{'B', 'z', 'y', 'k', '\r', '\n', 0};

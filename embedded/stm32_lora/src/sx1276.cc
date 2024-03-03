@@ -4,7 +4,7 @@
 namespace sx1276 {
 
 
-const hwconf_t hwc_emb = {
+constexpr hwconf_t hwc_emb = {
 	.spi = SPI1,
 	.spi_af = 0,
 
@@ -27,7 +27,6 @@ const hwconf_t hwc_emb = {
 	//.pin_radio_ant_sw_rx{GPIOA_BASE, 1},
 	//.pin_radio_ant_sw_tx_boost{GPIOC_BASE, 1},
 	//.pin_radio_ant_sw_tx_rfo{GPIOC_BASE, 2}
-
 };
 
 
@@ -90,9 +89,6 @@ void spi_sx_init(const hwconf_t& hwc, bool fast)
 
 	hwc.spi->CR1 = cr1 | SPI_CR1_SPE;
 }
-
-
-void spi_read_fifo(const hwconf_t& hwc, uint8_t* buf, size_t buf_size);
 
 
 } // namespace
