@@ -16,8 +16,9 @@
 
 #define PRIO_BLINK 1
 #define PRIO_DISPLAY 2
-#define PRIO_LORA 5
-#define PRIO_LOGGER 8
+#define PRIO_LORA_EMB 5
+#define PRIO_LORA_EXT 5
+#define PRIO_LOGGER 8 // FIXME
 
 
 #define USART_CON_BAUDRATE 115200
@@ -72,9 +73,9 @@ void bus_init()
 	RCC->IOPENR = RCC_IOPENR_IOPAEN_Msk | RCC_IOPENR_IOPBEN_Msk | RCC_IOPENR_IOPCEN_Msk;
 	toggle_bits_10(&RCC->IOPRSTR, RCC_IOPRSTR_IOPARST | RCC_IOPRSTR_IOPBRST | RCC_IOPRSTR_IOPCRST);
 
-	// USART2
-	RCC->APB1ENR |= RCC_APB1ENR_USART2EN_Msk | RCC_APB1ENR_I2C1EN_Msk;
-	toggle_bits_10(&RCC->APB1RSTR, RCC_APB1RSTR_USART2RST_Msk | RCC_APB1RSTR_I2C1RST_Msk);
+	// USART2 & SPI2
+	RCC->APB1ENR |= RCC_APB1ENR_USART2EN_Msk | RCC_APB1ENR_I2C1EN_Msk | RCC_APB1ENR_SPI2EN_Msk;
+	toggle_bits_10(&RCC->APB1RSTR, RCC_APB1RSTR_USART2RST_Msk | RCC_APB1RSTR_I2C1RST_Msk | RCC_APB1RSTR_SPI2RST_Msk);
 
 	// SPI1 & SYSCFG
 	RCC->APB2ENR |= RCC_APB2ENR_SPI1EN_Msk | RCC_APB2ENR_SYSCFGEN_Msk;
@@ -99,7 +100,7 @@ void bus_init()
 }
 
 
-volatile bool blue_state = false;
+//volatile bool blue_state = false;
 extern "C" __attribute__ ((interrupt)) void IntHandler_EXTI23()
 {
 	if (EXTI->PR & (1 << bsp::pin_userbutton.reg)) {
@@ -126,7 +127,8 @@ void vApplicationIdleHook(void)
 }
 
 
-lora::task_data_t lora_task_data;
+lora::task_data_t task_data_lora_emb;
+lora::task_data_t task_data_lora_ext;
 
 
 freertos_utils::pin_toggle_task_t g_pin_green2("blink_green2", bsp::pin_led_green2, PRIO_BLINK);
@@ -305,9 +307,13 @@ __attribute__ ((noreturn)) void main()
 	g_pin_blue.init_pin();
 	g_pin_red.init_pin();
 
-	logger.log_sync("Creating LORA task...\r\n");
-	lora::create_task("lora", PRIO_LORA, lora_task_data, &sx1276::hwc);
-	logger.log_sync("Created LORA task\r\n");
+	logger.log_sync("Creating LORA_EMB task...\r\n");
+	lora::create_task_emb("lora_emb", PRIO_LORA_EMB, task_data_lora_emb, &sx1276::hwc_emb);
+	logger.log_sync("Created LORA_EMB task\r\n");
+
+	logger.log_sync("Creating LORA_EXT task...\r\n");
+	lora::create_task_ext("lora_ext", PRIO_LORA_EXT, task_data_lora_ext, &sx1276::hwc_ext);
+	logger.log_sync("Created LORA_EXT task\r\n");
 
 	logger.log_sync("Creating DISPLAY task...\r\n");
 	create_task_display();

@@ -16,23 +16,29 @@ struct hwconf_t {
 	stm32_lib::gpio::gpio_pin_t pin_spi_miso;
 	stm32_lib::gpio::gpio_pin_t pin_spi_mosi;
 
-	std::array<stm32_lib::gpio::gpio_pin_t, 4> pins_dio;
+	//std::array<stm32_lib::gpio::gpio_pin_t, 4> pins_dio;
 
-	stm32_lib::gpio::gpio_pin_t pin_radio_reset;
+	//stm32_lib::gpio::gpio_pin_t pin_radio_reset;
 	//stm32_lib::gpio::gpio_pin_t pin_sx1276_reset;
 
 	//stm32_lib::gpio::gpio_pin_t pin_radio_tcxo_vcc;
-	stm32_lib::gpio::gpio_pin_t pin_radio_ant_sw_rx;
-	stm32_lib::gpio::gpio_pin_t pin_radio_ant_sw_tx_boost;
-	stm32_lib::gpio::gpio_pin_t pin_radio_ant_sw_tx_rfo;
+	//stm32_lib::gpio::gpio_pin_t pin_radio_ant_sw_rx;
+	//stm32_lib::gpio::gpio_pin_t pin_radio_ant_sw_tx_boost;
+	//stm32_lib::gpio::gpio_pin_t pin_radio_ant_sw_tx_rfo;
 };
 
-extern const hwconf_t hwc;
+extern const hwconf_t hwc_emb;
+extern const hwconf_t hwc_ext;
 
 
 enum regs_t : uint8_t {
-	RegFifo = 0x00,
-	RegOpMode = 0x01
+	Reg_Fifo = 0x00,
+	Reg_OpMode = 0x01,
+	Reg_FifoAddrPtr = 0x0D,
+	Reg_FifoTxBaseAddr = 0x0E,
+	Reg_FifoRxCurrentAddr = 0x10,
+	Reg_FifoRxBytesNb = 0x13,
+	Reg_PayloadLength = 0x22,
 };
 
 enum reg_val_t : uint8_t {
@@ -63,7 +69,7 @@ void sleep_ns(int ns)
 void init_radio_pin(const stm32_lib::gpio::gpio_pin_t&);
 
 
-void spi_sx_init(const hwconf_t&);
+void spi_sx_init(const hwconf_t&, bool fast);
 
 
 class spi_sx1276_t {
@@ -83,11 +89,47 @@ public:
 
 	uint8_t set_reg(uint8_t reg, uint8_t val)
 	{
+		const std::array<uint8_t, 2> tx_buf{uint8_t(reg|0x80), val};
+		std::array<uint8_t, 2> rx_buf;
 		nss_0();
-		stm32_lib::spi::write<uint8_t>(spi_, 0b10000000 | reg);
-		const auto r = stm32_lib::spi::write<uint8_t>(spi_, val);
+		stm32_lib::spi::write<uint8_t>(spi_, tx_buf.size(), tx_buf.data(), rx_buf.data());
 		nss_1();
-		return r;
+		return rx_buf[1];
+	}
+
+	void spi_write(const uint8_t* const tx_buf, size_t tx_size)
+	{
+		nss_0();
+		stm32_lib::spi::write<uint8_t>(spi_, tx_size, tx_buf, nullptr);
+		nss_1();
+	}
+
+	void send(const uint8_t* buf, size_t buf_size)
+	{
+		set_reg(0x01, (get_reg(0x01) & ~(0b111)) | 0b000); // mode: SLEEP
+		set_reg(regs_t::Reg_PayloadLength, buf_size);
+		set_reg(regs_t::Reg_FifoAddrPtr, 0x80);
+		set_reg(regs_t::Reg_FifoTxBaseAddr, 0x80);
+		set_reg(0x01, (get_reg(0x01) & ~(0b111)) | 0b001); // mode: STANDBY
+		nss_0();
+		stm32_lib::spi::write<uint8_t>(spi_, 0x80 | 0); // write to reg 0x00
+		stm32_lib::spi::write<uint8_t>(spi_, buf_size, buf, nullptr);
+		nss_1();
+		set_reg(0x01, (get_reg(0x01) & ~(0b111)) | 0b011); // mode: TX
+	}
+
+	uint8_t recv(uint8_t* rx_buf)
+	{
+		const auto rx_size = get_reg(regs_t::Reg_FifoRxBytesNb);
+		const auto fifo_addr = get_reg(regs_t::Reg_FifoRxCurrentAddr);
+		set_reg(regs_t::Reg_FifoAddrPtr, fifo_addr);
+
+		nss_0();
+		stm32_lib::spi::write<uint8_t>(spi_, regs_t::Reg_Fifo); // read from fifo
+		stm32_lib::spi::write<uint8_t>(spi_, rx_size, nullptr, rx_buf);
+		nss_1();
+
+		return rx_size;
 	}
 
 private:
