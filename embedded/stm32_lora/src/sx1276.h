@@ -101,6 +101,8 @@ enum reg_val_t : uint8_t {
 	RegOpMode_Mode_CAD = 0b111,
 
 	RegIrqFlags_RxDone = 1 << 6,
+	RegIrqFlags_PayloadCrcError = 1 << 5,
+	RegIrqFlags_TxDone = 1 << 3,
 };
 
 
@@ -150,21 +152,21 @@ public:
 		nss_1();
 	}
 
-	void send(const uint8_t* buf, size_t buf_size)
+	void fifo_write(const uint8_t* buf, size_t buf_size)
 	{
-		set_reg(0x01, (get_reg(0x01) & ~(0b111)) | 0b000); // mode: SLEEP
+		//set_reg(0x01, (get_reg(0x01) & ~(0b111)) | 0b000); // mode: SLEEP
 		set_reg(regs_t::Reg_PayloadLength, buf_size);
 		set_reg(regs_t::Reg_FifoAddrPtr, 0x80);
 		set_reg(regs_t::Reg_FifoTxBaseAddr, 0x80);
-		set_reg(0x01, (get_reg(0x01) & ~(0b111)) | 0b001); // mode: STANDBY
+		//set_reg(0x01, (get_reg(0x01) & ~(0b111)) | 0b001); // mode: STANDBY
 		nss_0();
 		stm32_lib::spi::write<uint8_t>(spi_, 0x80 | 0); // write to reg 0x00
 		stm32_lib::spi::write<uint8_t>(spi_, buf_size, buf, nullptr);
 		nss_1();
-		set_reg(0x01, (get_reg(0x01) & ~(0b111)) | 0b011); // mode: TX
+		//set_reg(0x01, (get_reg(0x01) & ~(0b111)) | 0b011); // mode: TX
 	}
 
-	uint8_t recv(uint8_t* rx_buf)
+	uint8_t fifo_read(uint8_t* rx_buf)
 	{
 		const auto rx_size = get_reg(regs_t::Reg_FifoRxBytesNb);
 		const auto fifo_addr = get_reg(regs_t::Reg_FifoRxCurrentAddr);
