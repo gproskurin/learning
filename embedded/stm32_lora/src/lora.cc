@@ -38,6 +38,12 @@ constexpr sx1276::lora_config_t lora_config = {
 };
 
 
+uint8_t sx1276_opmode(uint8_t v, uint8_t op_mode)
+{
+	return (v & ~sx1276::reg_val_t::OpMode_Mode_msk) | (op_mode << sx1276::reg_val_t::OpMode_Mode_pos);
+}
+
+
 char prn_halfbyte(uint8_t x)
 {
 	return ((x <= 9) ? '0' : ('A'-10)) + x;
@@ -117,10 +123,10 @@ void lora_configure(const sx1276::hwconf_t& hwc)
 
 	logger.log_async("--- version\r\n");
 	static char buf[8];
-	log_async_2(sx1276::regs_t::Reg_Version, spi.get_reg(sx1276::regs_t::Reg_Version), buf);
+	log_async_2(sx1276::regs_t::Version, spi.get_reg(sx1276::regs_t::Version), buf);
 
 	// RegOpMode
-	spi.set_reg(0x01, 0b10000000); // Lora, sleep mode
+	spi.set_reg(0x01, sx1276_opmode(0b10000000, sx1276::reg_val_t::OpMode_Mode_SLEEP)); // Lora, sleep mode
 
 	// carrier frequency
 	// RegFrMsb, RegFrMid, RegFrLsb
@@ -151,7 +157,7 @@ void lora_configure(const sx1276::hwconf_t& hwc)
 	spi.set_reg(0x20, lora_config.preamble_length >> 8); // msb
 	spi.set_reg(0x21, lora_config.preamble_length & 0xFF); // lsb
 
-	spi.set_reg(sx1276::regs_t::Reg_IrqFlags, 0xFF); // clear all
+	spi.set_reg(sx1276::regs_t::IrqFlags, 0xFF); // clear all
 }
 
 
@@ -180,27 +186,27 @@ void task_function_emb(void* arg)
 	lora_configure(*hwp);
 	sx1276::spi_sx1276_t spi(hwp->spi, hwp->pin_spi_nss);
 
-	spi.set_reg(sx1276::regs_t::Reg_IrqFlagsMask, 0);
+	spi.set_reg(sx1276::regs_t::IrqFlagsMask, 0);
 	spi.set_reg(0x40, 0b00); // RegDioMapping1
 	//spi.set_reg(0x41, 0b00); // RegDioMapping2
 	perif_init_irq_dio0();
-	spi.set_reg(0x01, (spi.get_reg(0x01) & ~(0b111)) | 0b101); // RXCONT
+	spi.set_reg(0x01, sx1276_opmode(spi.get_reg(0x01), sx1276::reg_val_t::OpMode_Mode_RXCONTINUOUS));
 
 	//printf_dio_status("DIO after init\r\n", hwp->pins_dio);
 	for(;;) {
 		xTaskNotifyWait(0, 0xffffffff, nullptr, configTICK_RATE_HZ /*1sec*/);
-		const auto flags = spi.get_reg(sx1276::regs_t::Reg_IrqFlags);
-		if (flags & sx1276::reg_val_t::RegIrqFlags_RxDone)
+		const auto flags = spi.get_reg(sx1276::regs_t::IrqFlags);
+		if (flags & sx1276::reg_val_t::IrqFlags_RxDone)
 		{
-			const bool crc_error = flags & sx1276::reg_val_t::RegIrqFlags_PayloadCrcError;
+			const bool crc_error = flags & sx1276::reg_val_t::IrqFlags_PayloadCrcError;
 			if (crc_error) {
 				g_pin_red.pulse_once(configTICK_RATE_HZ*2);
 				logger.log_async("LORA_EMB: recv crc error\r\n");
 			}
 			// clear flags
 			spi.set_reg(
-				sx1276::regs_t::Reg_IrqFlags,
-				sx1276::reg_val_t::RegIrqFlags_RxDone | sx1276::reg_val_t::RegIrqFlags_PayloadCrcError
+				sx1276::regs_t::IrqFlags,
+				sx1276::reg_val_t::IrqFlags_RxDone | sx1276::reg_val_t::IrqFlags_PayloadCrcError
 			);
 
 			// show off
@@ -232,14 +238,10 @@ void task_function_ext(void* arg)
 	lora_configure(*hwp);
 	sx1276::spi_sx1276_t spi(hwp->spi, hwp->pin_spi_nss);
 
-	spi.set_reg(sx1276::regs_t::Reg_IrqFlagsMask, 0);
+	spi.set_reg(sx1276::regs_t::IrqFlagsMask, 0);
 
-	const uint8_t reg_01 = spi.get_reg(sx1276::regs_t::Reg_OpMode);
-	spi.set_reg(
-		sx1276::regs_t::Reg_OpMode,
-		(reg_01 & ~(sx1276::reg_val_t::RegOpMode_Mode_msk))
-			| (sx1276::reg_val_t::RegOpMode_Mode_STDBY << sx1276::reg_val_t::RegOpMode_Mode_pos)
-	);
+	const uint8_t reg_01 = spi.get_reg(sx1276::regs_t::OpMode);
+	spi.set_reg(sx1276::regs_t::OpMode, sx1276_opmode(reg_01, sx1276::reg_val_t::OpMode_Mode_STDBY));
 	for(;;) {
 		static const std::array<uint8_t, 11> tx_buf{
 			'B', 'E', 'E', 'F',
@@ -249,11 +251,11 @@ void task_function_ext(void* arg)
 
 		g_pin_green.on();
 		spi.fifo_write(tx_buf.data(), tx_buf.size());
-		spi.set_reg(sx1276::regs_t::Reg_OpMode, (reg_01 & ~(0b111)) | 0b011); // TX mode
-		while (!(spi.get_reg(sx1276::regs_t::Reg_IrqFlags) & sx1276::reg_val_t::RegIrqFlags_TxDone)) {
+		spi.set_reg(sx1276::regs_t::OpMode, sx1276_opmode(reg_01, sx1276::reg_val_t::OpMode_Mode_TX));
+		while (!(spi.get_reg(sx1276::regs_t::IrqFlags) & sx1276::reg_val_t::IrqFlags_TxDone)) {
 			vTaskDelay(1);
 		}
-		spi.set_reg(sx1276::regs_t::Reg_IrqFlags, sx1276::reg_val_t::RegIrqFlags_TxDone); // clear flag
+		spi.set_reg(sx1276::regs_t::IrqFlags, sx1276::reg_val_t::IrqFlags_TxDone); // clear flag
 		g_pin_green.off();
 
 		logger.log_async("TX - done\r\n");

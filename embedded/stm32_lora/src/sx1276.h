@@ -73,36 +73,36 @@ extern const hwconf_t hwc_ext;
 
 
 enum regs_t : uint8_t {
-	Reg_Fifo = 0x00,
-	Reg_OpMode = 0x01,
-	Reg_FifoAddrPtr = 0x0D,
-	Reg_FifoTxBaseAddr = 0x0E,
-	Reg_FifoRxCurrentAddr = 0x10,
-	Reg_IrqFlagsMask = 0x11,
-	Reg_IrqFlags = 0x12,
-	Reg_FifoRxBytesNb = 0x13,
-	Reg_PayloadLength = 0x22,
-	Reg_Version = 0x42,
+	Fifo = 0x00,
+	OpMode = 0x01,
+	FifoAddrPtr = 0x0D,
+	FifoTxBaseAddr = 0x0E,
+	FifoRxCurrentAddr = 0x10,
+	IrqFlagsMask = 0x11,
+	IrqFlags = 0x12,
+	FifoRxBytesNb = 0x13,
+	PayloadLength = 0x22,
+	Version = 0x42,
 };
 
 enum reg_val_t : uint8_t {
-	RegOpMode_LongRangeMode = 0b10000000,
-	RegOpMode_AccessSharedReg = 0b01000000,
-	RegOpMode_LowFrequencyModeOn = 0b00001000,
-	RegOpMode_Mode_msk = 0b111,
-	RegOpMode_Mode_pos = 0,
-	RegOpMode_Mode_SLEEP = 0b000,
-	RegOpMode_Mode_STDBY = 0b001,
-	RegOpMode_Mode_FSTX = 0b010,
-	RegOpMode_Mode_TX = 0b011,
-	RegOpMode_Mode_FSRX = 0b100,
-	RegOpMode_Mode_RXCONTINUOUS = 0b101,
-	RegOpMode_Mode_RXSINGLE = 0b110,
-	RegOpMode_Mode_CAD = 0b111,
+	OpMode_LongRangeMode = 0b10000000,
+	OpMode_AccessSharedReg = 0b01000000,
+	OpMode_LowFrequencyModeOn = 0b00001000,
+	OpMode_Mode_msk = 0b111,
+	OpMode_Mode_pos = 0,
+	OpMode_Mode_SLEEP = 0b000,
+	OpMode_Mode_STDBY = 0b001,
+	OpMode_Mode_FSTX = 0b010,
+	OpMode_Mode_TX = 0b011,
+	OpMode_Mode_FSRX = 0b100,
+	OpMode_Mode_RXCONTINUOUS = 0b101,
+	OpMode_Mode_RXSINGLE = 0b110,
+	OpMode_Mode_CAD = 0b111,
 
-	RegIrqFlags_RxDone = 1 << 6,
-	RegIrqFlags_PayloadCrcError = 1 << 5,
-	RegIrqFlags_TxDone = 1 << 3,
+	IrqFlags_RxDone = 1 << 6,
+	IrqFlags_PayloadCrcError = 1 << 5,
+	IrqFlags_TxDone = 1 << 3,
 };
 
 
@@ -154,26 +154,23 @@ public:
 
 	void fifo_write(const uint8_t* buf, size_t buf_size)
 	{
-		//set_reg(0x01, (get_reg(0x01) & ~(0b111)) | 0b000); // mode: SLEEP
-		set_reg(regs_t::Reg_PayloadLength, buf_size);
-		set_reg(regs_t::Reg_FifoAddrPtr, 0x80);
-		set_reg(regs_t::Reg_FifoTxBaseAddr, 0x80);
-		//set_reg(0x01, (get_reg(0x01) & ~(0b111)) | 0b001); // mode: STANDBY
+		set_reg(regs_t::PayloadLength, buf_size);
+		set_reg(regs_t::FifoAddrPtr, 0x80);
+		set_reg(regs_t::FifoTxBaseAddr, 0x80);
 		nss_0();
 		stm32_lib::spi::write<uint8_t>(spi_, 0x80 | 0); // write to reg 0x00
 		stm32_lib::spi::write<uint8_t>(spi_, buf_size, buf, nullptr);
 		nss_1();
-		//set_reg(0x01, (get_reg(0x01) & ~(0b111)) | 0b011); // mode: TX
 	}
 
 	uint8_t fifo_read(uint8_t* rx_buf)
 	{
-		const auto rx_size = get_reg(regs_t::Reg_FifoRxBytesNb);
-		const auto fifo_addr = get_reg(regs_t::Reg_FifoRxCurrentAddr);
-		set_reg(regs_t::Reg_FifoAddrPtr, fifo_addr);
+		const auto rx_size = get_reg(regs_t::FifoRxBytesNb);
+		const auto fifo_addr = get_reg(regs_t::FifoRxCurrentAddr);
+		set_reg(regs_t::FifoAddrPtr, fifo_addr);
 
 		nss_0();
-		stm32_lib::spi::write<uint8_t>(spi_, regs_t::Reg_Fifo); // read from fifo
+		stm32_lib::spi::write<uint8_t>(spi_, regs_t::Fifo); // read from fifo
 		stm32_lib::spi::write<uint8_t>(spi_, rx_size, nullptr, rx_buf);
 		nss_1();
 
