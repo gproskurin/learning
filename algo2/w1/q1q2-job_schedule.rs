@@ -9,13 +9,13 @@ fn weighted_sum(jobs : &[Job], idx : &[usize]) -> int_t
 {
 	let mut end_time = 0;
 	let mut wsum = 0;
-	let mut cur = 0;
+	//let mut cur = 0;
 	for i in idx {
 		let j : &Job = &jobs[*i];
 		end_time += j.l;
 		//println!("job {}, idx:{} w:{} l:{} end:{} delta_wsum:{}", cur, i, j.w, j.l, end_time, (j.w * end_time));
 		wsum += j.w * end_time;
-		cur += 1;
+		//cur += 1;
 	}
 	return wsum;
 }
@@ -25,7 +25,6 @@ fn load_jobs() -> Vec<Job>
 	use std::sync::mpsc::{SyncSender, Receiver};
 	let (tx, rx) : (SyncSender<String>, Receiver<String>) = std::sync::mpsc::sync_channel(0);
 	std::thread::spawn(move || {
-		use std::io;
 		use std::io::prelude::*;
 		let stdin = std::io::stdin();
 		for line in stdin.lock().lines() {

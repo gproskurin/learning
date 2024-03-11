@@ -1,5 +1,3 @@
-//#![feature(scoped)]
-
 extern crate rand;
 extern crate num_cpus;
 
@@ -115,7 +113,7 @@ fn read_clause() -> Clause
 	let mut line = String::new();
 	std::io::stdin().read_line(& mut line).ok();
 	let line = line.trim();
-	let mut c_str_v : Vec<&str> = line.trim().split(|c:char| c.is_whitespace()).collect();
+	let c_str_v : Vec<&str> = line.trim().split(|c:char| c.is_whitespace()).collect();
 
 	for l_str in c_str_v {
 		let n : isize = l_str.parse().unwrap();
@@ -142,15 +140,15 @@ fn load_expr() -> (Expr, usize)
 
 	let mut line = String::new();
 	std::io::stdin().read_line(& mut line).ok();
-	let V : usize = line.trim().parse::<usize>().unwrap();
+	let v : usize = line.trim().parse::<usize>().unwrap();
 
-	println!("V:{}", V);
-	res.reserve(V);
-	for _ in 0..V {
+	println!("v:{}", v);
+	res.reserve(v);
+	for _ in 0..v {
 		res.push(read_clause());
 	}
 
-	return (res, V);
+	return (res, v);
 }
 
 fn print_stat(e : &Expr)
@@ -189,7 +187,7 @@ public:
 };
 */
 
-fn expr_simplify(mut e : Expr, V : usize) -> (Expr, FixedAss)
+fn expr_simplify(mut e : Expr, v : usize) -> (Expr, FixedAss)
 {
 	type VarsSet = std::collections::HashSet<usize>;
 
@@ -204,7 +202,7 @@ fn expr_simplify(mut e : Expr, V : usize) -> (Expr, FixedAss)
 		// collect usage of vars
 		for c in &e {
 			for l in c {
-				assert!(l.varnum < V);
+				assert!(l.varnum < v);
 				if l.negate {
 					neg.insert(l.varnum);
 				} else {
@@ -215,7 +213,7 @@ fn expr_simplify(mut e : Expr, V : usize) -> (Expr, FixedAss)
 
 		// Fix unique variables.
 		// If variable does not appear in expression at all, fix its value to something (value doesn't matter)
-		for vn in 0..V {
+		for vn in 0..v {
 			if !pos.contains(&vn) && !neg.contains(&vn) && !fix_ass.contains_key(&vn) {
 				fix_ass.insert(vn, true);
 				//fix_ass.emplace(vn, false);
@@ -266,9 +264,9 @@ fn expr_simplify(mut e : Expr, V : usize) -> (Expr, FixedAss)
 	} // loop
 }
 
-fn papadimitriou_inner(V : usize, e : &Expr, fa : &FixedAss, inner_iter : usize) -> OptAss
+async fn papadimitriou_inner(v : usize, e : &Expr, fa : &FixedAss, inner_iter : usize) -> OptAss
 {
-	let mut ass : Ass = gen_rnd_ass(V, fa);
+	let mut ass : Ass = gen_rnd_ass(v, fa);
 
 	for j in 0..inner_iter {
 		let falses = calc_e_get_falses(e, &ass);
@@ -315,11 +313,11 @@ fn papadimitriou_inner(V : usize, e : &Expr, fa : &FixedAss, inner_iter : usize)
 
 fn papadimitriou_parallel(ass_sz : usize, e : &Expr, fa : &FixedAss) -> OptAss
 {
-	let outer_iter : usize = num_cpus::get();; // threads count
+	let outer_iter : usize = num_cpus::get(); // threads count
 	let inner_iter : usize = 1000000;
 	let mut fut = Vec::new();
 	for _ in 0..outer_iter {
-		let f = std::thread::spawn(|| papadimitriou_inner(ass_sz, e, &fa, inner_iter) );
+		let f = std::thread::scope(|_| papadimitriou_inner(ass_sz, e, &fa, inner_iter) );
 		fut.push(f);
 	}
 
@@ -327,9 +325,9 @@ fn papadimitriou_parallel(ass_sz : usize, e : &Expr, fa : &FixedAss) -> OptAss
 
 	let mut res : OptAss = None;
 	for f in fut {
-		let cur_res = f.join();
+		let cur_res = futures::executor::block_on(f);
 		match res {
-			None => { res = cur_res.unwrap(); }
+			None => { res = cur_res; }
 			_ => {}
 		}
 	}
@@ -338,17 +336,17 @@ fn papadimitriou_parallel(ass_sz : usize, e : &Expr, fa : &FixedAss) -> OptAss
 
 fn run()
 {
-	let (e, V) = load_expr();
+	let (e, v) = load_expr();
 	print_stat(&e);
 	println!("");
 
-	let (opt_e, fa) : (Expr, FixedAss) = expr_simplify(e.clone(), V);
+	let (opt_e, fa) : (Expr, FixedAss) = expr_simplify(e.clone(), v);
 
-	println!("vars optimized away (fixed ass): {} remains:{}", fa.len(), V - fa.len());
+	println!("vars optimized away (fixed ass): {} remains:{}", fa.len(), v - fa.len());
 	println!("");
 
 
-	let res = papadimitriou_parallel(V, &opt_e, &fa);
+	let res = papadimitriou_parallel(v, &opt_e, &fa);
 
 	match res {
 		Some(ass) => {

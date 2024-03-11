@@ -10,11 +10,22 @@
 #include <unordered_set>
 #include <vector>
 
-#include <boost/optional.hpp>
+#include <optional>
 
 #include <assert.h>
 #include <stdlib.h>
 #include <unistd.h>
+
+
+#ifdef __APPLE__
+// quick&dirty hack to make it work on mac where there is no random_r
+typedef unsigned random_data;
+int random_r(random_data* rd, int* result)
+{
+	*result = rand_r(rd);
+	return 0;
+}
+#endif
 
 struct literal_t {
 	bool negate;
@@ -25,7 +36,7 @@ typedef std::vector<clause_t> expr_t;
 
 typedef std::vector<bool> ass_t;
 
-typedef boost::optional<ass_t> opt_ass_t;
+typedef std::optional<ass_t> opt_ass_t;
 
 typedef std::unordered_map<size_t, bool> fixed_ass_t;
 
@@ -278,6 +289,9 @@ std::pair<expr_t,fixed_ass_t> expr_simplify(expr_t e, const size_t V)
 
 opt_ass_t papadimitriou_inner(const size_t V, const expr_t& e, const fixed_ass_t& fa, const size_t inner_iter, size_t seed)
 {
+#ifdef __APPLE__
+	unsigned rd_buf = 314159; // random seed
+#else
 	struct random_data rd_buf;
 	char state[32];
 	if (initstate_r(seed, state, sizeof(state), &rd_buf) != 0) {
@@ -285,6 +299,7 @@ opt_ass_t papadimitriou_inner(const size_t V, const expr_t& e, const fixed_ass_t
 		std::cerr << err << std::endl;
 		throw std::runtime_error(err);
 	}
+#endif
 
 	ass_t ass = gen_rnd_ass(V, &rd_buf, fa);
 
@@ -331,7 +346,7 @@ opt_ass_t papadimitriou_inner(const size_t V, const expr_t& e, const fixed_ass_t
 			}
 		}
 	}
-	return boost::none;
+	return std::nullopt;
 }
 
 opt_ass_t papadimitriou_parallel(size_t ass_sz, const expr_t& e, const fixed_ass_t& fa)
@@ -372,7 +387,7 @@ opt_ass_t papadimitriou_parallel(size_t ass_sz, const expr_t& e, const fixed_ass
 		}
 	}
 	my_log(std::cout) << "ALL_FALSE\n";
-	return boost::none;
+	return std::nullopt;
 }
 
 void run()
@@ -393,7 +408,7 @@ void run()
 	const opt_ass_t res = papadimitriou_parallel(V, opt_e, fa);
 
 	if (res) {
-		const ass_t& ass = res.get();
+		const ass_t& ass = res.value();
 		const bool r = calc_e(e, ass);
 		if (r==false) {
 			throw std::runtime_error("BAD_PROGRAMMER_2");

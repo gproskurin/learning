@@ -1,10 +1,10 @@
 #include <exception>
 #include <iostream>
+#include <optional>
 #include <set>
 #include <stdexcept>
 #include <unordered_set>
 #include <vector>
-#include <boost/optional.hpp>
 
 #include <assert.h>
 
@@ -23,7 +23,7 @@ using adj_idx_set_t = std::unordered_set<adj_idx_t>;
 
 class graph_t {
 	const adj_list_t adj_;
-	mutable boost::optional<size_t> num_vertexes_;
+	mutable std::optional<size_t> num_vertexes_;
 public:
 	graph_t(const adj_list_t& al) : adj_(al) {}
 
@@ -40,14 +40,14 @@ public:
 			}
 			num_vertexes_ = vtxs.size();
 		}
-		return num_vertexes_.get();
+		return num_vertexes_.value();
 	}
 
 	vertex_t get_any_vertex() const { assert(!adj_.empty()); return adj_.front().v1; }
 
 	adj_idx_t find_min_edge_from_vertexes(const vtx_set_t& V) const
 	{
-		boost::optional<size_t> min_idx;
+		std::optional<size_t> min_idx;
 		for (size_t i=0; i<adj_.size(); ++i)
 		{
 			const auto& item = adj_.at(i);
@@ -57,14 +57,14 @@ public:
 				(
 					!min_idx
 					||
-					(item.cost < adj_[min_idx.get()].cost)
+					(item.cost < adj_[min_idx.value()].cost)
 				)
 			)
 			{
 					min_idx = i;
 			}
 		}
-		return min_idx.get();
+		return min_idx.value();
 	}
 private:
 	static bool exists(const vtx_set_t& V, vertex_t v) { return (V.find(v) != V.cend()); }
