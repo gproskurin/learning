@@ -1,8 +1,10 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
-#include "lora.h"
+#include "sx1276.h"
 #include "bsp.h"
+
+#include "lora.h"
 
 
 extern void perif_init_irq_dio0();
@@ -12,36 +14,7 @@ extern freertos_utils::pin_toggle_task_t<stm32_lib::gpio::pin_t> g_pin_red;
 extern freertos_utils::pin_toggle_task_t<stm32_lib::gpio::pin_t> g_pin_green;
 
 
-namespace lora {
-
-
 namespace {
-
-
-template <uint32_t Freq>
-constexpr uint32_t calc_freq_reg()
-{
-	constexpr uint64_t fr = uint64_t(Freq) * uint64_t(1 << 19) / uint64_t(32000000);
-	static_assert(fr <= 0xFFFFFF);
-	return uint32_t(fr);
-}
-
-
-constexpr sx1276::lora_config_t lora_config = {
-	.freq = 866000000,
-	.sf = 7,
-	.crc = true,
-	.bw = sx1276::cf_t::bw_khz_125,
-	.ecr = sx1276::cf_t::ecr_4_5,
-	.preamble_length = 8,
-	.implicit_header = false
-};
-
-
-uint8_t sx1276_opmode(uint8_t v, uint8_t op_mode)
-{
-	return (v & ~sx1276::reg_val_t::OpMode_Mode_msk) | (op_mode << sx1276::reg_val_t::OpMode_Mode_pos);
-}
 
 
 char prn_halfbyte(uint8_t x)
@@ -99,71 +72,6 @@ void log_async_2(uint8_t x1, uint8_t x2, char* const buf0)
 }
 
 
-void reset_radio_pin(const stm32_lib::gpio::pin_t& pin)
-{
-	// pull the pin down
-	stm32_lib::gpio::set_state(pin, 0);
-	pin.set(
-		stm32_lib::gpio::mode_t::output,
-		stm32_lib::gpio::otype_t::push_pull,
-		stm32_lib::gpio::pupd_t::no_pupd,
-		stm32_lib::gpio::speed_t::bits_11
-	);
-	vTaskDelay(1); // > 100 us
-
-	// make floating
-	pin.set(stm32_lib::gpio::mode_t::input);
-	vTaskDelay(configTICK_RATE_HZ/10); // > 5 ms
-}
-
-
-void lora_configure(const sx1276::hwconf_t& hwc)
-{
-	sx1276::spi_sx1276_t spi(hwc.spi, hwc.pin_spi_nss);
-
-	logger.log_async("--- version\r\n");
-	static char buf[8];
-	log_async_2(sx1276::regs_t::Version, spi.get_reg(sx1276::regs_t::Version), buf);
-
-	// RegOpMode
-	spi.set_reg(0x01, sx1276_opmode(0b10000000, sx1276::reg_val_t::OpMode_Mode_SLEEP)); // Lora, sleep mode
-
-	// carrier frequency
-	// RegFrMsb, RegFrMid, RegFrLsb
-	{
-		constexpr uint32_t freq_reg = calc_freq_reg<lora_config.freq>();
-		static_assert(freq_reg == 0xD88000);
-		spi.set_reg(0x06, uint8_t((freq_reg >> 16) & 0xFF)); // msb
-		spi.set_reg(0x07, uint8_t((freq_reg >> 8) & 0xFF)); // mid
-		spi.set_reg(0x08, uint8_t(freq_reg & 0xFF)); // lsb
-	}
-
-	// RegModemConfig1
-	spi.set_reg(
-		0x1D,
-		(lora_config.bw << sx1276::cf_t::bw_Pos)
-			| (lora_config.ecr << sx1276::cf_t::ecr_Pos)
-			| ((lora_config.implicit_header ? 1 : 0) << sx1276::cf_t::implicit_header_Pos)
-	);
-	// RegModemConfig2
-	spi.set_reg(
-		0x1E,
-		(lora_config.sf << sx1276::cf_t::sf_Pos)
-			| ((lora_config.crc ? 1 : 0) << sx1276::cf_t::crc_Pos)
-	);
-
-	// RegPreamble
-	static_assert((lora_config.preamble_length >> 16) == 0);
-	spi.set_reg(0x20, lora_config.preamble_length >> 8); // msb
-	spi.set_reg(0x21, lora_config.preamble_length & 0xFF); // lsb
-
-	spi.set_reg(sx1276::regs_t::IrqFlags, 0xFF); // clear all
-}
-
-
-} // namespace
-
-
 void task_function_emb(void* arg)
 {
 	logger.log_async("LORA_EMB task started\r\n");
@@ -181,16 +89,16 @@ void task_function_emb(void* arg)
 	// init dio
 	hwp->pin_dio0.set(stm32_lib::gpio::mode_t::input, stm32_lib::gpio::pupd_t::no_pupd);
 
-	reset_radio_pin(bsp::sx1276::pin_reset);
+	sx1276::reset_radio_pin(bsp::sx1276::pin_reset);
 
-	lora_configure(*hwp);
+	sx1276::lora_configure<sx1276::LoraConfig_1>(*hwp);
 	sx1276::spi_sx1276_t spi(hwp->spi, hwp->pin_spi_nss);
 
 	spi.set_reg(sx1276::regs_t::IrqFlagsMask, 0);
 	spi.set_reg(0x40, 0b00); // RegDioMapping1
 	//spi.set_reg(0x41, 0b00); // RegDioMapping2
 	perif_init_irq_dio0();
-	spi.set_reg(0x01, sx1276_opmode(spi.get_reg(0x01), sx1276::reg_val_t::OpMode_Mode_RXCONTINUOUS));
+	spi.set_reg(0x01, sx1276::opmode(spi.get_reg(0x01), sx1276::reg_val_t::OpMode_Mode_RXCONTINUOUS));
 
 	//printf_dio_status("DIO after init\r\n", hwp->pins_dio);
 	for(;;) {
@@ -233,15 +141,21 @@ void task_function_ext(void* arg)
 
 	sx1276::spi_sx_init(*hwp, false /*slow*/);
 
-	reset_radio_pin(stm32_lib::gpio::pin_t(GPIOB_BASE, 2));
+	sx1276::reset_radio_pin(stm32_lib::gpio::pin_t(GPIOB_BASE, 2));
 
-	lora_configure(*hwp);
+	sx1276::lora_configure<sx1276::LoraConfig_1>(*hwp);
 	sx1276::spi_sx1276_t spi(hwp->spi, hwp->pin_spi_nss);
+
+	{
+		logger.log_async("--- version\r\n");
+		static char buf[8];
+		log_async_2(sx1276::regs_t::Version, spi.get_reg(sx1276::regs_t::Version), buf);
+	}
 
 	spi.set_reg(sx1276::regs_t::IrqFlagsMask, 0);
 
 	const uint8_t reg_01 = spi.get_reg(sx1276::regs_t::OpMode);
-	spi.set_reg(sx1276::regs_t::OpMode, sx1276_opmode(reg_01, sx1276::reg_val_t::OpMode_Mode_STDBY));
+	spi.set_reg(sx1276::regs_t::OpMode, sx1276::opmode(reg_01, sx1276::reg_val_t::OpMode_Mode_STDBY));
 	for(;;) {
 		static const std::array<uint8_t, 11> tx_buf{
 			'B', 'E', 'E', 'F',
@@ -251,7 +165,7 @@ void task_function_ext(void* arg)
 
 		g_pin_green.on();
 		spi.fifo_write(tx_buf.data(), tx_buf.size());
-		spi.set_reg(sx1276::regs_t::OpMode, sx1276_opmode(reg_01, sx1276::reg_val_t::OpMode_Mode_TX));
+		spi.set_reg(sx1276::regs_t::OpMode, sx1276::opmode(reg_01, sx1276::reg_val_t::OpMode_Mode_TX));
 		while (!(spi.get_reg(sx1276::regs_t::IrqFlags) & sx1276::reg_val_t::IrqFlags_TxDone)) {
 			vTaskDelay(1);
 		}
@@ -263,7 +177,15 @@ void task_function_ext(void* arg)
 }
 
 
-void create_task_emb(const char* task_name, UBaseType_t prio, task_data_t& task_data, const sx1276::hwconf_t* hwp)
+} // namespace
+
+
+void lora::create_task_emb(
+	const char* task_name,
+	UBaseType_t prio,
+	lora::task_data_t& task_data,
+	const sx1276::hwconf_t* hwp
+)
 {
 	task_data.task_handle = xTaskCreateStatic(
 		&task_function_emb,
@@ -277,7 +199,12 @@ void create_task_emb(const char* task_name, UBaseType_t prio, task_data_t& task_
 }
 
 
-void create_task_ext(const char* task_name, UBaseType_t prio, task_data_t& task_data, const sx1276::hwconf_t* hwp)
+void lora::create_task_ext(
+	const char* task_name,
+	UBaseType_t prio,
+	lora::task_data_t& task_data,
+	const sx1276::hwconf_t* hwp
+)
 {
 	task_data.task_handle = xTaskCreateStatic(
 		&task_function_ext,
@@ -289,7 +216,4 @@ void create_task_ext(const char* task_name, UBaseType_t prio, task_data_t& task_
 		&task_data.task_buffer
 	);
 }
-
-
-} // namespace
 

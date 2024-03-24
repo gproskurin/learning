@@ -1,4 +1,5 @@
 #include "lib_stm32.h"
+#include "sx1276.h"
 #include "bsp.h"
 #include "freertos_utils.h"
 #include "logging.h"
@@ -23,12 +24,33 @@
 
 #define USART_CON_BAUDRATE 115200
 
-namespace sx1276 {
-	struct hwconf_t;
-};
 
 lora::task_data_t task_data_lora_emb;
 lora::task_data_t task_data_lora_ext;
+
+constexpr sx1276::hwconf_t hwc_emb = {
+	.spi = SPI1,
+	.spi_af = 0,
+	.pin_spi_nss = bsp::sx1276::pin_spi_nss,
+	.pin_spi_sck = bsp::sx1276::pin_spi_sck,
+	.pin_spi_miso = bsp::sx1276::pin_spi_miso,
+	.pin_spi_mosi = bsp::sx1276::pin_spi_mosi,
+	.pin_dio0 = bsp::sx1276::pin_dio0,
+	//.pin_radio_reset{GPIOC_BASE, 0},
+	//.pin_sx1276_reset{GPIOA_BASE, 11},
+	//.pin_radio_tcxo_vcc{GPIOA_BASE, 12},
+};
+
+constexpr sx1276::hwconf_t hwc_ext = {
+	.spi = SPI2,
+	.spi_af = 0,
+	.pin_spi_nss{GPIOB_BASE, 12},
+	.pin_spi_sck{GPIOB_BASE, 13},
+	.pin_spi_miso{GPIOB_BASE, 14},
+	.pin_spi_mosi{GPIOB_BASE, 15},
+	.pin_dio0{GPIOB_BASE, 4}, // FIXME, not used yet
+};
+
 
 usart_logger_t logger;
 
@@ -335,11 +357,11 @@ __attribute__ ((noreturn)) void main()
 	g_pin_red.init_pin();
 
 	logger.log_sync("Creating LORA_EMB task...\r\n");
-	lora::create_task_emb("lora_emb", PRIO_LORA_EMB, task_data_lora_emb, &sx1276::hwc_emb);
+	lora::create_task_emb("lora_emb", PRIO_LORA_EMB, task_data_lora_emb, &hwc_emb);
 	logger.log_sync("Created LORA_EMB task\r\n");
 
 	logger.log_sync("Creating LORA_EXT task...\r\n");
-	lora::create_task_ext("lora_ext", PRIO_LORA_EXT, task_data_lora_ext, &sx1276::hwc_ext);
+	lora::create_task_ext("lora_ext", PRIO_LORA_EXT, task_data_lora_ext, &hwc_ext);
 	logger.log_sync("Created LORA_EXT task\r\n");
 
 	logger.log_sync("Creating DISPLAY task...\r\n");

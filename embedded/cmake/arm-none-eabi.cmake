@@ -4,7 +4,7 @@ set(CMAKE_SYSTEM_PROCESSOR arm)
 
 if (APPLE)
 	set(tools_prefix_bin "$ENV{HOME}/tmp/at/arm-gnu-toolchain-13.2.Rel1-darwin-x86_64-arm-none-eabi/bin/")
-	set(tools_prefix_bin "/usr/local/pkg/cross-arm-none-eabi/bin/")
+	#set(tools_prefix_bin "/usr/local/pkg/cross-arm-none-eabi/bin/")
 else()
 	set(tools_prefix_bin "")
 endif()

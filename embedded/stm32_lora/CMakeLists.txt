@@ -44,7 +44,7 @@ function(generate_targets T)
 		-I${UGUI_DIR}
 	)
 
-	set(T_CXX_FLAGS ${CMAKE_CXX_FLAGS} ${T_C_CXX_FLAGS} -std=c++17 -fno-rtti -fno-exceptions)
+	set(T_CXX_FLAGS ${CMAKE_CXX_FLAGS} ${T_C_CXX_FLAGS} -std=c++20 -fconcepts-diagnostics-depth=2 -fno-rtti -fno-exceptions)
 	#set(T_CXX_FLAGS ${CMAKE_CXX_FLAGS} ${T_C_CXX_FLAGS})
 	set(T_C_FLAGS ${CMAKE_C_FLAGS} ${T_C_CXX_FLAGS})
 
@@ -63,7 +63,6 @@ function(generate_targets T)
 	add_executable(${T_FIRMWARE_ELF}
 		src/startup.c
 		src/main.cc
-		src/sx1276.cc
 		src/lora.cc
 		${STM32_LIB_ROOT}/logging.cc
 		${STM32_LIB_ROOT}/my_stdlib.c
