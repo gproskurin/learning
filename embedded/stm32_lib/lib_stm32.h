@@ -247,21 +247,36 @@ void init_pins(
 
 
 inline
-void write(I2C_TypeDef* const i2c, uint16_t addr, const uint8_t* const data, uint16_t size)
+void write(I2C_TypeDef* const i2c, uint16_t addr, const uint8_t* const data, size_t size)
 {
 	//static_assert(addr < 0x80);
-	// TODO support size > 255, reload
-	uint16_t tx_done = 0;
-	i2c->CR2 = (i2c->CR2 & ~(I2C_CR2_SADD_Msk | I2C_CR2_NBYTES_Msk | I2C_CR2_RD_WRN))
-		| ((addr << 1) << I2C_CR2_SADD_Pos)
-		| (size << I2C_CR2_NBYTES_Pos)
-		| I2C_CR2_START_Msk
-		| I2C_CR2_AUTOEND_Msk
-		;
+	constexpr size_t chunk_max = 255;
+	size_t tx_done = 0;
+	uint32_t cr2 = 0; // i2c->CR2;
 	while (tx_done < size) {
-		while (!(i2c->ISR & I2C_ISR_TXE)) {} // TODO timeout
-		i2c->TXDR = data[tx_done];
-		++tx_done;
+		const size_t tx_rem = size - tx_done;
+		const bool last_chunk = (tx_rem <= chunk_max);
+		size_t chunk_rem = std::min(tx_rem, chunk_max);
+
+		if (tx_done == 0) {
+			// first write to CR2, init
+			cr2 = (cr2 & ~(I2C_CR2_SADD_Msk | I2C_CR2_RD_WRN))
+				| ((addr << 1) << I2C_CR2_SADD_Pos)
+				| I2C_CR2_START_Msk
+				;
+		}
+		cr2 = (cr2 & ~(I2C_CR2_NBYTES_Msk | I2C_CR2_RELOAD_Msk | I2C_CR2_AUTOEND_Msk))
+			| (chunk_rem << I2C_CR2_NBYTES_Pos)
+			| (last_chunk ? I2C_CR2_AUTOEND_Msk : I2C_CR2_RELOAD_Msk)
+			;
+		i2c->CR2 = cr2;
+
+		while (chunk_rem > 0) {
+			while (!(i2c->ISR & I2C_ISR_TXE)) {} // TODO timeout
+			i2c->TXDR = data[tx_done];
+			++tx_done;
+			--chunk_rem;
+		}
 	}
 	while (i2c->ISR & I2C_ISR_BUSY) {}
 }
