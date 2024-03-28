@@ -354,10 +354,11 @@ void write(SPI_TypeDef* const spi, size_t const size, const T* const tx_buf, T* 
 	bool tx_started = false;
 #else
 	auto const txdr = reinterpret_cast<volatile T*>(&spi->DR);
-	auto const rxdr = txdr;
+	auto const rxdr = reinterpret_cast<volatile T*>(&spi->DR);
 #endif
 
 	size_t tx_done = 0, rx_done = 0;
+	bool mode_tx = true;
 	constexpr size_t max_count = 1000000;
 	size_t count_without_progress = 0; // count iterations without progress
 
@@ -367,11 +368,12 @@ void write(SPI_TypeDef* const spi, size_t const size, const T* const tx_buf, T* 
 #if defined TARGET_STM32H745_CM4 || defined TARGET_STM32H745_CM7
 		while (tx_done < size && (spi->SR & SPI_SR_TXP)) // fill tx buffer
 #else
-		if (tx_done < size && (spi->SR & SPI_SR_TXE)) // write one item to tx buffer
+		if (mode_tx && tx_done < size && (spi->SR & SPI_SR_TXE)) // write one item to tx buffer
 #endif
 		{
 			*txdr = (tx_buf ? tx_buf[tx_done] : 0);
 			++tx_done;
+			mode_tx = false;
 			progress = true;
 		}
 #if defined TARGET_STM32H745_CM4 || defined TARGET_STM32H745_CM7
@@ -385,7 +387,7 @@ void write(SPI_TypeDef* const spi, size_t const size, const T* const tx_buf, T* 
 #if defined TARGET_STM32H745_CM4 || defined TARGET_STM32H745_CM7
 		while (rx_done < size && (spi->SR & SPI_SR_RXP))
 #else
-		if (rx_done < size && (spi->SR & SPI_SR_RXNE))
+		if (!mode_tx && rx_done < size && (spi->SR & SPI_SR_RXNE))
 #endif
 		{
 			const T d = *rxdr;
@@ -393,6 +395,7 @@ void write(SPI_TypeDef* const spi, size_t const size, const T* const tx_buf, T* 
 				rx_buf[rx_done] = d;
 			}
 			++rx_done;
+			mode_tx = true;
 			progress = true;
 		}
 
