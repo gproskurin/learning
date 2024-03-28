@@ -4,10 +4,58 @@
 #include "cmsis_device.h"
 
 #include <algorithm>
+#include <array>
 
 
 namespace stm32_lib {
 
+
+namespace display {
+
+
+typedef void (*display_write_cmd_t)(uint8_t cmd);
+typedef void (*display_write_data_t)(const uint8_t *data, size_t size);
+
+
+template <uint16_t Xsize, uint16_t Ysize, display_write_cmd_t write_cmd_func, display_write_data_t write_data_func>
+class display_t {
+	std::array<uint8_t, Xsize*Ysize/8> fb_data{0};
+public:
+        static constexpr uint16_t x_size() { return Xsize; }
+        static constexpr uint16_t y_size() { return Ysize; }
+public:
+	void draw_point(uint16_t x, uint16_t y, bool color)
+	{
+		if (x < Xsize && y < Ysize) {
+			const auto page = y / 8;
+			const auto seg_bit = y % 8;
+			const size_t idx = page * Xsize + x;
+			if (color) {
+				fb_data[idx] |= (1 << seg_bit);
+			} else {
+				fb_data[idx] &= ~(1 << seg_bit);
+			}
+		}
+	}
+
+	void clear()
+	{
+		std::fill(fb_data.begin(), fb_data.end(), 0);
+	}
+
+	void flush_buffer() const
+	{
+		for (uint8_t page=0; page < Ysize/8; ++page) {
+			write_cmd_func(0xB0 + page);
+			write_cmd_func(0x00 + 0); // offset
+			write_cmd_func(0x10 + 0); // offset
+			write_data_func(&fb_data[Xsize * page], Xsize);
+		}
+	}
+};
+
+
+#if defined(TARGET_STM32H745_CM7)
 
 constexpr uint32_t hs = 2;
 constexpr uint32_t vs = 10;
@@ -72,6 +120,11 @@ public:
 	static void update_now() { LTDC->SRCR = LTDC_SRCR_IMR; }
 	static void update_v() { LTDC->SRCR = LTDC_SRCR_VBR; }
 };
+
+#endif
+
+
+} // namespace display
 
 
 } // namespace stm32_lib
