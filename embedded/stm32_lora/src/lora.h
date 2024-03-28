@@ -13,7 +13,7 @@ namespace lora {
 
 
 struct task_data_t {
-	freertos_utils::task_stack_t<256> stack;
+	freertos_utils::task_stack_t<512> stack;
 	TaskHandle_t task_handle = nullptr;
 	StaticTask_t task_buffer;
 };

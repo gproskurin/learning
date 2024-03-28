@@ -1,4 +1,5 @@
 #include "lib_stm32.h"
+#include "lcd.h"
 #include "sx1276.h"
 #include "bsp.h"
 #include "freertos_utils.h"
@@ -8,6 +9,7 @@
 
 #include "FreeRTOS.h"
 #include "task.h"
+#include "semphr.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -16,8 +18,9 @@
 #include "ugui.h"
 
 #define PRIO_BLINK 1
-#define PRIO_DISPLAY 2
-#define PRIO_LORA_EMB 5
+#define PRIO_DISPLAY_1 2
+#define PRIO_DISPLAY_2 2
+#define PRIO_LORA_EMB 6
 #define PRIO_LORA_EXT 5
 #define PRIO_LOGGER 8 // FIXME
 
@@ -50,6 +53,21 @@ constexpr sx1276::hwconf_t hwc_ext = {
 	.pin_spi_mosi{GPIOB_BASE, 15},
 	.pin_dio0{GPIOB_BASE, 4}, // FIXME, not used yet
 };
+
+
+StaticSemaphore_t mutex_buffer_spi2;
+SemaphoreHandle_t mutex_spi2 = xSemaphoreCreateMutexStatic(&mutex_buffer_spi2);
+
+
+void spi2_lock()
+{
+	while (xSemaphoreTake(mutex_spi2, portMAX_DELAY) != pdTRUE) { vTaskDelay(1); }
+}
+
+void spi2_unlock()
+{
+	xSemaphoreGive(mutex_spi2);
+}
 
 
 usart_logger_t logger;
@@ -186,84 +204,151 @@ freertos_utils::pin_toggle_task_t g_pin_red("blink_red", bsp::pin_led_red, PRIO_
 freertos_utils::pin_toggle_task_t g_pin_green("blink_green", bsp::pin_led_green, PRIO_BLINK);
 
 
+namespace display1 {
 #define i2c_display I2C1
-constexpr stm32_lib::gpio::pin_t pin_scl(GPIOB_BASE, 8);
-constexpr stm32_lib::gpio::pin_t pin_sda(GPIOB_BASE, 9);
-constexpr uint8_t i2c_af = 4;
-constexpr uint8_t i2c_addr = 0x3C;
+	constexpr stm32_lib::gpio::pin_t pin_scl(GPIOB_BASE, 8);
+	constexpr stm32_lib::gpio::pin_t pin_sda(GPIOB_BASE, 9);
+	constexpr uint8_t i2c_af = 4;
+	constexpr uint8_t i2c_addr = 0x3C;
 
+	void i2c_write_data(const uint8_t* const data, size_t size);
+	void i2c_write_cmd0(uint8_t cmd);
+	using display_t = stm32_lib::display::display_t<128, 32, i2c_write_cmd0, i2c_write_data>;
 
-void init_display()
-{
-	stm32_lib::i2c::init_pins(pin_scl, i2c_af, pin_sda, i2c_af);
-	i2c_display->CR1 = 0;
-	i2c_display->CR2 = 0;
-	i2c_display->TIMINGR = (i2c_display->TIMINGR & ~(I2C_TIMINGR_PRESC_Msk))
-		| (0b0010 << I2C_TIMINGR_PRESC_Pos);
-	i2c_display->CR1 = I2C_CR1_PE;
-	logger.log_async("DISPLAY init done\r\n");
-}
+	display_t display;
+	UG_GUI ugui;
 
-
-freertos_utils::task_data_t<1024> task_data_display;
-
-
-template <size_t DataSize>
-void i2c_write_data(const uint8_t* const data)
-{
-	static_assert(DataSize < 255);
-	std::array<uint8_t, DataSize+1> buf;
-	buf[0] = 0b01000000; // data
-	for (size_t d = 0; d < DataSize; ++d) {
-		buf[1+d] = data[d];
-	}
-	stm32_lib::i2c::write(i2c_display, i2c_addr, buf.data(), buf.size());
-}
-
-void i2c_write_cmd0(uint8_t cmd)
-{
-	const std::array<uint8_t, 2> buf{0, cmd};
-	stm32_lib::i2c::write(i2c_display, i2c_addr, buf.data(), buf.size());
-}
-
-constexpr uint8_t W = 128;
-constexpr uint8_t H = 32;
-static std::array<uint8_t, W*H/8> buffer{0};
-UG_GUI ugui;
-
-
-inline
-void ugui_pset(int16_t x, int16_t y, uint32_t color)
-{
-	const auto page = y / 8;
-	const auto page_seg = x % W;
-	const auto seg_bit = y % 8;
-	const auto idx = page * W + page_seg;
-	if (color) {
-		buffer[idx] |= (1 << seg_bit);
-	} else {
-		buffer[idx] &= ~(1 << seg_bit);
+	void init_display()
+	{
+		stm32_lib::i2c::init_pins(pin_scl, i2c_af, pin_sda, i2c_af);
+		i2c_display->CR1 = 0;
+		i2c_display->CR2 = 0;
+		i2c_display->TIMINGR = (i2c_display->TIMINGR & ~(I2C_TIMINGR_PRESC_Msk))
+			| (0b0010 << I2C_TIMINGR_PRESC_Pos);
+		i2c_display->CR1 = I2C_CR1_PE;
 	}
 
-}
 
+	void i2c_write_data(const uint8_t* const data, size_t size)
+	{
+		if (size != display.x_size()) {
+			logger.log_async("WRONG SIZE\r\n");
+		}
+		//static_assert(size == 128);
+		std::array<uint8_t, display.x_size()+1> buf; // FIXME
+		buf[0] = 0b01000000; // data
+		for (size_t i=0; i<size; ++i) {
+			buf[1+i] = data[i];
+		}
+		stm32_lib::i2c::write(i2c_display, i2c_addr, buf.data(), size+1);
+	}
 
-void flush_buffer()
-{
-	for (uint8_t i=0; i<H/8; ++i) {
-		i2c_write_cmd0(0xB0 + i);
-		i2c_write_cmd0(0x00 + 0); // offset
-		i2c_write_cmd0(0x10 + 0); // offset
-		i2c_write_data<W>(&buffer[W*i]);
+	void i2c_write_cmd0(uint8_t cmd)
+	{
+		const std::array<uint8_t, 2> buf{0, cmd};
+		stm32_lib::i2c::write(i2c_display, i2c_addr, buf.data(), buf.size());
+	}
+
+	void ugui_pset(int16_t x, int16_t y, uint32_t color)
+	{
+		display.draw_point(x, y, color);
 	}
 }
 
 
-void task_function_display(void*)
+namespace display2 {
+	constexpr stm32_lib::gpio::pin_t pin_dc{GPIOA_BASE, 10};
+	constexpr stm32_lib::gpio::pin_t pin_rst{GPIOA_BASE, 0};
+	constexpr stm32_lib::gpio::pin_t pin_vdd{GPIOA_BASE, 8};
+	constexpr stm32_lib::gpio::pin_t pin_spi_nss{GPIOA_BASE, 9};
+	constexpr stm32_lib::gpio::pin_t pin_spi_sck{GPIOB_BASE, 13};
+	constexpr stm32_lib::gpio::pin_t pin_spi_mosi{GPIOB_BASE, 15};
+
+	void spi_write_data(const uint8_t* const data, size_t size);
+	void spi_write_cmd(uint8_t cmd);
+
+	using display_t = stm32_lib::display::display_t<128, 64, spi_write_cmd, spi_write_data>;
+
+	display_t display;
+	UG_GUI ugui;
+
+	void init_display()
+	{
+		stm32_lib::spi::init_pin_nss(pin_spi_nss);
+
+		// D/C#
+		pin_dc.set(
+			stm32_lib::gpio::pupd_t::no_pupd,
+			stm32_lib::gpio::speed_t::bits_00,
+			stm32_lib::gpio::mode_t::output
+		);
+		stm32_lib::gpio::set_state(pin_dc, 0);
+
+		pin_rst.set(
+			stm32_lib::gpio::pupd_t::no_pupd,
+			stm32_lib::gpio::speed_t::bits_00,
+			stm32_lib::gpio::mode_t::output
+		);
+		stm32_lib::gpio::set_state(pin_rst, 1);
+
+		// power up
+		pin_vdd.set(
+			stm32_lib::gpio::pupd_t::no_pupd,
+			stm32_lib::gpio::speed_t::bits_00,
+			stm32_lib::gpio::mode_t::output
+		);
+		stm32_lib::gpio::set_state(pin_vdd, true);
+
+		// reset
+		stm32_lib::gpio::set_state(pin_rst, 0);
+		vTaskDelay(1);
+		stm32_lib::gpio::set_state(pin_rst, 1);
+
+		logger.log_async("DISPLAY-2 init done\r\n");
+	}
+
+	void nss_0()
+	{
+		stm32_lib::gpio::set_state(pin_spi_nss, 0);
+		for (volatile int i=0; i<100; ++i) {}
+	}
+	void nss_1()
+	{
+		for (volatile int i=0; i<100; ++i) {}
+		stm32_lib::gpio::set_state(pin_spi_nss, 1);
+	}
+
+	void spi_write_cmd(uint8_t cmd)
+	{
+		stm32_lib::gpio::set_state(pin_dc, 0);
+		nss_0();
+		stm32_lib::spi::write<uint8_t>(SPI2, 1, &cmd, nullptr);
+		nss_1();
+	}
+
+	void spi_write_data(const uint8_t* const data, size_t size)
+	{
+		stm32_lib::gpio::set_state(pin_dc, 1);
+		nss_0();
+		stm32_lib::spi::write<uint8_t>(SPI2, size, data, nullptr);
+		nss_1();
+	}
+
+	void ugui_pset(int16_t x, int16_t y, uint32_t color)
+	{
+		display.draw_point(x, y, color);
+	}
+}
+
+
+freertos_utils::task_data_t<1024> task_data_display_1;
+freertos_utils::task_data_t<1024> task_data_display_2;
+
+
+void task_function_display_1(void*)
 {
 	vTaskDelay(configTICK_RATE_HZ);
-	logger.log_async("DISPLAY task started\r\n");
-	init_display();
+	display1::init_display();
 
 	constexpr std::array<uint8_t, 6> init_cmds{
 		0xAE, // display off
@@ -272,64 +357,115 @@ void task_function_display(void*)
 		0xAF // display on
 	};
 	for (const auto cmd : init_cmds) {
-		i2c_write_cmd0(cmd);
+		display1::i2c_write_cmd0(cmd);
 	}
+	display1::display.flush_buffer();
 
-	flush_buffer();
-
-	UG_Init(&ugui, ugui_pset, W, H);
-	UG_SelectGUI(&ugui);
+	UG_Init(&display1::ugui, &display1::ugui_pset, display1::display.x_size(), display1::display.y_size());
+	UG_SelectGUI(&display1::ugui);
 	UG_FontSelect(&FONT_8X14);
 
 	UG_FillScreen(0);
-	UG_PutString(1, 2, "123456789012345678901234567890");
+	UG_PutString(1, 2, "Display-1 01234567890123456789");
 	UG_Update();
-	flush_buffer();
+	display1::display.flush_buffer();
 
-	for(;;) {
-		vTaskDelay(configTICK_RATE_HZ);
+	vTaskDelay(configTICK_RATE_HZ*3);
+
+	display1::display.clear();
+	display1::display.flush_buffer();
+
+	for(uint16_t y=0; y < display1::display.y_size(); ++y) {
+		for (uint16_t x=0; x < display1::display.x_size(); ++x) {
+			display1::display.draw_point(x, y, 1);
+			display1::display.flush_buffer();
+			vTaskDelay(1);
+		}
+		logger.log_async("DISPLAY-1 row done\r\n");
 	}
 
-
-	logger.log_async("DISPLAY loop\r\n");
+	logger.log_async("DISPLAY-1 loop\r\n");
 	for (;;) {
-		for(uint8_t hl=0; hl<H; ++hl) {
-			const auto page_hl = hl/8;
-			for (uint8_t page=0; page<H/8; ++page) {
-				for (size_t w=0; w<W; ++w) {
-					buffer[page*W + w] = ((page == page_hl) ? (1 << (hl % 8)): 0);
-				}
-			}
-			flush_buffer();
-			//vTaskDelay(configTICK_RATE_HZ/16);
-			vTaskDelay(1);
-		}
-
-		for(uint8_t wl=0; wl<W; ++wl) {
-			for (auto& x : buffer) {
-				x = 0;
-			}
-			for (uint8_t page=0; page<H/8; ++page) {
-				buffer[page*W + wl] = 0xFF;
-			}
-			flush_buffer();
-			vTaskDelay(1);
-		}
-
 		vTaskDelay(configTICK_RATE_HZ*5);
 	}
 }
 
-void create_task_display()
+
+void task_function_display_2(void*)
 {
-	task_data_display.task_handle = xTaskCreateStatic(
-		&task_function_display,
-		"DISPLAY",
-		task_data_display.stack.size(),
+	vTaskDelay(configTICK_RATE_HZ*5);
+	logger.log_async("DISPLAY-2 task started\r\n");
+	display2::init_display();
+
+	constexpr std::array<uint8_t, 8> init_cmds{
+		0xAE, // display off
+		0xDA, 0b00010010, // COM pins configuration: sequential, disable COM left/right remap
+		0x20, 0b10, // page addressing mode
+		0x8D, 0x14, // enable charge pump
+		0xAF // display on
+	};
+
+	spi2_lock();
+	for (const auto cmd : init_cmds) {
+		display2::spi_write_cmd(cmd);
+	}
+	display2::display.flush_buffer();
+	spi2_unlock();
+
+	UG_Init(&display2::ugui, &display2::ugui_pset, display2::display.x_size(), display2::display.y_size());
+	UG_SelectGUI(&display2::ugui);
+	UG_FontSelect(&FONT_8X14);
+
+	UG_FillScreen(0);
+	UG_PutString(1, 2, "Display-2 012345678901234567890123456789012345678901234567890123456789");
+	UG_Update();
+	display2::display.flush_buffer();
+
+	vTaskDelay(configTICK_RATE_HZ*3);
+
+	display2::display.clear();
+	display2::display.flush_buffer();
+	for(uint16_t y=0; y < display2::display.y_size(); ++y) {
+		for (uint16_t x=0; x < display2::display.x_size(); ++x) {
+			display2::display.draw_point(x, y, 1);
+			spi2_lock();
+			display2::display.flush_buffer();
+			spi2_unlock();
+			vTaskDelay(1);
+		}
+		logger.log_async("DISPLAY-2 row done\r\n");
+	}
+
+	logger.log_async("DISPLAY-2 loop\r\n");
+	for (;;) {
+		vTaskDelay(configTICK_RATE_HZ);
+	}
+}
+
+
+void create_task_display_1()
+{
+	task_data_display_1.task_handle = xTaskCreateStatic(
+		&task_function_display_1,
+		"DISPLAY-1",
+		task_data_display_1.stack.size(),
 		nullptr,
-		PRIO_DISPLAY,
-		task_data_display.stack.data(),
-		&task_data_display.task_buffer
+		PRIO_DISPLAY_1,
+		task_data_display_1.stack.data(),
+		&task_data_display_1.task_buffer
+	);
+}
+
+void create_task_display_2()
+{
+	task_data_display_2.task_handle = xTaskCreateStatic(
+		&task_function_display_2,
+		"DISPLAY-2",
+		task_data_display_2.stack.size(),
+		nullptr,
+		PRIO_DISPLAY_2,
+		task_data_display_2.stack.data(),
+		&task_data_display_2.task_buffer
 	);
 }
 
@@ -364,9 +500,13 @@ __attribute__ ((noreturn)) void main()
 	lora::create_task_ext("lora_ext", PRIO_LORA_EXT, task_data_lora_ext, &hwc_ext);
 	logger.log_sync("Created LORA_EXT task\r\n");
 
-	logger.log_sync("Creating DISPLAY task...\r\n");
-	create_task_display();
-	logger.log_sync("Created DISPLAY task\r\n");
+	logger.log_sync("Creating DISPLAY-1 task...\r\n");
+	create_task_display_1();
+	logger.log_sync("Created DISPLAY-1 task\r\n");
+
+	logger.log_sync("Creating DISPLAY-2 task...\r\n");
+	create_task_display_2();
+	logger.log_sync("Created DISPLAY-2 task\r\n");
 
 	logger.log_sync("Starting FreeRTOS scheduler\r\n");
 	vTaskStartScheduler();

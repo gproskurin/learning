@@ -1,11 +1,15 @@
 #include "FreeRTOS.h"
 #include "task.h"
+#include "semphr.h"
 
 #include "sx1276.h"
 #include "bsp.h"
 
 #include "lora.h"
 
+extern SemaphoreHandle_t mutex_spi2;
+void spi2_lock();
+void spi2_unlock();
 
 extern void perif_init_irq_dio0();
 extern freertos_utils::pin_toggle_task_t<stm32_lib::gpio::pin_t> g_pin_green2;
@@ -139,6 +143,7 @@ void task_function_ext(void* arg)
 	logger.log_async("LORA_EXT task started\r\n");
 	const sx1276::hwconf_t* const hwp = reinterpret_cast<const sx1276::hwconf_t*>(arg);
 
+	spi2_lock();
 	sx1276::spi_sx_init(*hwp, false /*slow*/);
 
 	sx1276::reset_radio_pin(stm32_lib::gpio::pin_t(GPIOB_BASE, 2));
@@ -156,6 +161,7 @@ void task_function_ext(void* arg)
 
 	const uint8_t reg_01 = spi.get_reg(sx1276::regs_t::OpMode);
 	spi.set_reg(sx1276::regs_t::OpMode, sx1276::opmode(reg_01, sx1276::reg_val_t::OpMode_Mode_STDBY));
+	spi2_unlock();
 	for(;;) {
 		static const std::array<uint8_t, 11> tx_buf{
 			'B', 'E', 'E', 'F',
@@ -164,12 +170,16 @@ void task_function_ext(void* arg)
 		vTaskDelay(configTICK_RATE_HZ*5);
 
 		g_pin_green.on();
+		spi2_lock();
 		spi.fifo_write(tx_buf.data(), tx_buf.size());
 		spi.set_reg(sx1276::regs_t::OpMode, sx1276::opmode(reg_01, sx1276::reg_val_t::OpMode_Mode_TX));
 		while (!(spi.get_reg(sx1276::regs_t::IrqFlags) & sx1276::reg_val_t::IrqFlags_TxDone)) {
+			spi2_unlock();
 			vTaskDelay(1);
+			spi2_lock();
 		}
 		spi.set_reg(sx1276::regs_t::IrqFlags, sx1276::reg_val_t::IrqFlags_TxDone); // clear flag
+		spi2_unlock();
 		g_pin_green.off();
 
 		logger.log_async("TX - done\r\n");
