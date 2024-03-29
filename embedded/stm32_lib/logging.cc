@@ -4,28 +4,6 @@
 #include "queue.h"
 
 
-namespace {
-
-void usart_tx(USART_TypeDef* const usart, const char* s)
-{
-	while (*s) {
-#if defined TARGET_STM32H745_CM4 || defined TARGET_STM32H745_CM7 || defined TARGET_STM32WB55 || defined TARGET_STM32G030 || defined TARGET_STM32G031
-		while (! (usart->ISR & USART_ISR_TXE_TXFNF)) {}
-		usart->TDR = *s;
-#elif defined TARGET_STM32L072
-		while (! (usart->ISR & USART_ISR_TXE)) {}
-		usart->TDR = *s;
-#else
-		while (! (usart->SR & USART_SR_TXE)) {}
-		usart->DR = *s;
-#endif
-		++s;
-	}
-}
-
-} // namespace
-
-
 void usart_logger_t::task_function(void* arg)
 {
 	usart_logger_t* const lp = reinterpret_cast<usart_logger_t*>(arg);
@@ -49,24 +27,43 @@ void usart_logger_t::init_queue()
 }
 
 
-void usart_logger_t::log_sync(const char* str) const
+void usart_logger_t::log_sync(const char* s) const
 {
-	usart_tx(usart_, str);
-}
+#ifdef TARGET_NRF52DK
+	if (!*s) {
+		return;
+	}
 
+	usart_->TASKS_STARTTX = 1;
 
-void usart_logger_t::log_async(const char* static_str)
-{
-	xQueueSend(queue_handle_, &static_str, 0);
-	// TODO check error, queue overflow?
-}
+	// tx_byte
+	usart_->EVENTS_TXDRDY = 0;
+	usart_->TXD = *s;
+	++s;
+#endif
 
+	while (*s) {
+#if defined TARGET_STM32H745_CM4 || defined TARGET_STM32H745_CM7 || defined TARGET_STM32WB55 || defined TARGET_STM32G030 || defined TARGET_STM32G031
+		while (! (usart_->ISR & USART_ISR_TXE_TXFNF)) {}
+		usart_->TDR = *s;
+#elif defined TARGET_STM32L072
+		while (! (usart_->ISR & USART_ISR_TXE)) {}
+		usart_->TDR = *s;
+#elif defined TARGET_NRF52DK
+		while (! (usart_->EVENTS_TXDRDY)) {}
+		usart_->EVENTS_TXDRDY = 0;
+		usart_->TXD = *s;
+#else
+		while (! (usart_->SR & USART_SR_TXE)) {}
+		usart_->DR = *s;
+#endif
+		++s;
+	}
 
-void usart_logger_t::log_async_from_isr(const char* static_str)
-{
-	// copy pointer itself to queue
-	xQueueSendFromISR(queue_handle_, reinterpret_cast<void*>(&static_str), NULL);
-	// TODO check error, queue overflow?
+#ifdef TARGET_NRF52DK
+	while (! (usart_->EVENTS_TXDRDY)) {}
+	usart_->TASKS_STOPTX = 1;
+#endif
 }
 
 

@@ -149,6 +149,12 @@ constexpr nrf5_lib::gpio::pin_inverted_t pin_led_1{17};
 constexpr nrf5_lib::gpio::pin_inverted_t pin_led_2{18};
 constexpr nrf5_lib::gpio::pin_inverted_t pin_led_3{19};
 constexpr nrf5_lib::gpio::pin_inverted_t pin_led_4{20};
+
+#define UART_VCOM NRF_UART0
+//constexpr nrf5_lib::gpio::pin_t pin_vcom_rts{5};
+constexpr nrf5_lib::gpio::pin_t pin_vcom_txd{6};
+//constexpr nrf5_lib::gpio::pin_t pin_vcom_cts{7};
+//constexpr nrf5_lib::gpio::pin_t pin_vcom_rxd{8};
 #endif
 
 #if defined TARGET_NRF5340DK_APP
