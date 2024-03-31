@@ -9,7 +9,7 @@
 
 #include "FreeRTOS.h"
 #include "task.h"
-#include "semphr.h"
+//#include "semphr.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -19,9 +19,7 @@
 
 #define PRIO_BLINK 1
 #define PRIO_DISPLAY_1 2
-#define PRIO_DISPLAY_2 2
 #define PRIO_LORA_EMB 6
-#define PRIO_LORA_EXT 5
 #define PRIO_LOGGER 8 // FIXME
 
 
@@ -29,7 +27,6 @@
 
 
 lora::task_data_t task_data_lora_emb;
-lora::task_data_t task_data_lora_ext;
 
 constexpr sx1276::hwconf_t hwc_emb = {
 	.spi = SPI1,
@@ -43,31 +40,6 @@ constexpr sx1276::hwconf_t hwc_emb = {
 	//.pin_sx1276_reset{GPIOA_BASE, 11},
 	//.pin_radio_tcxo_vcc{GPIOA_BASE, 12},
 };
-
-constexpr sx1276::hwconf_t hwc_ext = {
-	.spi = SPI2,
-	.spi_af = 0,
-	.pin_spi_nss{GPIOB_BASE, 12},
-	.pin_spi_sck{GPIOB_BASE, 13},
-	.pin_spi_miso{GPIOB_BASE, 14},
-	.pin_spi_mosi{GPIOB_BASE, 15},
-	.pin_dio0{GPIOB_BASE, 4}, // FIXME, not used yet
-};
-
-
-StaticSemaphore_t mutex_buffer_spi2;
-SemaphoreHandle_t mutex_spi2 = xSemaphoreCreateMutexStatic(&mutex_buffer_spi2);
-
-
-void spi2_lock()
-{
-	while (xSemaphoreTake(mutex_spi2, portMAX_DELAY) != pdTRUE) { vTaskDelay(1); }
-}
-
-void spi2_unlock()
-{
-	xSemaphoreGive(mutex_spi2);
-}
 
 
 usart_logger_t logger;
@@ -115,9 +87,9 @@ void bus_init()
 	RCC->IOPENR = RCC_IOPENR_IOPAEN_Msk | RCC_IOPENR_IOPBEN_Msk | RCC_IOPENR_IOPCEN_Msk;
 	toggle_bits_10(&RCC->IOPRSTR, RCC_IOPRSTR_IOPARST | RCC_IOPRSTR_IOPBRST | RCC_IOPRSTR_IOPCRST);
 
-	// USART2 & SPI2
-	RCC->APB1ENR |= RCC_APB1ENR_USART2EN_Msk | RCC_APB1ENR_I2C1EN_Msk | RCC_APB1ENR_SPI2EN_Msk;
-	toggle_bits_10(&RCC->APB1RSTR, RCC_APB1RSTR_USART2RST_Msk | RCC_APB1RSTR_I2C1RST_Msk | RCC_APB1RSTR_SPI2RST_Msk);
+	// USART2 & I2C1
+	RCC->APB1ENR |= RCC_APB1ENR_USART2EN_Msk | RCC_APB1ENR_I2C1EN_Msk /*| RCC_APB1ENR_SPI2EN_Msk*/;
+	toggle_bits_10(&RCC->APB1RSTR, RCC_APB1RSTR_USART2RST_Msk | RCC_APB1RSTR_I2C1RST_Msk /*| RCC_APB1RSTR_SPI2RST_Msk*/);
 
 	// SPI1 & SYSCFG
 	RCC->APB2ENR |= RCC_APB2ENR_SPI1EN_Msk | RCC_APB2ENR_SYSCFGEN_Msk;
@@ -206,6 +178,7 @@ freertos_utils::pin_toggle_task_t g_pin_green("blink_green", bsp::pin_led_green,
 
 namespace display1 {
 #define i2c_display I2C1
+	constexpr stm32_lib::gpio::pin_t pin_vcc(GPIOA_BASE, 9);
 	constexpr stm32_lib::gpio::pin_t pin_scl(GPIOB_BASE, 8);
 	constexpr stm32_lib::gpio::pin_t pin_sda(GPIOB_BASE, 9);
 	constexpr uint8_t i2c_af = 4;
@@ -220,6 +193,16 @@ namespace display1 {
 
 	void init_display()
 	{
+		// power on
+		stm32_lib::gpio::set_state(pin_vcc, 0);
+		pin_vcc.set(
+			stm32_lib::gpio::mode_t::output,
+			stm32_lib::gpio::pupd_t::no_pupd,
+			stm32_lib::gpio::speed_t::bits_00
+		);
+		stm32_lib::gpio::set_state(pin_vcc, 1);
+		vTaskDelay(configTICK_RATE_HZ/10);
+
 		stm32_lib::i2c::init_pins(pin_scl, i2c_af, pin_sda, i2c_af);
 		i2c_display->CR1 = 0;
 		i2c_display->CR2 = 0;
@@ -256,6 +239,7 @@ namespace display1 {
 }
 
 
+#if 0
 namespace display2 {
 	constexpr stm32_lib::gpio::pin_t pin_dc{GPIOA_BASE, 10};
 	constexpr stm32_lib::gpio::pin_t pin_rst{GPIOA_BASE, 0};
@@ -339,15 +323,16 @@ namespace display2 {
 		display.draw_point(x, y, color);
 	}
 }
+#endif
 
 
 freertos_utils::task_data_t<1024> task_data_display_1;
-freertos_utils::task_data_t<1024> task_data_display_2;
+//freertos_utils::task_data_t<1024> task_data_display_2;
 
 
 void task_function_display_1(void*)
 {
-	vTaskDelay(configTICK_RATE_HZ);
+	logger.log_async("DISPLAY-1 task started\r\n");
 	display1::init_display();
 
 	constexpr std::array<uint8_t, 6> init_cmds{
@@ -375,6 +360,7 @@ void task_function_display_1(void*)
 	display1::display.clear();
 	display1::display.flush_buffer();
 
+	/*
 	for(uint16_t y=0; y < display1::display.y_size(); ++y) {
 		for (uint16_t x=0; x < display1::display.x_size(); ++x) {
 			display1::display.draw_point(x, y, 1);
@@ -383,6 +369,7 @@ void task_function_display_1(void*)
 		}
 		logger.log_async("DISPLAY-1 row done\r\n");
 	}
+	*/
 
 	logger.log_async("DISPLAY-1 loop\r\n");
 	for (;;) {
@@ -391,6 +378,7 @@ void task_function_display_1(void*)
 }
 
 
+#if 0
 void task_function_display_2(void*)
 {
 	vTaskDelay(configTICK_RATE_HZ*5);
@@ -441,6 +429,7 @@ void task_function_display_2(void*)
 		vTaskDelay(configTICK_RATE_HZ);
 	}
 }
+#endif
 
 
 void create_task_display_1()
@@ -456,6 +445,7 @@ void create_task_display_1()
 	);
 }
 
+#if 0
 void create_task_display_2()
 {
 	task_data_display_2.task_handle = xTaskCreateStatic(
@@ -468,6 +458,7 @@ void create_task_display_2()
 		&task_data_display_2.task_buffer
 	);
 }
+#endif
 
 
 __attribute__ ((noreturn)) void main()
@@ -496,17 +487,17 @@ __attribute__ ((noreturn)) void main()
 	lora::create_task_emb("lora_emb", PRIO_LORA_EMB, task_data_lora_emb, &hwc_emb);
 	logger.log_sync("Created LORA_EMB task\r\n");
 
-	logger.log_sync("Creating LORA_EXT task...\r\n");
-	lora::create_task_ext("lora_ext", PRIO_LORA_EXT, task_data_lora_ext, &hwc_ext);
-	logger.log_sync("Created LORA_EXT task\r\n");
+	//logger.log_sync("Creating LORA_EXT task...\r\n");
+	//lora::create_task_ext("lora_ext", PRIO_LORA_EXT, task_data_lora_ext, &hwc_ext);
+	//logger.log_sync("Created LORA_EXT task\r\n");
 
 	logger.log_sync("Creating DISPLAY-1 task...\r\n");
 	create_task_display_1();
 	logger.log_sync("Created DISPLAY-1 task\r\n");
 
-	logger.log_sync("Creating DISPLAY-2 task...\r\n");
-	create_task_display_2();
-	logger.log_sync("Created DISPLAY-2 task\r\n");
+	//logger.log_sync("Creating DISPLAY-2 task...\r\n");
+	//create_task_display_2();
+	//logger.log_sync("Created DISPLAY-2 task\r\n");
 
 	logger.log_sync("Starting FreeRTOS scheduler\r\n");
 	vTaskStartScheduler();

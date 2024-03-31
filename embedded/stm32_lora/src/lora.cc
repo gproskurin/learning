@@ -7,9 +7,6 @@
 
 #include "lora.h"
 
-extern SemaphoreHandle_t mutex_spi2;
-void spi2_lock();
-void spi2_unlock();
 
 extern void perif_init_irq_dio0();
 extern freertos_utils::pin_toggle_task_t<stm32_lib::gpio::pin_t> g_pin_green2;
@@ -137,6 +134,7 @@ void task_function_emb(void* arg)
 }
 
 
+#if 0
 void task_function_ext(void* arg)
 {
 	vTaskDelay(configTICK_RATE_HZ/2);
@@ -185,6 +183,7 @@ void task_function_ext(void* arg)
 		logger.log_async("TX - done\r\n");
 	}
 }
+#endif
 
 
 } // namespace
@@ -209,6 +208,7 @@ void lora::create_task_emb(
 }
 
 
+#if 0
 void lora::create_task_ext(
 	const char* task_name,
 	UBaseType_t prio,
@@ -226,4 +226,5 @@ void lora::create_task_ext(
 		&task_data.task_buffer
 	);
 }
+#endif
 
