@@ -33,6 +33,11 @@ enum class pull_t {
 	pu = 3
 };
 
+enum class state_t {
+	lo = 0,
+	hi = 1
+};
+
 
 #ifdef TARGET_NRF52DK
 #define MY_P0 (NRF_P0)
@@ -77,6 +82,13 @@ struct pin_impl_t {
 		set(args...);
 	}
 
+	template <typename... Targs>
+	void set(state_t s, Targs... args) const
+	{
+		set_state(static_cast<bool>(s));
+		set(args...);
+	}
+
 	void set_mode_output_lowspeed_pushpull() const
 	{
 		set(dir_t::output, pull_t::no_pull);
@@ -100,7 +112,8 @@ using pin_t = pin_impl_t<false>;
 using pin_inverted_t = pin_impl_t<true>;
 
 
-}
+} // gpio
+
 
 } // namespace nrf5_lib
 

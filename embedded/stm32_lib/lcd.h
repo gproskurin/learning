@@ -3,6 +3,7 @@
 
 #include "cmsis_device.h"
 
+#include <stddef.h>
 #include <algorithm>
 #include <array>
 
