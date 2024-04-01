@@ -168,17 +168,16 @@ void vApplicationIdleHook(void)
 
 freertos_utils::pin_toggle_task_t g_pin_led1("blink_led1", bsp::pin_led_1, PRIO_BLINK);
 freertos_utils::pin_toggle_task_t g_pin_led2("blink_led2", bsp::pin_led_2, PRIO_BLINK);
-//freertos_utils::pin_toggle_task_t g_pin_led3("blink_led3", bsp::pin_led_3, PRIO_BLINK);
-//freertos_utils::pin_toggle_task_t g_pin_led4("blink_led4", bsp::pin_led_4, PRIO_BLINK);
+freertos_utils::pin_toggle_task_t g_pin_led3("blink_led3", bsp::pin_led_3, PRIO_BLINK);
+freertos_utils::pin_toggle_task_t g_pin_led4("blink_led4", bsp::pin_led_4, PRIO_BLINK);
 
 
 namespace display {
-	constexpr nrf5_lib::gpio::pin_t pin_vdd{25};
-	constexpr nrf5_lib::gpio::pin_t pin_spi_sck{24};
-	constexpr nrf5_lib::gpio::pin_t pin_spi_mosi{23};
-	constexpr nrf5_lib::gpio::pin_t pin_rst{22};
-	constexpr nrf5_lib::gpio::pin_t pin_dc{20};
-	constexpr nrf5_lib::gpio::pin_t pin_spi_nss{19};
+	constexpr nrf5_lib::gpio::pin_t pin_spi_nss{31};
+	constexpr nrf5_lib::gpio::pin_t pin_spi_sck{3};
+	constexpr nrf5_lib::gpio::pin_t pin_spi_mosi{22};
+	constexpr nrf5_lib::gpio::pin_t pin_rst{28};
+	constexpr nrf5_lib::gpio::pin_t pin_dc{29};
 
 	void spi_write_data(const uint8_t* const data, size_t size);
 	void spi_write_cmd(uint8_t cmd);
@@ -205,20 +204,26 @@ namespace display {
 	void init_display()
 	{
 		pin_rst.set(nrf5_lib::gpio::state_t::hi, nrf5_lib::gpio::dir_t::output);
-		pin_vdd.set(nrf5_lib::gpio::state_t::lo, nrf5_lib::gpio::dir_t::output);
 		pin_dc.set(nrf5_lib::gpio::state_t::lo, nrf5_lib::gpio::dir_t::output);
 
-		pin_spi_nss.set(nrf5_lib::gpio::state_t::hi, nrf5_lib::gpio::dir_t::output);
-		pin_spi_sck.set(nrf5_lib::gpio::state_t::lo/*CPOL*/, nrf5_lib::gpio::dir_t::output);
-		pin_spi_mosi.set(nrf5_lib::gpio::state_t::lo, nrf5_lib::gpio::dir_t::output);
-
-		// power up
-		pin_vdd.set_state(1);
-		vTaskDelay(configTICK_RATE_HZ/10);
+		pin_spi_nss.set(
+			nrf5_lib::gpio::state_t::hi,
+			nrf5_lib::gpio::dir_t::output
+		);
+		pin_spi_sck.set(
+			nrf5_lib::gpio::state_t::lo, // CPOL
+			//nrf5_lib::gpio::pull_t::pd,
+			nrf5_lib::gpio::dir_t::output
+		);
+		pin_spi_mosi.set(
+			nrf5_lib::gpio::state_t::lo,
+			//nrf5_lib::gpio::pull_t::pd,
+			nrf5_lib::gpio::dir_t::output
+		);
 
 		// reset
 		pin_rst.set_state(0);
-		vTaskDelay(configTICK_RATE_HZ/10);
+		vTaskDelay(1);
 		pin_rst.set_state(1);
 
 		// init SPI
@@ -228,7 +233,8 @@ namespace display {
 		SPI_DEV->PSEL.SCK = pin_spi_sck.reg;
 		SPI_DEV->PSEL.MOSI = pin_spi_mosi.reg;
 		SPI_DEV->PSEL.MISO = 0xFFFFFFFF;
-		SPI_DEV->FREQUENCY = 0x10000000; // 1Mbps
+		//SPI_DEV->FREQUENCY = 0x10000000; // 1Mbps
+		SPI_DEV->FREQUENCY = 0x02000000; // 125kbps
 		SPI_DEV->ENABLE = 7;
 	}
 
@@ -349,12 +355,12 @@ __attribute__ ((noreturn)) void main()
 
 	g_pin_led1.init_pin();
 	g_pin_led2.init_pin();
-	//g_pin_led3.init_pin();
-	//g_pin_led4.init_pin();
-	g_pin_led1.pulse_continuous(configTICK_RATE_HZ/20, configTICK_RATE_HZ*19/20);
-	g_pin_led2.pulse_continuous(configTICK_RATE_HZ/30, configTICK_RATE_HZ/50);
-	//g_pin_led3.pulse_continuous(configTICK_RATE_HZ/13, configTICK_RATE_HZ/7);
-	//g_pin_led4.pulse_continuous(configTICK_RATE_HZ/5, configTICK_RATE_HZ/11);
+	g_pin_led3.init_pin();
+	g_pin_led4.init_pin();
+	g_pin_led1.pulse_continuous(configTICK_RATE_HZ/32, configTICK_RATE_HZ*31/32);
+	g_pin_led2.pulse_continuous(configTICK_RATE_HZ/32, configTICK_RATE_HZ/10);
+	g_pin_led3.pulse_continuous(configTICK_RATE_HZ/13, configTICK_RATE_HZ/7);
+	g_pin_led4.pulse_continuous(configTICK_RATE_HZ/5, configTICK_RATE_HZ/11);
 
 	//logger.log_sync("Creating LORA_EXT task...\r\n");
 	//lora::create_task_ext("lora_ext", PRIO_LORA_EXT, task_data_lora_ext, &hwc_ext);
