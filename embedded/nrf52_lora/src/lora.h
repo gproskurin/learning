@@ -18,8 +18,7 @@ struct task_data_t {
 	StaticTask_t task_buffer;
 };
 
-void create_task_ext(const char* task_name, UBaseType_t prio, task_data_t&, const sx1276::hwconf_t*);
-void create_task_emb(const char* task_name, UBaseType_t prio, task_data_t&, const sx1276::hwconf_t*);
+void create_task(const char* task_name, UBaseType_t prio, task_data_t&, const sx1276::hwconf_t*);
 
 
 } // namespace

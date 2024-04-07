@@ -1,21 +1,57 @@
 #include "FreeRTOS.h"
 #include "task.h"
-#include "semphr.h"
 
 #include "sx1276.h"
 #include "bsp.h"
 
+#include "logging.h"
 #include "lora.h"
+#include <nrf52.h>
 
+extern usart_logger_t logger;
 
 extern void perif_init_irq_dio0();
-extern freertos_utils::pin_toggle_task_t<stm32_lib::gpio::pin_t> g_pin_green2;
-extern freertos_utils::pin_toggle_task_t<stm32_lib::gpio::pin_t> g_pin_blue;
-extern freertos_utils::pin_toggle_task_t<stm32_lib::gpio::pin_t> g_pin_red;
-extern freertos_utils::pin_toggle_task_t<stm32_lib::gpio::pin_t> g_pin_green;
+extern freertos_utils::pin_toggle_task_t<nrf5_lib::gpio::pin_t> g_pin_led1;
+extern freertos_utils::pin_toggle_task_t<nrf5_lib::gpio::pin_t> g_pin_led2;
+extern freertos_utils::pin_toggle_task_t<nrf5_lib::gpio::pin_t> g_pin_led3;
+extern freertos_utils::pin_toggle_task_t<nrf5_lib::gpio::pin_t> g_pin_led4;
 
+
+extern "C"
+const sx1276::hwconf_t hwc{
+	.spi{NRF_SPIM1},
+
+	.pin_spi_nss{26},
+	.pin_spi_sck{25},
+	.pin_spi_miso{2},
+	.pin_spi_mosi{27},
+
+	.pin_dio0{24}
+};
+constexpr nrf5_lib::gpio::pin_t sx1276_reset{23};
 
 namespace {
+
+
+namespace spi {
+	void cb_spi_nss(bool s)
+	{
+		hwc.pin_spi_nss.set_state(s);
+	}
+
+	void cb_spi_write(const uint8_t* tx_data, size_t size, uint8_t* rx_data)
+	{
+		hwc.spi->TXD.PTR = reinterpret_cast<uint32_t>(tx_data);
+		hwc.spi->TXD.MAXCNT = (tx_data ? size : 0);
+		hwc.spi->RXD.PTR = reinterpret_cast<uint32_t>(rx_data);
+		hwc.spi->RXD.MAXCNT = (rx_data ? size : 0);
+
+		hwc.spi->EVENTS_END = 0;
+		hwc.spi->TASKS_START = 1;
+		while(! (hwc.spi->EVENTS_END)) {}
+		hwc.spi->TASKS_STOP = 1;
+	}
+} //spi
 
 
 char prn_halfbyte(uint8_t x)
@@ -50,6 +86,7 @@ void printf_dio_status(const char* msg, const Pins& pins)
 #endif
 
 
+#if 0
 void log_async_1(uint8_t x, char* const buf0)
 {
 	auto buf = buf0;
@@ -59,6 +96,7 @@ void log_async_1(uint8_t x, char* const buf0)
 	*buf++ = 0;
 	logger.log_async(buf0);
 }
+#endif
 
 void log_async_2(uint8_t x1, uint8_t x2, char* const buf0)
 {
@@ -73,81 +111,18 @@ void log_async_2(uint8_t x1, uint8_t x2, char* const buf0)
 }
 
 
-void task_function_emb(void* arg)
+void task_function(void* arg)
 {
-	logger.log_async("LORA_EMB task started\r\n");
+	logger.log_async("LORA task started\r\n");
 	const sx1276::hwconf_t* const hwp = reinterpret_cast<const sx1276::hwconf_t*>(arg);
 
-	sx1276::spi_sx_init(*hwp, true);
-
-	//sx1276::init_radio_pin(hwp->pin_radio_tcxo_vcc);
-	//sx1276::init_radio_pin(hwp->pin_radio_ant_sw_rx);
-	//sx1276::init_radio_pin(hwp->pin_radio_ant_sw_tx_boost);
-	//sx1276::init_radio_pin(hwp->pin_radio_ant_sw_tx_rfo);
-
-	//stm32_lib::gpio::set_state(hwp->pin_radio_tcxo_vcc, 1);
-
-	// init dio
-	hwp->pin_dio0.set(stm32_lib::gpio::mode_t::input, stm32_lib::gpio::pupd_t::no_pupd);
-
-	sx1276::reset_radio_pin(bsp::sx1276::pin_reset);
-
-	sx1276::lora_configure<sx1276::LoraConfig_1>(*hwp);
-	sx1276::spi_sx1276_t spi(hwp->spi, hwp->pin_spi_nss);
-
-	spi.set_reg(sx1276::regs_t::IrqFlagsMask, 0);
-	spi.set_reg(0x40, 0b00); // RegDioMapping1
-	//spi.set_reg(0x41, 0b00); // RegDioMapping2
-	perif_init_irq_dio0();
-	spi.set_reg(0x01, sx1276::opmode(spi.get_reg(0x01), sx1276::reg_val_t::OpMode_Mode_RXCONTINUOUS));
-
-	//printf_dio_status("DIO after init\r\n", hwp->pins_dio);
-	for(;;) {
-		xTaskNotifyWait(0, 0xffffffff, nullptr, configTICK_RATE_HZ /*1sec*/);
-		const auto flags = spi.get_reg(sx1276::regs_t::IrqFlags);
-		if (flags & sx1276::reg_val_t::IrqFlags_RxDone)
-		{
-			const bool crc_error = flags & sx1276::reg_val_t::IrqFlags_PayloadCrcError;
-			if (crc_error) {
-				g_pin_red.pulse_once(configTICK_RATE_HZ*2);
-				logger.log_async("LORA_EMB: recv crc error\r\n");
-			}
-			// clear flags
-			spi.set_reg(
-				sx1276::regs_t::IrqFlags,
-				sx1276::reg_val_t::IrqFlags_RxDone | sx1276::reg_val_t::IrqFlags_PayloadCrcError
-			);
-
-			// show off
-			g_pin_blue.pulse_once(configTICK_RATE_HZ/100);
-			logger.log_async("LORA_EMB: recv\r\n");
-
-			static std::array<uint8_t, 256> rx_buf;
-			const auto rx_size = spi.fifo_read(rx_buf.data());
-			if (true || rx_size != 7) {
-				char buf[5];
-				log_async_1(rx_size, buf);
-				logger.log_async(reinterpret_cast<const char*>(rx_buf.data()));
-			}
-		}
-	}
-}
-
-
-#if 0
-void task_function_ext(void* arg)
-{
-	vTaskDelay(configTICK_RATE_HZ/2);
-	logger.log_async("LORA_EXT task started\r\n");
-	const sx1276::hwconf_t* const hwp = reinterpret_cast<const sx1276::hwconf_t*>(arg);
-
-	spi2_lock();
 	sx1276::spi_sx_init(*hwp, false /*slow*/);
 
-	sx1276::reset_radio_pin(stm32_lib::gpio::pin_t(GPIOB_BASE, 2));
+	sx1276::reset_radio_pin(sx1276_reset);
 
-	sx1276::lora_configure<sx1276::LoraConfig_1>(*hwp);
-	sx1276::spi_sx1276_t spi(hwp->spi, hwp->pin_spi_nss);
+	using spi_t = sx1276::spi_sx1276_t<spi::cb_spi_write, spi::cb_spi_nss>;
+	spi_t spi;
+	sx1276::lora_configure<sx1276::LoraConfig_1>(spi);
 
 	{
 		logger.log_async("--- version\r\n");
@@ -159,7 +134,6 @@ void task_function_ext(void* arg)
 
 	const uint8_t reg_01 = spi.get_reg(sx1276::regs_t::OpMode);
 	spi.set_reg(sx1276::regs_t::OpMode, sx1276::opmode(reg_01, sx1276::reg_val_t::OpMode_Mode_STDBY));
-	spi2_unlock();
 	for(;;) {
 		static const std::array<uint8_t, 11> tx_buf{
 			'B', 'E', 'E', 'F',
@@ -167,29 +141,53 @@ void task_function_ext(void* arg)
 		};
 		vTaskDelay(configTICK_RATE_HZ*5);
 
-		g_pin_green.on();
-		spi2_lock();
+		g_pin_led4.on();
 		spi.fifo_write(tx_buf.data(), tx_buf.size());
-		spi.set_reg(sx1276::regs_t::OpMode, sx1276::opmode(reg_01, sx1276::reg_val_t::OpMode_Mode_TX));
-		while (!(spi.get_reg(sx1276::regs_t::IrqFlags) & sx1276::reg_val_t::IrqFlags_TxDone)) {
-			spi2_unlock();
-			vTaskDelay(1);
-			spi2_lock();
+
+		// perform CAD, wait for channel to be free to avoid collision while sending
+		for (;;) {
+			spi.set_reg(sx1276::regs_t::OpMode, sx1276::opmode(reg_01, sx1276::reg_val_t::OpMode_Mode_CAD));
+			// wait for CadDone
+			uint8_t f;
+			while (!(f=spi.get_reg(sx1276::regs_t::IrqFlags) & sx1276::reg_val_t::IrqFlags_CadDone)) {
+				vTaskDelay(1);
+			}
+
+			if (!(f & sx1276::reg_val_t::IrqFlags_CadDetected)) {
+				// CAD not detected, channel is free, goto TX ASAP, clear flags after TX
+				break;
+			}
+
+			// channel is busy, sleep for some time and retry
+			spi.set_reg(
+				sx1276::regs_t::IrqFlags,
+				sx1276::reg_val_t::IrqFlags_CadDone | sx1276::reg_val_t::IrqFlags_CadDetected
+			);
+			vTaskDelay(configTICK_RATE_HZ/10); // TODO random
 		}
-		spi.set_reg(sx1276::regs_t::IrqFlags, sx1276::reg_val_t::IrqFlags_TxDone); // clear flag
-		spi2_unlock();
-		g_pin_green.off();
+
+		spi.set_reg(sx1276::regs_t::OpMode, sx1276::opmode(reg_01, sx1276::reg_val_t::OpMode_Mode_TX));
+		uint8_t f;
+		while (!(f=spi.get_reg(sx1276::regs_t::IrqFlags) & sx1276::reg_val_t::IrqFlags_TxDone)) {
+			vTaskDelay(1);
+		}
+		// clear all used flags
+		spi.set_reg(
+			sx1276::regs_t::IrqFlags,
+			sx1276::reg_val_t::IrqFlags_TxDone | sx1276::reg_val_t::IrqFlags_CadDone
+		);
+		g_pin_led4.off();
+		g_pin_led3.pulse_once(configTICK_RATE_HZ/10);
 
 		logger.log_async("TX - done\r\n");
 	}
 }
-#endif
 
 
 } // namespace
 
 
-void lora::create_task_emb(
+void lora::create_task(
 	const char* task_name,
 	UBaseType_t prio,
 	lora::task_data_t& task_data,
@@ -197,7 +195,7 @@ void lora::create_task_emb(
 )
 {
 	task_data.task_handle = xTaskCreateStatic(
-		&task_function_emb,
+		&task_function,
 		task_name,
 		task_data.stack.size(),
 		const_cast<void*>(reinterpret_cast<const void*>(hwp)),
@@ -206,25 +204,4 @@ void lora::create_task_emb(
 		&task_data.task_buffer
 	);
 }
-
-
-#if 0
-void lora::create_task_ext(
-	const char* task_name,
-	UBaseType_t prio,
-	lora::task_data_t& task_data,
-	const sx1276::hwconf_t* hwp
-)
-{
-	task_data.task_handle = xTaskCreateStatic(
-		&task_function_ext,
-		task_name,
-		task_data.stack.size(),
-		const_cast<void*>(reinterpret_cast<const void*>(hwp)),
-		prio,
-		task_data.stack.data(),
-		&task_data.task_buffer
-	);
-}
-#endif
 

@@ -3,16 +3,16 @@
 #include "lib_nrf5.h"
 #include <nrf52_bitfields.h>
 #include "lcd.h"
-//#include "sx1276.h"
 #include "bsp.h"
 #include "freertos_utils.h"
 #include "logging.h"
 
-//#include "lora.h"
+#include "lora.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
 //#include "semphr.h"
+#include "sx1276.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -22,14 +22,12 @@
 
 #define PRIO_BLINK 1
 #define PRIO_DISPLAY 2
-#define PRIO_LORA_EXT 6
+#define PRIO_LORA 6
 #define PRIO_LOGGER 8 // FIXME
 
 
-//#define USART_CON_BAUDRATE 115200
-
-
-//lora::task_data_t task_data_lora_emb;
+lora::task_data_t task_data_lora;
+extern "C" const sx1276::hwconf_t hwc;
 
 #if 0
 constexpr sx1276::hwconf_t hwc_emb = {
@@ -47,10 +45,9 @@ constexpr sx1276::hwconf_t hwc_emb = {
 #endif
 
 
-usart_logger_t logger;
+usart_logger_t logger(UART_VCOM, "logger", PRIO_LOGGER);
 
 
-#ifdef TARGET_NRF52DK
 void usart_init(NRF_UART_Type* const usart)
 {
 	bsp::pin_vcom_txd.set(nrf5_lib::gpio::dir_t::output, nrf5_lib::gpio::pull_t::pu);
@@ -64,89 +61,6 @@ void usart_init(NRF_UART_Type* const usart)
 	usart->PSELRTS = 0xFFFFFFFF;
 	usart->ENABLE = 4; // enable
 }
-#endif
-
-#if 0
-void usart_init(USART_TypeDef* const usart)
-{
-	usart->CR1 = 0; // ensure UE flag is reset
-
-	constexpr uint32_t cr1 = USART_CR1_TE;
-
-	stm32_lib::gpio::set_mode_af_lowspeed_pu(bsp::usart_stlink_pin_tx, USART_STLINK_PIN_TX_AF);
-	usart->BRR = configCPU_CLOCK_HZ / USART_CON_BAUDRATE;
-
-	usart->CR1 = cr1;
-	usart->CR1 = cr1 | USART_CR1_UE;
-}
-#endif
-
-
-void toggle_bits_10(volatile uint32_t* const ptr, const uint32_t mask)
-{
-	const auto val = *ptr;
-	*ptr = val | mask; // set mask bits to 1
-	*ptr = val & ~mask; // reset mask bits to 0
-}
-
-
-void bus_init()
-{
-#if defined TARGET_STM32L072
-	// flash
-	FLASH->ACR |= FLASH_ACR_LATENCY;
-
-	// clock: switch from MSI to HSI
-	// turn on HSI & wait
-	RCC->CR |= RCC_CR_HSION;
-	while (!(RCC->CR & RCC_CR_HSIRDY)) {}
-	// switch to HSI
-	RCC->CFGR = (RCC->CFGR & ~RCC_CFGR_SW_Msk) | (0b01 << RCC_CFGR_SW_Pos);
-	// switch off MSI & wait
-	RCC->CR &= ~RCC_CR_MSION;
-	while (RCC->CR & RCC_CR_MSIRDY) {}
-
-	// GPIOs
-	RCC->IOPENR = RCC_IOPENR_IOPAEN_Msk | RCC_IOPENR_IOPBEN_Msk | RCC_IOPENR_IOPCEN_Msk;
-	toggle_bits_10(&RCC->IOPRSTR, RCC_IOPRSTR_IOPARST | RCC_IOPRSTR_IOPBRST | RCC_IOPRSTR_IOPCRST);
-
-	// USART2 & I2C1
-	RCC->APB1ENR |= RCC_APB1ENR_USART2EN_Msk | RCC_APB1ENR_I2C1EN_Msk /*| RCC_APB1ENR_SPI2EN_Msk*/;
-	toggle_bits_10(&RCC->APB1RSTR, RCC_APB1RSTR_USART2RST_Msk | RCC_APB1RSTR_I2C1RST_Msk /*| RCC_APB1RSTR_SPI2RST_Msk*/);
-
-	// SPI1 & SYSCFG
-	RCC->APB2ENR |= RCC_APB2ENR_SPI1EN_Msk | RCC_APB2ENR_SYSCFGEN_Msk;
-	toggle_bits_10(&RCC->APB2RSTR, RCC_APB2RSTR_SPI1RST_Msk | RCC_APB2RSTR_SYSCFGRST_Msk);
-
-#if 0
-	// PB2 interrupt TODO: do not hardcode PB2, use bit masks stuff
-	{
-		auto const cr = &SYSCFG->EXTICR[pin_userbutton.reg / 4];
-		*cr = (*cr & ~(SYSCFG_EXTICR1_EXTI2_Msk)) | SYSCFG_EXTICR1_EXTI2_PB;
-	}
-
-	// EXTI
-	pin_userbutton.set(stm32_lib::gpio::mode_t::input, stm32_lib::gpio::pupd_t::no_pupd);
-	EXTI->IMR |= (1 << pin_userbutton.reg);
-	EXTI->RTSR &= ~(1 << pin_userbutton.reg); // disable rising edge interrupt (button release)
-	EXTI->FTSR |= (1 << pin_userbutton.reg); // enable falling edge interrupt (button press)
-	NVIC_SetPriority(EXTI2_3_IRQn, 13);
-	NVIC_EnableIRQ(EXTI2_3_IRQn);
-#endif
-#endif
-}
-
-
-#if 0
-//volatile bool blue_state = false;
-extern "C" __attribute__ ((interrupt)) void IntHandler_EXTI23()
-{
-	if (EXTI->PR & (1 << bsp::pin_userbutton.reg)) {
-		//stm32_lib::gpio::set_state(pin_led_blue, (blue_state = !blue_state));
-		EXTI->PR = (1 << bsp::pin_userbutton.reg);
-	}
-}
-#endif
 
 
 StaticTask_t xTaskBufferIdle;
@@ -339,19 +253,8 @@ void create_task_display()
 
 __attribute__ ((noreturn)) void main()
 {
-	bus_init();
-
 	usart_init(UART_VCOM);
-	logger.set_usart(UART_VCOM);
 	logger.log_sync("\r\nLogger initialized (sync)\r\n");
-
-	logger.log_sync("Creating logger queue...\r\n");
-	logger.init_queue();
-	logger.log_sync("Created logger queue\r\n");
-
-	logger.log_sync("Creating logger task...\r\n");
-	logger.create_task("logger", PRIO_LOGGER);
-	logger.log_sync("Created logger task\r\n");
 
 	g_pin_led1.init_pin();
 	g_pin_led2.init_pin();
@@ -359,12 +262,12 @@ __attribute__ ((noreturn)) void main()
 	g_pin_led4.init_pin();
 	g_pin_led1.pulse_continuous(configTICK_RATE_HZ/32, configTICK_RATE_HZ*31/32);
 	g_pin_led2.pulse_continuous(configTICK_RATE_HZ/32, configTICK_RATE_HZ/10);
-	g_pin_led3.pulse_continuous(configTICK_RATE_HZ/13, configTICK_RATE_HZ/7);
-	g_pin_led4.pulse_continuous(configTICK_RATE_HZ/5, configTICK_RATE_HZ/11);
+	//g_pin_led3.pulse_continuous(configTICK_RATE_HZ/13, configTICK_RATE_HZ/7);
+	//g_pin_led4.pulse_continuous(configTICK_RATE_HZ/5, configTICK_RATE_HZ/11);
 
-	//logger.log_sync("Creating LORA_EXT task...\r\n");
-	//lora::create_task_ext("lora_ext", PRIO_LORA_EXT, task_data_lora_ext, &hwc_ext);
-	//logger.log_sync("Created LORA_EXT task\r\n");
+	logger.log_sync("Creating LORA task...\r\n");
+	lora::create_task("lora", PRIO_LORA, task_data_lora, &hwc);
+	logger.log_sync("Created LORA task\r\n");
 
 	logger.log_sync("Creating DISPLAY task...\r\n");
 	create_task_display();
