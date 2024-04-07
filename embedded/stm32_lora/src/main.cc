@@ -9,7 +9,6 @@
 
 #include "FreeRTOS.h"
 #include "task.h"
-//#include "semphr.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -28,7 +27,8 @@
 
 lora::task_data_t task_data_lora_emb;
 
-constexpr sx1276::hwconf_t hwc_emb = {
+extern "C"
+const sx1276::hwconf_t hwc_emb = {
 	.spi = SPI1,
 	.spi_af = 0,
 	.pin_spi_nss = bsp::sx1276::pin_spi_nss,
@@ -42,7 +42,7 @@ constexpr sx1276::hwconf_t hwc_emb = {
 };
 
 
-usart_logger_t logger;
+usart_logger_t logger(USART_STLINK, "logger", PRIO_LOGGER);
 
 
 void usart_init(USART_TypeDef* const usart)
@@ -466,16 +466,7 @@ __attribute__ ((noreturn)) void main()
 	bus_init();
 
 	usart_init(USART_STLINK);
-	logger.set_usart(USART_STLINK);
 	logger.log_sync("\r\nLogger initialized (sync)\r\n");
-
-	logger.log_sync("Creating logger queue...\r\n");
-	logger.init_queue();
-	logger.log_sync("Created logger queue\r\n");
-
-	logger.log_sync("Creating logger task...\r\n");
-	logger.create_task("logger", PRIO_LOGGER);
-	logger.log_sync("Created logger task\r\n");
 
 	g_pin_green.init_pin();
 	g_pin_green2.init_pin();

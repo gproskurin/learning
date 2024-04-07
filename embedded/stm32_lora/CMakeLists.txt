@@ -78,7 +78,7 @@ function(generate_targets T)
 		-T${T_LINKER_SCRIPT}
 		-nostartfiles
 		-ffreestanding
-		#-nostdlib
+		-nostdlib
 	)
 	set_target_properties(${T_FIRMWARE_ELF}
 		PROPERTIES LINK_OPTIONS "${link_options}"

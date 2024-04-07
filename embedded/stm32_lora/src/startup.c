@@ -4,7 +4,6 @@ extern void _estack(void);
 extern void vPortSVCHandler(void);
 extern void xPortPendSVHandler(void);
 extern void xPortSysTickHandler(void);
-//extern void SysTick_Handler(void);
 
 //extern void IntHandler_EXTI23();
 extern void IntHandler_EXTI4_15();
@@ -29,7 +28,6 @@ __attribute__((section(".vectors"))) void (*tab[16+32])(void) =
 	0,
 	&xPortPendSVHandler,
 	&xPortSysTickHandler,
-	//&SysTick_Handler, //&xPortSysTickHandler,
 
 	0,
 	0,
