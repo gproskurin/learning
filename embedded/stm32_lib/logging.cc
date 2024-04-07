@@ -1,29 +1,15 @@
 #include "logging.h"
 
-#include "task.h"
-#include "queue.h"
-
 
 void usart_logger_t::task_function(void* arg)
 {
 	usart_logger_t* const lp = reinterpret_cast<usart_logger_t*>(arg);
 	for (;;) {
-		const char* buf; // receive one pointer
-		if (xQueueReceive(lp->queue_handle_, reinterpret_cast<void*>(&buf), portMAX_DELAY) == pdTRUE) {
-			lp->log_sync(buf);
+		queue_item_t item;
+		if (xQueueReceive(lp->queue_handle_, reinterpret_cast<void*>(&item), portMAX_DELAY) == pdTRUE) {
+			lp->log_sync(item);
 		}
 	}
-}
-
-
-void usart_logger_t::init_queue()
-{
-	queue_handle_ = xQueueCreateStatic(
-		queue_storage_.size(),
-		sizeof(queue_storage_[0]),
-		reinterpret_cast<uint8_t*>(queue_storage_.data()),
-		&queue_
-	);
 }
 
 
@@ -64,19 +50,5 @@ void usart_logger_t::log_sync(const char* s) const
 	while (! (usart_->EVENTS_TXDRDY)) {}
 	usart_->TASKS_STOPTX = 1;
 #endif
-}
-
-
-void usart_logger_t::create_task(const char* task_name, UBaseType_t prio)
-{
-	task_handle_ = xTaskCreateStatic(
-		&task_function,
-		task_name,
-		task_stack_.size(),
-		reinterpret_cast<void*>(this), // param
-		prio,
-		task_stack_.data(),
-		&task_buffer_
-	);
 }
 
