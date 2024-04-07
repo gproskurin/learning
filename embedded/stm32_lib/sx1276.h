@@ -1,7 +1,11 @@
 #ifndef _my_sx1276_h_included_
 #define _my_sx1276_h_included_
 
-#include "stm32_lib/lib_stm32.h"
+#ifdef TARGET_NRF52DK
+#include "lib_nrf5.h"
+#else
+#include "lib_stm32.h"
+#endif
 
 #include <array>
 #include <concepts>
@@ -12,15 +16,25 @@ namespace sx1276 {
 
 
 struct hwconf_t {
-	SPI_TypeDef* spi = nullptr;
+#ifdef TARGET_NRF52DK
+	using pin_t = nrf5_lib::gpio::pin_t;
+	using spi_t = NRF_SPIM_Type;
+#else
+	using pin_t = stm32_lib::gpio::pin_t;
+	using spi_t = SPI_TypeDef;
+#endif
+	spi_t* spi = nullptr;
+
+#ifndef TARGET_NRF52DK
 	uint8_t spi_af; // TODO per spi pin
+#endif
 
-	stm32_lib::gpio::gpio_pin_t pin_spi_nss;
-	stm32_lib::gpio::gpio_pin_t pin_spi_sck;
-	stm32_lib::gpio::gpio_pin_t pin_spi_miso;
-	stm32_lib::gpio::gpio_pin_t pin_spi_mosi;
+	pin_t pin_spi_nss;
+	pin_t pin_spi_sck;
+	pin_t pin_spi_miso;
+	pin_t pin_spi_mosi;
 
-	stm32_lib::gpio::gpio_pin_t pin_dio0;
+	pin_t pin_dio0;
 
 	//stm32_lib::gpio::gpio_pin_t pin_radio_reset;
 	//stm32_lib::gpio::gpio_pin_t pin_sx1276_reset;
@@ -95,6 +109,8 @@ enum reg_val_t : uint8_t {
 	IrqFlags_RxDone = 1 << 6,
 	IrqFlags_PayloadCrcError = 1 << 5,
 	IrqFlags_TxDone = 1 << 3,
+	IrqFlags_CadDone = 1 << 2,
+	IrqFlags_CadDetected = 1 << 0,
 };
 
 
@@ -139,33 +155,51 @@ void sleep_ns(int ns)
 }
 
 
-inline
-void init_radio_pin(const stm32_lib::gpio::gpio_pin_t& pin)
+template <typename Pin>
+void init_radio_pin(const Pin& pin)
 {
+#ifdef TARGET_NRF52DK
+	pin.set(
+		nrf5_lib::gpio::dir_t::output,
+		nrf5_lib::gpio::pull_t::no_pull
+	);
+#else
 	pin.set(
 		stm32_lib::gpio::mode_t::output,
 		stm32_lib::gpio::otype_t::push_pull,
-		stm32_lib::gpio::pupd_t::no_pupd,
-		stm32_lib::gpio::speed_t::bits_11
+		stm32_lib::gpio::pupd_t::no_pupd
 	);
+#endif
 }
 
 
-inline
-void reset_radio_pin(const stm32_lib::gpio::pin_t& pin)
+template <typename Pin>
+void reset_radio_pin(const Pin& pin)
 {
 	// pull the pin down
+#ifdef TARGET_NRF52DK
+	pin.set(
+		nrf5_lib::gpio::state_t::lo,
+		nrf5_lib::gpio::pull_t::no_pull,
+		nrf5_lib::gpio::dir_t::output
+	);
+#else
 	stm32_lib::gpio::set_state(pin, 0);
 	pin.set(
 		stm32_lib::gpio::mode_t::output,
 		stm32_lib::gpio::otype_t::push_pull,
-		stm32_lib::gpio::pupd_t::no_pupd,
-		stm32_lib::gpio::speed_t::bits_11
+		stm32_lib::gpio::pupd_t::no_pupd
 	);
-	vTaskDelay(1); // > 100 us
+#endif
+
+	vTaskDelay(configTICK_RATE_HZ/10); // > 100 us
 
 	// make floating
+#ifdef TARGET_NRF52DK
+	pin.set(nrf5_lib::gpio::dir_t::input);
+#else
 	pin.set(stm32_lib::gpio::mode_t::input);
+#endif
 	vTaskDelay(configTICK_RATE_HZ/10); // > 5 ms
 }
 
@@ -193,41 +227,66 @@ void spi_sx_init(const hwconf_t& hwc, bool fast)
 	hwc.spi->CR2 = SPI_CR2_SSOE;
 
 	hwc.spi->CR1 = cr1 | SPI_CR1_SPE;
+#elif defined TARGET_NRF52DK
+	hwc.pin_spi_nss.set(
+		nrf5_lib::gpio::state_t::hi,
+		nrf5_lib::gpio::dir_t::output
+	);
+	hwc.pin_spi_sck.set(
+		nrf5_lib::gpio::state_t::lo, // CPOL
+		//nrf5_lib::gpio::pull_t::pd,
+		nrf5_lib::gpio::dir_t::output
+	);
+	hwc.pin_spi_mosi.set(
+		nrf5_lib::gpio::state_t::lo,
+		nrf5_lib::gpio::pull_t::pd,
+		nrf5_lib::gpio::dir_t::output
+	);
+	hwc.pin_spi_miso.set(
+		nrf5_lib::gpio::dir_t::input
+	);
+
+	hwc.spi->ENABLE = 0;
+	hwc.spi->INTENCLR = 0xFFFFFFFF;
+	hwc.spi->CONFIG = 0b000; // LSB first
+	hwc.spi->PSEL.SCK = hwc.pin_spi_sck.reg;
+	hwc.spi->PSEL.MOSI = hwc.pin_spi_mosi.reg;
+	hwc.spi->PSEL.MISO = hwc.pin_spi_miso.reg;
+	hwc.spi->FREQUENCY = 0x02000000; // 125kbps
+	hwc.spi->ENABLE = 7;
 #else
 #error "Unsupported target"
 #endif
 }
 
 
+typedef void (*spi_write_t)(const uint8_t *tx_data, size_t size, uint8_t* rx_data);
+typedef void (*spi_nss_t)(bool);
+
+template <spi_write_t SpiWrite, spi_nss_t Nss>
 class spi_sx1276_t {
-	SPI_TypeDef* const spi_;
-	const stm32_lib::gpio::gpio_pin_t pin_nss_;
-public:
-	spi_sx1276_t(SPI_TypeDef* spi, const stm32_lib::gpio::gpio_pin_t& pin_nss) : spi_(spi), pin_nss_(pin_nss) {}
+	void nss_0() { Nss(false); sleep_ns(30); }
 
-	uint8_t get_reg(uint8_t reg)
-	{
-		nss_0();
-		stm32_lib::spi::write<uint8_t>(spi_, reg);
-		const auto r = stm32_lib::spi::write<uint8_t>(spi_, 0);
-		nss_1();
-		return r;
-	}
+	void nss_1() { sleep_ns(100); Nss(true); sleep_ns(30); }
 
-	uint8_t set_reg(uint8_t reg, uint8_t val)
+	uint8_t reg_impl(uint8_t reg, uint8_t val)
 	{
-		const std::array<uint8_t, 2> tx_buf{uint8_t(reg|0x80), val};
+		const std::array<uint8_t, 2> tx_buf{reg, val};
 		std::array<uint8_t, 2> rx_buf;
 		nss_0();
-		stm32_lib::spi::write<uint8_t>(spi_, tx_buf.size(), tx_buf.data(), rx_buf.data());
+		SpiWrite(tx_buf.data(), tx_buf.size(), rx_buf.data());
 		nss_1();
 		return rx_buf[1];
 	}
 
-	void spi_write(const uint8_t* const tx_buf, size_t tx_size)
+public:
+	uint8_t get_reg(uint8_t reg) { return reg_impl(reg, 0); }
+	uint8_t set_reg(uint8_t reg, uint8_t val) { return reg_impl(reg | 0x80, val); }
+
+	void spi_write(const uint8_t* data, size_t size)
 	{
 		nss_0();
-		stm32_lib::spi::write<uint8_t>(spi_, tx_size, tx_buf, nullptr);
+		SpiWrite(data, size, nullptr);
 		nss_1();
 	}
 
@@ -236,9 +295,13 @@ public:
 		set_reg(regs_t::PayloadLength, buf_size);
 		set_reg(regs_t::FifoAddrPtr, 0x80);
 		set_reg(regs_t::FifoTxBaseAddr, 0x80);
+
 		nss_0();
-		stm32_lib::spi::write<uint8_t>(spi_, 0x80 | 0); // write to reg 0x00
-		stm32_lib::spi::write<uint8_t>(spi_, buf_size, buf, nullptr);
+
+		constexpr uint8_t reg = 0x00 | 0x80; // write to reg 0x00
+		SpiWrite(&reg, 1, nullptr);
+		SpiWrite(buf, buf_size, nullptr);
+
 		nss_1();
 	}
 
@@ -249,25 +312,12 @@ public:
 		set_reg(regs_t::FifoAddrPtr, fifo_addr);
 
 		nss_0();
-		stm32_lib::spi::write<uint8_t>(spi_, regs_t::Fifo); // read from fifo
-		stm32_lib::spi::write<uint8_t>(spi_, rx_size, nullptr, rx_buf);
+		const uint8_t r = regs_t::Fifo; // read from fifo
+		SpiWrite(&r, 1, nullptr);
+		SpiWrite(nullptr, rx_size, rx_buf);
 		nss_1();
 
 		return rx_size;
-	}
-
-private:
-	void nss_0()
-	{
-		stm32_lib::gpio::set_state(pin_nss_, 0);
-		sleep_ns(30);
-	}
-
-	void nss_1()
-	{
-		sleep_ns(100);
-		stm32_lib::gpio::set_state(pin_nss_, 1);
-		sleep_ns(30);
 	}
 };
 
@@ -275,20 +325,16 @@ private:
 template <IsLoraConfig LoraConfig>
 constexpr uint32_t calc_freq_reg()
 {
-#if defined(TARGET_STM32L072)
 	constexpr uint64_t cpu_freq = 32000000;
-#endif
 	const uint64_t fr = uint64_t(LoraConfig::freq) * uint64_t(1 << 19) / cpu_freq;
 	static_assert(fr <= 0xFFFFFF);
 	return uint32_t(fr);
 }
 
 
-template <IsLoraConfig LoraConfig>
-void lora_configure(const hwconf_t& hwc)
+template <IsLoraConfig LoraConfig, typename Spi>
+void lora_configure(Spi&& spi)
 {
-	spi_sx1276_t spi(hwc.spi, hwc.pin_spi_nss);
-
 	// RegOpMode
 	spi.set_reg(0x01, sx1276::opmode(0b10000000, sx1276::reg_val_t::OpMode_Mode_SLEEP)); // Lora, sleep mode
 
@@ -296,7 +342,7 @@ void lora_configure(const hwconf_t& hwc)
 	// RegFrMsb, RegFrMid, RegFrLsb
 	{
 		constexpr uint32_t freq_reg = calc_freq_reg<LoraConfig>();
-		static_assert(freq_reg == 0xD88000);
+		static_assert(freq_reg == 0xD88000); // TODO
 		constexpr std::array<uint8_t, 4> burst_buf{
 			0x06 | 0x80,
 			uint8_t((freq_reg >> 16) & 0xFF), // msb
@@ -330,7 +376,7 @@ void lora_configure(const hwconf_t& hwc)
 		spi.spi_write(burst_buf.data(), burst_buf.size());
 	}
 
-	spi.set_reg(sx1276::regs_t::IrqFlags, 0xFF); // clear all
+	spi.set_reg(sx1276::regs_t::IrqFlags, 0xFF); // clear all flags
 }
 
 
