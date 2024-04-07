@@ -49,7 +49,7 @@ template <bool Invert>
 struct pin_impl_t {
 	uint8_t const reg;
 
-	explicit constexpr pin_impl_t(uint8_t r) : reg(r) {}
+	/*explicit TODO*/ constexpr pin_impl_t(uint8_t r) : reg(r) {}
 
 	void set_state(bool s) const
 	{
