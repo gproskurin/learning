@@ -26,6 +26,47 @@ constexpr stm32_lib::gpio::gpio_pin_t pin_userbutton3{GPIOD_BASE, 1};
 #endif
 
 
+#ifdef TARGET_STM32WL55
+
+#define USART_STLINK LPUART1
+#define USART_STLINK_PIN_TX_AF 8
+constexpr stm32_lib::gpio::gpio_pin_t usart_stlink_pin_tx{GPIOA_BASE, 2};
+constexpr stm32_lib::gpio::gpio_pin_t usart_stlink_pin_rx{GPIOA_BASE, 3};
+
+constexpr stm32_lib::gpio::gpio_pin_t pin_led_blue{GPIOB_BASE, 15};
+constexpr stm32_lib::gpio::gpio_pin_t pin_led_green{GPIOB_BASE, 9};
+constexpr stm32_lib::gpio::gpio_pin_t pin_led_red{GPIOB_BASE, 11};
+constexpr stm32_lib::gpio::gpio_pin_t pin_userbutton1{GPIOA_BASE, 0};
+constexpr stm32_lib::gpio::gpio_pin_t pin_userbutton2{GPIOA_BASE, 1};
+constexpr stm32_lib::gpio::gpio_pin_t pin_userbutton3{GPIOC_BASE, 6};
+
+namespace sx1276 {
+	constexpr stm32_lib::gpio::gpio_pin_t pin_dio0{GPIOB_BASE, 12};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_dio1{GPIOB_BASE, 13};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_dio2{GPIOB_BASE, 14};
+	//constexpr stm32_lib::gpio::gpio_pin_t pin_reset{GPIOC_BASE, 0};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_spi_sck{GPIOA_BASE, 5};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_spi_miso{GPIOA_BASE, 6};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_spi_mosi{GPIOA_BASE, 7};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_spi_nss{GPIOA_BASE, 4};
+
+	//  Connection between STM32 and RF switch
+	constexpr stm32_lib::gpio::gpio_pin_t pin_fe_ctrl1{GPIOC_BASE, 4};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_fe_ctrl2{GPIOC_BASE, 5};
+	constexpr stm32_lib::gpio::gpio_pin_t pin_fe_ctrl3{GPIOC_BASE, 3};
+
+	constexpr stm32_lib::gpio::gpio_pin_t pin_tcxo32_vdd{GPIOB_BASE, 0};
+
+	//constexpr stm32_lib::gpio::gpio_pin_t pin_vctl1{GPIOA_BASE, 1};
+	//constexpr stm32_lib::gpio::gpio_pin_t pin_vctl2{GPIOC_BASE, 2};
+	//constexpr stm32_lib::gpio::gpio_pin_t pin_vctl3{GPIOC_BASE, 1};
+	//constexpr stm32_lib::gpio::gpio_pin_t pin_radio_ant_sw_rx{pin_vctl1};
+	//constexpr stm32_lib::gpio::gpio_pin_t pin_radio_ant_sw_tx_boost{pin_vctl2};
+	//constexpr stm32_lib::gpio::gpio_pin_t pin_radio_ant_sw_tx_rfo{pin_vctl3};
+} // namespace
+#endif
+
+
 #ifdef TARGET_STM32L072
 
 #define USART_STLINK USART2

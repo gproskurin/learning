@@ -29,7 +29,7 @@ void usart_logger_t::log_sync(const char* s) const
 #endif
 
 	while (*s) {
-#if defined TARGET_STM32H745_CM4 || defined TARGET_STM32H745_CM7 || defined TARGET_STM32WB55 || defined TARGET_STM32G030 || defined TARGET_STM32G031
+#if defined TARGET_STM32H745_CM4 || defined TARGET_STM32H745_CM7 || defined TARGET_STM32WB55 || defined TARGET_STM32WL55 || defined TARGET_STM32G030 || defined TARGET_STM32G031
 		while (! (usart_->ISR & USART_ISR_TXE_TXFNF)) {}
 		usart_->TDR = *s;
 #elif defined TARGET_STM32L072
