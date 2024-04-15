@@ -3,7 +3,7 @@
 
 #define configUSE_PREEMPTION				1
 #define configUSE_PORT_OPTIMISED_TASK_SELECTION		1
-#define configUSE_TICKLESS_IDLE				1
+#define configUSE_TICKLESS_IDLE				0
 
 #if defined TARGET_NRF52DK
 	#define configCPU_CLOCK_HZ			64000000
@@ -11,7 +11,7 @@
 
 //#define configSYSTICK_CLOCK_HZ			1000000
 #define configTICK_RATE_HZ				100
-#define configMAX_PRIORITIES				5
+#define configMAX_PRIORITIES				8
 #define configMINIMAL_STACK_SIZE			128
 #define configMAX_TASK_NAME_LEN				16
 //#define configUSE_16_BIT_TICKS				0
@@ -42,7 +42,7 @@
 #define configSTACK_ALLOCATION_FROM_SEPARATE_HEAP	0
 
 /* Hook function related definitions. */
-#define configUSE_IDLE_HOOK				1
+#define configUSE_IDLE_HOOK				0
 #define configUSE_TICK_HOOK				0
 #define configCHECK_FOR_STACK_OVERFLOW			0
 #define configUSE_MALLOC_FAILED_HOOK			0

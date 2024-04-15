@@ -23,7 +23,7 @@
 #define PRIO_BLINK 1
 #define PRIO_DISPLAY 2
 #define PRIO_LORA 6
-#define PRIO_LOGGER 8 // FIXME
+#define PRIO_LOGGER 7 // FIXME
 
 
 lora::task_data_t task_data_lora;
@@ -71,12 +71,6 @@ void vApplicationGetIdleTaskMemory(StaticTask_t **tcbIdle, StackType_t **stackId
 	*tcbIdle = &xTaskBufferIdle;
 	*stackIdle = idle_task_stack.data();
 	*stackSizeIdle = idle_task_stack.size();
-}
-
-extern "C"
-void vApplicationIdleHook(void)
-{
-	__WFI();
 }
 
 
