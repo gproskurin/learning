@@ -122,12 +122,12 @@ void task_function_emb(void* arg)
 	logger.log_async("LORA_EMB loop\r\n");
 
 	perif_init_irq_dio0();
-	spi.set_reg(0x01, sx1276::opmode(spi.get_reg(0x01), sx1276::reg_val_t::OpMode_Mode_CAD));
+	spi.set_reg(0x01, sx1276::opmode(spi.get_reg(0x01), sx1276::reg_val_t::OpMode_Mode_RXCONTINUOUS));
 
 	for(;;) {
 		xTaskNotifyWait(0, 0xffffffff, nullptr, portMAX_DELAY);
 		const auto flags = spi.get_reg(sx1276::regs_t::IrqFlags);
-		if (flags & sx1276::reg_val_t::IrqFlags_CadDone)
+		if (flags & sx1276::reg_val_t::IrqFlags_RxDone)
 		{
 			const bool crc_error = flags & sx1276::reg_val_t::IrqFlags_PayloadCrcError;
 			if (crc_error) {
