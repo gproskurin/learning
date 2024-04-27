@@ -20,10 +20,11 @@ typedef void (*display_write_data_t)(const uint8_t *data, size_t size);
 
 template <uint16_t Xsize, uint16_t Ysize, display_write_cmd_t write_cmd_func, display_write_data_t write_data_func>
 class display_t {
+	static_assert(Ysize % 8 == 0);
 	std::array<uint8_t, Xsize*Ysize/8> fb_data{0};
 public:
-        static constexpr uint16_t x_size() { return Xsize; }
-        static constexpr uint16_t y_size() { return Ysize; }
+	static constexpr uint16_t x_size() { return Xsize; }
+	static constexpr uint16_t y_size() { return Ysize; }
 public:
 	void draw_point(uint16_t x, uint16_t y, bool color)
 	{
@@ -48,8 +49,14 @@ public:
 	{
 		for (uint8_t page=0; page < Ysize/8; ++page) {
 			write_cmd_func(0xB0 + page);
-			write_cmd_func(0x00 + 0); // offset
-			write_cmd_func(0x10 + 0); // offset
+
+			// set X offset
+			static_assert(Xsize <= 128);
+			static_assert(Xsize % 2 == 0);
+			constexpr uint8_t dx = (128 - Xsize) / 2;
+			write_cmd_func(0x00 + (dx & 0b1111 /*low nimble*/));
+			write_cmd_func(0x10 + (dx >> 4 /*high nimble*/));
+
 			write_data_func(&fb_data[Xsize * page], Xsize);
 		}
 	}
