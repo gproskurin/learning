@@ -21,14 +21,14 @@ extern "C"
 const sx1276::hwconf_t hwc{
 	.spi{NRF_SPIM1},
 
-	.pin_spi_nss{26},
-	.pin_spi_sck{25},
-	.pin_spi_miso{2},
-	.pin_spi_mosi{27},
+	.pin_spi_nss{3},
+	.pin_spi_sck{4},
+	.pin_spi_miso{28},
+	.pin_spi_mosi{29},
 
-	.pin_dio0{24}
+	.pin_dio0{31}
 };
-constexpr nrf5_lib::gpio::pin_t sx1276_reset{23};
+constexpr nrf5_lib::gpio::pin_t sx1276_reset{30};
 
 namespace {
 
