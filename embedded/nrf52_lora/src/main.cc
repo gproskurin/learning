@@ -81,96 +81,73 @@ freertos_utils::pin_toggle_task_t g_pin_led4("blink_led4", bsp::pin_led_4, PRIO_
 
 
 namespace display {
-	constexpr nrf5_lib::gpio::pin_t pin_spi_nss{31};
-	constexpr nrf5_lib::gpio::pin_t pin_spi_sck{3};
-	constexpr nrf5_lib::gpio::pin_t pin_spi_mosi{22};
-	constexpr nrf5_lib::gpio::pin_t pin_rst{28};
-	constexpr nrf5_lib::gpio::pin_t pin_dc{29};
+	constexpr nrf5_lib::gpio::pin_t pin_vcc{2};
+	constexpr nrf5_lib::gpio::pin_t pin_scl{26};
+	constexpr nrf5_lib::gpio::pin_t pin_sda{27};
+	constexpr uint8_t i2c_addr = 0x3C;
 
-	void spi_write_data(const uint8_t* const data, size_t size);
-	void spi_write_cmd(uint8_t cmd);
+	void i2c_write_cmd(uint8_t cmd);
+	void i2c_write_data(const uint8_t* const data, size_t size);
 
-	using display_t = stm32_lib::display::display_t<128, 64, spi_write_cmd, spi_write_data>;
-
-	display_t display;
+	using s_display = stm32_lib::display::display_type_72_40<i2c_write_cmd, i2c_write_data>;
+	s_display::display_t display;
 	UG_GUI ugui;
 
-#define SPI_DEV (NRF_SPIM0) // uses DMA
-	void spi_write(const uint8_t* const data, size_t size)
-	{
-		SPI_DEV->EVENTS_END = 0;
-		SPI_DEV->TXD.PTR = reinterpret_cast<uint32_t>(data);
-		SPI_DEV->TXD.MAXCNT = size;
-		uint8_t garbage;
-		SPI_DEV->RXD.PTR = reinterpret_cast<uint32_t>(&garbage); // be safe and set this to something valid
-		SPI_DEV->RXD.MAXCNT = 0;
-		SPI_DEV->TASKS_START = 1;
-		while(! (SPI_DEV->EVENTS_END)) {}
-		SPI_DEV->TASKS_STOP = 1;
-	}
-
+#define DISPLAY_DEV NRF_TWIM0
 	void init_display()
 	{
-		pin_rst.set(nrf5_lib::gpio::state_t::hi, nrf5_lib::gpio::dir_t::output);
-		pin_dc.set(nrf5_lib::gpio::state_t::lo, nrf5_lib::gpio::dir_t::output);
+		pin_vcc.set(nrf5_lib::gpio::state_t::lo, nrf5_lib::gpio::dir_t::output);
+		pin_scl.set(nrf5_lib::gpio::pull_t::pu);
+		pin_sda.set(nrf5_lib::gpio::pull_t::pu);
+		vTaskDelay(configTICK_RATE_HZ/10);
+		pin_vcc.set(nrf5_lib::gpio::state_t::hi);
+		vTaskDelay(configTICK_RATE_HZ/5);
 
-		pin_spi_nss.set(
-			nrf5_lib::gpio::state_t::hi,
-			nrf5_lib::gpio::dir_t::output
-		);
-		pin_spi_sck.set(
-			nrf5_lib::gpio::state_t::lo, // CPOL
-			//nrf5_lib::gpio::pull_t::pd,
-			nrf5_lib::gpio::dir_t::output
-		);
-		pin_spi_mosi.set(
-			nrf5_lib::gpio::state_t::lo,
-			//nrf5_lib::gpio::pull_t::pd,
-			nrf5_lib::gpio::dir_t::output
-		);
-
-		// reset
-		pin_rst.set_state(0);
-		vTaskDelay(1);
-		pin_rst.set_state(1);
-
-		// init SPI
-		SPI_DEV->ENABLE = 0;
-		SPI_DEV->INTENCLR = 0xFFFFFFFF;
-		SPI_DEV->CONFIG = 0b000; // LSB first
-		SPI_DEV->PSEL.SCK = pin_spi_sck.reg;
-		SPI_DEV->PSEL.MOSI = pin_spi_mosi.reg;
-		SPI_DEV->PSEL.MISO = 0xFFFFFFFF;
-		//SPI_DEV->FREQUENCY = 0x10000000; // 1Mbps
-		SPI_DEV->FREQUENCY = 0x02000000; // 125kbps
-		SPI_DEV->ENABLE = 7;
+		// init I2C
+		DISPLAY_DEV->ENABLE = 0;
+		DISPLAY_DEV->INTENCLR = 0xFFFFFFFF;
+		DISPLAY_DEV->PSEL.SCL = pin_scl.reg;
+		DISPLAY_DEV->PSEL.SDA = pin_sda.reg;
+		//DISPLAY_DEV->FREQUENCY = 0x01980000; // 100 kbps
+		//DISPLAY_DEV->FREQUENCY = 0x04000000; // 250 kbps
+		DISPLAY_DEV->FREQUENCY = 0x06400000; // 400 kbps
+		DISPLAY_DEV->ADDRESS = i2c_addr;
+		DISPLAY_DEV->ENABLE = 6;
+		vTaskDelay(configTICK_RATE_HZ/10);
 	}
 
-	void nss_0()
+	void i2c_write(const uint8_t* data, size_t size)
 	{
-		pin_spi_nss.set_state(0);
-		for (volatile int i=0; i<100; ++i) {}
-	}
-	void nss_1()
-	{
-		for (volatile int i=0; i<100; ++i) {}
-		pin_spi_nss.set_state(1);
+		if (size < 1) {
+			logger.log_async("ERROR: empty i2c write to display\r\n");
+			return;
+		}
+
+		DISPLAY_DEV->TXD.PTR = reinterpret_cast<uint32_t>(data);
+		DISPLAY_DEV->TXD.MAXCNT = size;
+		DISPLAY_DEV->SHORTS = (1 << 9); // LASTTX_STOP
+		DISPLAY_DEV->EVENTS_STOPPED = 0;
+		DISPLAY_DEV->TASKS_STARTTX = 1;
+		while (!DISPLAY_DEV->EVENTS_STOPPED) {}
 	}
 
-	void spi_write_cmd(uint8_t cmd)
+	void i2c_write_cmd(uint8_t cmd)
 	{
-		pin_dc.set_state(0);
-		nss_0();
-		spi_write(&cmd, 1);
-		nss_1();
+		const std::array<uint8_t, 2> buf{0, cmd};
+		i2c_write(buf.data(), buf.size());
 	}
 
-	void spi_write_data(const uint8_t* const data, size_t size)
+	void i2c_write_data(const uint8_t* const data, size_t size)
 	{
-		pin_dc.set_state(1);
-		nss_0();
-		spi_write(data, size);
-		nss_1();
+		if (size != display.x_size()) {
+			logger.log_async("WRONG SIZE\r\n");
+		}
+		static std::array<uint8_t, display.x_size()+1> buf; // FIXME
+		buf[0] = 0b01000000; // data
+		for (size_t i=0; i<size; ++i) {
+			buf[1+i] = data[i];
+		}
+		i2c_write(buf.data(), buf.size());
 	}
 
 	void ugui_pset(int16_t x, int16_t y, uint32_t color)
@@ -187,20 +164,12 @@ void task_function_display(void*)
 {
 	logger.log_async("DISPLAY task started\r\n");
 	display::init_display();
-	logger.log_async("DISPLAY init done\r\n");
 
-	constexpr std::array<uint8_t, 8> init_cmds{
-		0xAE, // display off
-		0xDA, 0b00010010, // COM pins configuration: sequential, disable COM left/right remap
-		0x20, 0b10, // page addressing mode
-		0x8D, 0x14, // enable charge pump
-		0xAF // display on
-	};
-
-	for (const auto cmd : init_cmds) {
-		display::spi_write_cmd(cmd);
+	for (const auto cmd : display::s_display::init_cmds) {
+		display::i2c_write_cmd(cmd);
 	}
 	display::display.flush_buffer();
+	logger.log_async("DISPLAY init done\r\n");
 
 	UG_Init(&display::ugui, &display::ugui_pset, display::display.x_size(), display::display.y_size());
 	UG_SelectGUI(&display::ugui);
@@ -213,20 +182,24 @@ void task_function_display(void*)
 
 	vTaskDelay(configTICK_RATE_HZ*10);
 
+	logger.log_async("DISPLAY loop\r\n");
 	for (;;) {
 		display::display.clear();
 		display::display.flush_buffer();
-		for(uint16_t i=0; i < display::display.y_size(); ++i) {
-			display::display.draw_point(i, i, 1);
+		for (uint16_t y=0; y<display::display.y_size(); ++y) {
+			display::display.draw_point(0, y, 1);
+			display::display.draw_point(display::display.x_size()-1, y, 1);
+		}
+		for (uint16_t x=0; x<display::display.x_size(); ++x) {
+			display::display.draw_point(x, 0, 1);
+			display::display.draw_point(x, display::display.y_size()-1, 1);
+		}
+		for (uint16_t y=0; y<display::display.y_size(); ++y) {
+			display::display.draw_point(y, y, 1);
 			display::display.flush_buffer();
 			vTaskDelay(5);
 		}
-		vTaskDelay(configTICK_RATE_HZ);
-	}
-
-	logger.log_async("DISPLAY loop\r\n");
-	for (;;) {
-		vTaskDelay(configTICK_RATE_HZ);
+		vTaskDelay(configTICK_RATE_HZ*3);
 	}
 }
 

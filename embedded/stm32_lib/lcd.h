@@ -62,6 +62,20 @@ public:
 	}
 };
 
+template <display_write_cmd_t write_cmd_func, display_write_data_t write_data_func>
+struct display_type_72_40 {
+	static constexpr std::array<uint8_t, 10> init_cmds{
+		0xAE, // display off
+		0xDA, 0b00010010, // COM pins configuration: sequential, disable COM left/right remap
+		0x20, 0b10, // page addressing mode
+		0x8D, 0x14, // enable charge pump
+		0xAD, 0b00110000, // set internal Iref
+		0xAF // display on
+	};
+
+	using display_t = stm32_lib::display::display_t<72, 40, write_cmd_func, write_data_func>;
+};
+
 
 #if defined(TARGET_STM32H745_CM7)
 
