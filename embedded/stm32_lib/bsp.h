@@ -40,15 +40,17 @@ constexpr stm32_lib::gpio::gpio_pin_t pin_userbutton1{GPIOA_BASE, 0};
 constexpr stm32_lib::gpio::gpio_pin_t pin_userbutton2{GPIOA_BASE, 1};
 constexpr stm32_lib::gpio::gpio_pin_t pin_userbutton3{GPIOC_BASE, 6};
 
+#define SUBGHZSPI_DEBUG_AF 13
+constexpr stm32_lib::gpio::gpio_pin_t pin_debug_subghzspi_nss{GPIOA_BASE, 4};
+constexpr stm32_lib::gpio::gpio_pin_t pin_debug_subghzspi_sck{GPIOA_BASE, 5};
+constexpr stm32_lib::gpio::gpio_pin_t pin_debug_subghzspi_miso{GPIOA_BASE, 6};
+constexpr stm32_lib::gpio::gpio_pin_t pin_debug_subghzspi_mosi{GPIOA_BASE, 7};
+
 namespace sx1276 {
 	constexpr stm32_lib::gpio::gpio_pin_t pin_dio0{GPIOB_BASE, 12};
 	constexpr stm32_lib::gpio::gpio_pin_t pin_dio1{GPIOB_BASE, 13};
 	constexpr stm32_lib::gpio::gpio_pin_t pin_dio2{GPIOB_BASE, 14};
 	//constexpr stm32_lib::gpio::gpio_pin_t pin_reset{GPIOC_BASE, 0};
-	constexpr stm32_lib::gpio::gpio_pin_t pin_spi_sck{GPIOA_BASE, 5};
-	constexpr stm32_lib::gpio::gpio_pin_t pin_spi_miso{GPIOA_BASE, 6};
-	constexpr stm32_lib::gpio::gpio_pin_t pin_spi_mosi{GPIOA_BASE, 7};
-	constexpr stm32_lib::gpio::gpio_pin_t pin_spi_nss{GPIOA_BASE, 4};
 
 	//  Connection between STM32 and RF switch
 	constexpr stm32_lib::gpio::gpio_pin_t pin_fe_ctrl1{GPIOC_BASE, 4};
