@@ -82,6 +82,7 @@ enum regs_t : uint8_t {
 	OpMode = 0x01,
 	FifoAddrPtr = 0x0D,
 	FifoTxBaseAddr = 0x0E,
+	FifoRxBaseAddr = 0x0F,
 	FifoRxCurrentAddr = 0x10,
 	IrqFlagsMask = 0x11,
 	IrqFlags = 0x12,
@@ -281,7 +282,7 @@ class spi_sx1276_t {
 
 public:
 	uint8_t get_reg(uint8_t reg) { return reg_impl(reg, 0); }
-	uint8_t set_reg(uint8_t reg, uint8_t val) { return reg_impl(reg | 0x80, val); }
+	void set_reg(uint8_t reg, uint8_t val) { reg_impl(reg | 0x80, val); }
 
 	void spi_write(const uint8_t* data, size_t size)
 	{
@@ -293,8 +294,10 @@ public:
 	void fifo_write(const uint8_t* buf, size_t buf_size)
 	{
 		set_reg(regs_t::PayloadLength, buf_size);
-		set_reg(regs_t::FifoAddrPtr, 0x80);
-		set_reg(regs_t::FifoTxBaseAddr, 0x80);
+
+		constexpr uint8_t tx_base_addr = 0x00;
+		set_reg(regs_t::FifoTxBaseAddr, tx_base_addr);
+		set_reg(regs_t::FifoAddrPtr, tx_base_addr);
 
 		nss_0();
 

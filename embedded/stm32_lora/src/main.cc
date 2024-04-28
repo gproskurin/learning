@@ -152,7 +152,6 @@ extern "C" __attribute__ ((interrupt)) void IntHandler_EXTI4_15()
 }
 
 
-
 StaticTask_t xTaskBufferIdle;
 freertos_utils::task_stack_t<64> idle_task_stack;
 extern "C"
@@ -445,21 +444,6 @@ void create_task_display_1()
 	);
 }
 
-#if 0
-void create_task_display_2()
-{
-	task_data_display_2.task_handle = xTaskCreateStatic(
-		&task_function_display_2,
-		"DISPLAY-2",
-		task_data_display_2.stack.size(),
-		nullptr,
-		PRIO_DISPLAY_2,
-		task_data_display_2.stack.data(),
-		&task_data_display_2.task_buffer
-	);
-}
-#endif
-
 
 __attribute__ ((noreturn)) void main()
 {
@@ -478,17 +462,9 @@ __attribute__ ((noreturn)) void main()
 	lora::create_task_emb("lora_emb", PRIO_LORA_EMB, task_data_lora_emb, &hwc_emb);
 	logger.log_sync("Created LORA_EMB task\r\n");
 
-	//logger.log_sync("Creating LORA_EXT task...\r\n");
-	//lora::create_task_ext("lora_ext", PRIO_LORA_EXT, task_data_lora_ext, &hwc_ext);
-	//logger.log_sync("Created LORA_EXT task\r\n");
-
-	logger.log_sync("Creating DISPLAY-1 task...\r\n");
-	create_task_display_1();
-	logger.log_sync("Created DISPLAY-1 task\r\n");
-
-	//logger.log_sync("Creating DISPLAY-2 task...\r\n");
-	//create_task_display_2();
-	//logger.log_sync("Created DISPLAY-2 task\r\n");
+	//logger.log_sync("Creating DISPLAY-1 task...\r\n");
+	//create_task_display_1();
+	//logger.log_sync("Created DISPLAY-1 task\r\n");
 
 	logger.log_sync("Starting FreeRTOS scheduler\r\n");
 	vTaskStartScheduler();

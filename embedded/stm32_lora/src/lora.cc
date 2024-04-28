@@ -122,6 +122,7 @@ void task_function_emb(void* arg)
 	logger.log_async("LORA_EMB loop\r\n");
 
 	perif_init_irq_dio0();
+	spi.set_reg(sx1276::regs_t::FifoRxBaseAddr, 0);
 	spi.set_reg(0x01, sx1276::opmode(spi.get_reg(0x01), sx1276::reg_val_t::OpMode_Mode_RXCONTINUOUS));
 
 	for(;;) {
@@ -141,16 +142,21 @@ void task_function_emb(void* arg)
 			);
 
 			// show off
-			g_pin_blue.pulse_once(configTICK_RATE_HZ/100);
+			g_pin_blue.pulse_once(configTICK_RATE_HZ/10);
 			logger.log_async("LORA_EMB: recv\r\n");
 
-			static std::array<uint8_t, 256> rx_buf;
+			static std::array<uint8_t, 257> rx_buf;
+			rx_buf[256] = 0;
 			const auto rx_size = spi.fifo_read(rx_buf.data());
-			if (true || rx_size != 7) {
-				static char buf[5];
-				log_async_1(rx_size, buf);
+			if (true /*|| rx_size != 7*/) {
+				{
+					static std::array<char, 8> num_buf;
+					log_async_1(rx_size, num_buf.data());
+				}
+
 				logger.log_async(reinterpret_cast<const char*>(rx_buf.data()));
 			}
+			logger.log_async("RCV_DONE\r\n");
 		}
 	}
 }
@@ -228,25 +234,4 @@ void lora::create_task_emb(
 		&task_data.task_buffer
 	);
 }
-
-
-#if 0
-void lora::create_task_ext(
-	const char* task_name,
-	UBaseType_t prio,
-	lora::task_data_t& task_data,
-	const sx1276::hwconf_t* hwp
-)
-{
-	task_data.task_handle = xTaskCreateStatic(
-		&task_function_ext,
-		task_name,
-		task_data.stack.size(),
-		const_cast<void*>(reinterpret_cast<const void*>(hwp)),
-		prio,
-		task_data.stack.data(),
-		&task_data.task_buffer
-	);
-}
-#endif
 
