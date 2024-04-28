@@ -135,7 +135,7 @@ void task_function(void* arg)
 	const uint8_t reg_01 = spi.get_reg(sx1276::regs_t::OpMode);
 	spi.set_reg(sx1276::regs_t::OpMode, sx1276::opmode(reg_01, sx1276::reg_val_t::OpMode_Mode_STDBY));
 	for(;;) {
-		static const std::array<uint8_t, 11> tx_buf{
+		const std::array<uint8_t, 11> tx_buf{
 			'B', 'E', 'E', 'F',
 			'B', 'z', 'y', 'k', '\r', '\n', 0
 		};
