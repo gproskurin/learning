@@ -9,7 +9,7 @@ extern void IntHandler_Timer();
 
 
 #if defined TARGET_STM32L072
-__attribute__((section(".vectors"))) void (*tab[])(void) =
+__attribute__((section(".vectors"))) void (*tab[16+32])(void) =
 {
 	_estack,
 	_reset,
@@ -74,7 +74,7 @@ __attribute__((section(".vectors"))) void (*tab[])(void) =
 	0 // &IntHandler_Timer // TIM6 59 = 16 + 43
 };
 #elif defined TARGET_STM32F103
-__attribute__((section(".vectors"))) void (*tab[])(void) =
+__attribute__((section(".vectors"))) void (*tab[16+60])(void) =
 {
 	_estack,
 	_reset,
