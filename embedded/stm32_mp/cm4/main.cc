@@ -16,7 +16,7 @@
 #define USART_CON_BAUDRATE 115200
 
 
-usart_logger_t logger;
+usart_logger_t logger(USART_STLINK, "logger_cm4", PRIO_LOGGER);
 
 
 void usart_init(USART_TypeDef* const usart)
@@ -123,16 +123,7 @@ __attribute__ ((noreturn)) void main()
 	g_pin_red_otg.pulse_continuous(configTICK_RATE_HZ/10, configTICK_RATE_HZ);
 
 	usart_init(USART_STLINK);
-	logger.set_usart(USART_STLINK);
-	logger.log_sync("\r\nCM4: Logger initialized (sync)\r\n");
-
-	logger.log_sync("Creating logger queue...\r\n");
-	logger.init_queue();
-	logger.log_sync("Created logger queue\r\n");
-
-	logger.log_sync("Creating logger task...\r\n");
-	logger.create_task("logger", PRIO_LOGGER);
-	logger.log_sync("Created logger task\r\n");
+	logger.log_sync("\r\nCM4: USART initialized (sync)\r\n");
 
 	logger.log_sync("Starting FreeRTOS scheduler\r\n");
 	vTaskStartScheduler();

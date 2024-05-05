@@ -1,24 +1,20 @@
 ###
+include("${CMAKE_SOURCE_DIR}/../cmake/freertos.cmake")
 
 set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/../ld/stm32h745_cm4.ld)
 
-set(FIRMWARE_ELF ${PROJECT_NAME}.elf)
-set(FIRMWARE_BIN ${PROJECT_NAME}.bin)
+set(FIRMWARE_ELF ${PROJECT_NAME}_cm4.elf)
+set(FIRMWARE_BIN ${PROJECT_NAME}_cm4.bin)
 
 set(ARCH_FLAGS -mcpu=cortex-m4 -mthumb -DTARGET_STM32H745_CM4 -DCORE_CM4)
 set(COMMON_C_CXX_FLAGS ${COMMON_C_CXX_FLAGS} ${ARCH_FLAGS})
 
-# FreeRTOS
-add_library(freertos_config INTERFACE)
-target_include_directories(freertos_config SYSTEM
-	INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}"
+generate_freertos_targets("CM4_" "GCC_ARM_CM3")
+set_target_properties(CM4_freertos_config
+	PROPERTIES
+	INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}
+	INTERFACE_COMPILE_OPTIONS "${COMMON_C_CXX_FLAGS}"
 )
-target_compile_options(freertos_config
-	INTERFACE ${COMMON_C_CXX_FLAGS}
-)
-set(FREERTOS_PORT "GCC_ARM_CM3")
-add_subdirectory("${CMAKE_SOURCE_DIR}/../_deps/FreeRTOS-Kernel" "FreeRTOS")
-###
 
 add_executable(${FIRMWARE_ELF}
 	startup.c
@@ -29,7 +25,7 @@ add_executable(${FIRMWARE_ELF}
 )
 
 target_link_libraries(${FIRMWARE_ELF}
-	freertos_kernel
+	CM4_freertos_kernel
 )
 
 target_include_directories(${FIRMWARE_ELF}

@@ -25,7 +25,7 @@ set(COMMON_INCLUDES
 )
 
 
-#add_subdirectory(cm4)
 add_subdirectory(cm7)
+add_subdirectory(cm4)
 
 ###

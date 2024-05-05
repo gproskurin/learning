@@ -22,7 +22,7 @@
 #define USART_CON_BAUDRATE 115200
 
 
-usart_logger_t logger;
+usart_logger_t logger(USART_STLINK, "logger_cm7", PRIO_LOGGER);
 
 stm32_lib::hsem::hsem_t<0> hsem0;
 
@@ -140,7 +140,7 @@ void ts_init()
 }
 
 
-stm32_lib::lcd_t<480,272> lcd;
+stm32_lib::display::lcd_t<480,272> lcd;
 void init()
 {
 	// lcd pixel clock, PLL3(=64)/div
@@ -467,16 +467,7 @@ __attribute__ ((noreturn)) void main()
 	g_pin_green_vbus.pulse_continuous(configTICK_RATE_HZ/2, configTICK_RATE_HZ);
 
 	usart_init(USART_STLINK);
-	logger.set_usart(USART_STLINK);
-	logger.log_sync("\r\nCM7: Logger initialized (sync)\r\n");
-
-	logger.log_sync("Creating logger queue...\r\n");
-	logger.init_queue();
-	logger.log_sync("Created logger queue\r\n");
-
-	logger.log_sync("Creating logger task...\r\n");
-	logger.create_task("logger", PRIO_LOGGER);
-	logger.log_sync("Created logger task\r\n");
+	logger.log_sync("\r\nCM7: USART initialized (sync)\r\n");
 
 	logger.log_sync("Creating LCD task...\r\n");
 	create_task_lcd();
