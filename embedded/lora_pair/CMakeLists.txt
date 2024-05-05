@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.25)
 
 include("${CMAKE_SOURCE_DIR}/../cmake/arm-none-eabi.cmake")
 
-project(stm32wl55_bare C CXX)
+project(lora_pair C CXX)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
 set(CMSIS_ROOT "${CMAKE_SOURCE_DIR}/../_deps/CMSIS_5")
@@ -24,8 +24,7 @@ set(COMMON_INCLUDES
 )
 
 
-add_subdirectory(cm4)
-add_subdirectory(cm0)
+add_subdirectory(gateway)
 
 ###
 
