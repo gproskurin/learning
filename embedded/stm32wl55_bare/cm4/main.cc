@@ -608,7 +608,8 @@ __attribute__ ((noreturn)) void main()
 	g_pin_blue.init_pin();
 	g_pin_green.init_pin();
 	g_pin_green.pulse_continuous(configTICK_RATE_HZ/30, configTICK_RATE_HZ/10);
-	g_pin_red.init_pin();
+	//g_pin_red.init_pin();
+	PWR->CR4 |= PWR_CR4_C2BOOT;
 
 	logger.log_sync("Creating LORA_RECV task...\r\n");
 	create_task_lora_recv();
