@@ -1,14 +1,12 @@
 ###
 include("${CMAKE_SOURCE_DIR}/../cmake/freertos.cmake")
 
-set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/../ld/stm32wl55_cpu2.ld)
-set(DEFINITIONS -DTARGET_STM32WL55 -DTARGET_STM32WL55_CPU2 -DCORE_CM0PLUS)
-set(C_CXX_ARCH_FLAGS -mcpu=cortex-m0plus -mthumb)
+set(T_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/../ld/stm32wl55_cpu2.ld)
+set(T_DEFINITIONS -DTARGET_STM32WL55 -DTARGET_STM32WL55_CPU2 -DCORE_CM0PLUS)
+set(T_C_CXX_FLAGS ${COMMON_C_CXX_FLAGS} -mcpu=cortex-m0plus -mthumb)
 
-set(C_CXX_FLAGS ${COMMON_C_CXX_FLAGS} ${C_CXX_ARCH_FLAGS})
-
-set(FIRMWARE_ELF "bare_cm0.elf")
-set(FIRMWARE_BIN "bare_cm0.bin")
+set(FIRMWARE_ELF "lorapair_gateway_cm0.elf")
+set(FIRMWARE_BIN "lorapair_gateway_cm0.bin")
 
 
 # FreeRTOS
@@ -16,9 +14,10 @@ generate_freertos_targets("CM0_" "GCC_ARM_CM0")
 set_target_properties(CM0_freertos_config
 	PROPERTIES
 	INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}"
-	INTERFACE_COMPILE_OPTIONS "${C_CXX_FLAGS}"
-	INTERFACE_COMPILE_DEFINITIONS "${DEFINITIONS}"
+	INTERFACE_COMPILE_OPTIONS "${T_C_CXX_FLAGS}"
+	INTERFACE_COMPILE_DEFINITIONS "${T_DEFINITIONS}"
 )
+
 
 add_executable(${FIRMWARE_ELF}
 	startup.c
@@ -28,30 +27,26 @@ add_executable(${FIRMWARE_ELF}
 	${STM32_LIB_ROOT}/startup.c
 )
 
-target_link_libraries(${FIRMWARE_ELF}
+target_include_directories(${FIRMWARE_ELF} PRIVATE
+	${STM32_LIB_ROOT}
+	${CMSIS_DEVICE_ROOT}
+	${CMSIS_ARM_INCLUDE}
+)
+
+target_link_libraries(${FIRMWARE_ELF} PRIVATE
 	CM0_freertos_kernel
-)
-
-target_include_directories(${FIRMWARE_ELF}
-	PRIVATE ${COMMON_INCLUDES}
-)
-
-set(link_options
-	-T${LINKER_SCRIPT}
+	-T${T_LINKER_SCRIPT}
 	-nostartfiles
 	-ffreestanding
 	-nostdlib
 )
-set_target_properties(${FIRMWARE_ELF}
-	PROPERTIES LINK_OPTIONS "${link_options}"
+
+set_target_properties(${FIRMWARE_ELF} PROPERTIES
+	COMPILE_DEFINITIONS "${T_DEFINITIONS}"
+	COMPILE_OPTIONS "${T_C_CXX_FLAGS}"
+	LINK_DEPENDS "${T_LINKER_SCRIPT}"
 )
 
-set_target_properties(${FIRMWARE_ELF}
-	PROPERTIES COMPILE_OPTIONS "${COMMON_C_CXX_FLAGS}"
-)
-set_target_properties(${FIRMWARE_ELF}
-	PROPERTIES LINK_DEPENDS ${LINKER_SCRIPT}
-)
 add_custom_target(${FIRMWARE_BIN}
 	ALL
 	DEPENDS ${FIRMWARE_ELF}

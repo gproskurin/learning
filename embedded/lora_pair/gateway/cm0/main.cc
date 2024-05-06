@@ -78,7 +78,7 @@ __attribute__ ((noreturn)) void main()
 	logger.log_sync("\r\nLogger_cm0 initialized (sync)\r\n");
 
 	g_pin_red.init_pin();
-	g_pin_red.pulse_continuous(configTICK_RATE_HZ/10, configTICK_RATE_HZ*9/10);
+	g_pin_red.pulse_continuous(configTICK_RATE_HZ/10, configTICK_RATE_HZ*4/10);
 
 	logger.log_sync("Creating LORA_RECV task...\r\n");
 	create_task_lora_recv();
