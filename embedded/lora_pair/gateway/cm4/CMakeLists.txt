@@ -22,6 +22,7 @@ set_target_properties(CM4_freertos_config
 add_executable(${FIRMWARE_ELF}
 	startup.c
 	main.cc
+	${CMAKE_CURRENT_SOURCE_DIR}/../common/utils.cc
 	${STM32_LIB_ROOT}/logging.cc
 	${STM32_LIB_ROOT}/my_stdlib.c
 	${STM32_LIB_ROOT}/startup.c
