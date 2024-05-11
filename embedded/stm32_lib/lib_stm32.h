@@ -433,6 +433,27 @@ T write(SPI_TypeDef* const spi, T data)
 } // namespace spi
 
 
+#if defined TARGET_STM32WL55
+namespace ipcc {
+
+
+template <uint8_t Ch>
+void c1_mask_rx_int()
+{
+	IPCC->C1MR |= uint32_t(1 << Ch);
+}
+
+template <uint8_t Ch>
+void c1_unmask_rx_int()
+{
+	IPCC->C1MR &= ~(uint32_t(1 << Ch));
+}
+
+
+} // ipcc
+#endif
+
+
 #if defined TARGET_STM32H745_CM4 || defined TARGET_STM32H745_CM7
 namespace hsem {
 

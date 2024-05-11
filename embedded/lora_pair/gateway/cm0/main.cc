@@ -13,6 +13,7 @@
 
 #define PRIO_BLINK 1
 #define PRIO_LORA_RECV 5
+#define PRIO_IPCC_SEND 6
 #define PRIO_LOGGER 8 // FIXME
 
 
@@ -480,6 +481,37 @@ void create_task_lora_recv()
 }
 
 
+freertos_utils::task_data_t<1024> task_data_ipcc_send;
+
+void task_function_ipcc_send(void*)
+{
+	logger.log_async("CM0: IPCC_SEND task started\r\n");
+	constexpr uint8_t ch = 3;
+	for (;;) {
+		vTaskDelay(configTICK_RATE_HZ*5);
+		if ((IPCC->C2TOC1SR & (1 << ch)) == 0) {
+			logger.log_async("CM0: ipcc sending\r\n");
+			IPCC->C2SCR = (1 << (ch+16));
+		} else {
+			logger.log_async("CM0: ipcc busy\r\n");
+		}
+	}
+}
+
+void create_task_ipcc_send()
+{
+	task_data_lora_recv.task_handle = xTaskCreateStatic(
+		&task_function_ipcc_send,
+		"ipcc_send_cm0",
+		task_data_ipcc_send.stack.size(),
+		nullptr,
+		PRIO_IPCC_SEND,
+		task_data_ipcc_send.stack.data(),
+		&task_data_ipcc_send.task_buffer
+	);
+}
+
+
 __attribute__ ((noreturn)) void main()
 {
 	for (volatile int i=0; i<100000; ++i) {}
@@ -495,6 +527,8 @@ __attribute__ ((noreturn)) void main()
 	logger.log_sync("CM0: Creating LORA_RECV task...\r\n");
 	create_task_lora_recv();
 	logger.log_sync("CM0: Created LORA_RECV task\r\n");
+
+	create_task_ipcc_send();
 
 	logger.log_sync("CM0: Starting FreeRTOS scheduler\r\n");
 	vTaskStartScheduler();

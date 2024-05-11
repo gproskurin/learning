@@ -11,9 +11,11 @@
 #include <array>
 
 #define PRIO_BLINK 1
-#define PRIO_TASK_CM4 5
+#define PRIO_IPCC_RECV 5
 #define PRIO_LOGGER 8 // FIXME
 
+
+constexpr uint8_t ipcc_ch_lora = 3;
 
 #define USART_CON_BAUDRATE 115200
 
@@ -108,6 +110,12 @@ void bus_init()
 	// SUBGHZSPI
 	RCC->APB3ENR |= RCC_APB3ENR_SUBGHZSPIEN;
 	toggle_bits_10(&RCC->APB3RSTR, RCC_APB3RSTR_SUBGHZSPIRST);
+
+	// IPCC
+	RCC->C2AHB3ENR |= RCC_C2AHB3ENR_IPCCEN;
+	RCC->AHB3ENR |= RCC_AHB3ENR_IPCCEN;
+	toggle_bits_10(&RCC->AHB3RSTR, RCC_AHB3RSTR_IPCCRST);
+	//toggle_bits_10(&RCC->C2AHB3RSTR, RCC_C2AHB3RSTR_IPCCRST);
 #endif
 }
 
@@ -134,28 +142,53 @@ void set_pin_debug(const stm32_lib::gpio::pin_t& p)
 	p.set(/*stm32_lib::gpio::mode_t::output,*/ stm32_lib::gpio::af_t(SUBGHZSPI_DEBUG_AF));
 }
 
-freertos_utils::task_data_t<64> task_data_cm4;
 
-void task_function_cm4(void*)
+freertos_utils::task_data_t<1024> task_data_ipcc_recv;
+
+void task_function_ipcc_recv(void*)
 {
-	logger.log_async("CM4: task started\r\n");
+	logger.log_async("CM4: IPCC_RECV started\r\n");
+	NVIC_SetPriority(IPCC_C1_RX_IRQn, 10); // TODO
+	NVIC_EnableIRQ(IPCC_C1_RX_IRQn);
+	IPCC->C1CR |= IPCC_C1CR_RXOIE;
 	for (;;) {
-		vTaskDelay(configTICK_RATE_HZ*10);
-		logger.log_async("CM4: keep-alive\r\n");
+		stm32_lib::ipcc::c1_unmask_rx_int<ipcc_ch_lora>();
+		if (xTaskNotifyWait(0, 0xffffffff, nullptr, portMAX_DELAY) == pdTRUE) {
+			if (IPCC->C2TOC1SR & (1 << ipcc_ch_lora)) {
+				logger.log_async("CM4: IPCC_RECV has data\r\n");
+				IPCC->C1SCR = (1 << ipcc_ch_lora);
+				stm32_lib::ipcc::c1_unmask_rx_int<ipcc_ch_lora>();
+			} else {
+				logger.log_async("CM4: ERROR: no rx data\r\n");
+			}
+		}
 	}
 }
 
-void create_task_cm4()
+void create_task_ipcc_recv()
 {
-	task_data_cm4.task_handle = xTaskCreateStatic(
-		&task_function_cm4,
-		"task_cm4",
-		task_data_cm4.stack.size(),
+	task_data_ipcc_recv.task_handle = xTaskCreateStatic(
+		&task_function_ipcc_recv,
+		"ipcc_recv_cm4",
+		task_data_ipcc_recv.stack.size(),
 		nullptr,
-		PRIO_TASK_CM4,
-		task_data_cm4.stack.data(),
-		&task_data_cm4.task_buffer
+		PRIO_IPCC_RECV,
+		task_data_ipcc_recv.stack.data(),
+		&task_data_ipcc_recv.task_buffer
 	);
+}
+
+
+extern "C" __attribute__ ((interrupt)) void IntHandler_IPCC_CPU1_RX()
+{
+	auto const sr = IPCC->C2TOC1SR;
+	if (sr & (1 << ipcc_ch_lora)) {
+		stm32_lib::ipcc::c1_mask_rx_int<ipcc_ch_lora>();
+
+		BaseType_t yield = pdFALSE;
+		xTaskNotifyFromISR(task_data_ipcc_recv.task_handle, 0, eSetBits, &yield);
+		portYIELD_FROM_ISR(yield);
+	}
 }
 
 
@@ -179,9 +212,7 @@ __attribute__ ((noreturn)) void main()
 	//g_pin_red.init_pin();
 	PWR->CR4 |= PWR_CR4_C2BOOT;
 
-	logger.log_sync("Creating TASK_CM4 task...\r\n");
-	create_task_cm4();
-	logger.log_sync("Created TASK_CM4 task\r\n");
+	create_task_ipcc_recv();
 
 	logger.log_sync("CM4: Starting FreeRTOS scheduler\r\n");
 	vTaskStartScheduler();
