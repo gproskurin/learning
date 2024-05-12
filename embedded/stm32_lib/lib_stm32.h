@@ -449,6 +449,24 @@ void c1_unmask_rx_int()
 	IPCC->C1MR &= ~(uint32_t(1 << Ch));
 }
 
+template <uint8_t Ch>
+bool c2_to_c1_tx_is_free()
+{
+	return (IPCC->C2TOC1SR & (1 << Ch)) == 0;
+}
+
+template <uint8_t Ch>
+void c2_to_c1_send()
+{
+	IPCC->C2SCR = (1 << (Ch + 16));
+}
+
+template <uint8_t Ch>
+void c1_mark_received()
+{
+	IPCC->C1SCR = (1 << Ch);
+}
+
 
 } // ipcc
 #endif

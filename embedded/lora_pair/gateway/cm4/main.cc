@@ -1,3 +1,4 @@
+#include "../common/utils.h"
 #include "lib_stm32.h"
 #include "bsp.h"
 #include "freertos_utils.h"
@@ -16,13 +17,14 @@
 
 
 constexpr uint8_t ipcc_ch_lora = 3;
+constexpr uint32_t mb_ptr_addr = 0x20008088; // keep it up-to-date, taken from CM0 linker map file
 
 #define USART_CON_BAUDRATE 115200
 
 
 usart_logger_t logger(USART_STLINK, "logger_cm4", PRIO_LOGGER);
 
-//freertos_utils::pin_toggle_task_t g_pin_blue("blink_blue", bsp::pin_led_blue, PRIO_BLINK);
+freertos_utils::pin_toggle_task_t g_pin_blue("blink_blue", bsp::pin_led_blue, PRIO_BLINK);
 freertos_utils::pin_toggle_task_t g_pin_green("blink_green", bsp::pin_led_green, PRIO_BLINK);
 //freertos_utils::pin_toggle_task_t g_pin_red("blink_red", bsp::pin_led_red, PRIO_BLINK);
 
@@ -153,15 +155,45 @@ void task_function_ipcc_recv(void*)
 	IPCC->C1CR |= IPCC_C1CR_RXOIE;
 	for (;;) {
 		stm32_lib::ipcc::c1_unmask_rx_int<ipcc_ch_lora>();
-		if (xTaskNotifyWait(0, 0xffffffff, nullptr, portMAX_DELAY) == pdTRUE) {
-			if (IPCC->C2TOC1SR & (1 << ipcc_ch_lora)) {
-				logger.log_async("CM4: IPCC_RECV has data\r\n");
-				IPCC->C1SCR = (1 << ipcc_ch_lora);
-				stm32_lib::ipcc::c1_unmask_rx_int<ipcc_ch_lora>();
-			} else {
-				logger.log_async("CM4: ERROR: no rx data\r\n");
-			}
+		if (xTaskNotifyWait(0, 0xffffffff, nullptr, portMAX_DELAY) != pdTRUE) {
+			logger.log_async("CM4: notify timeout\r\n");
+			continue;
 		}
+
+		if (! (IPCC->C2TOC1SR & (1 << ipcc_ch_lora))) {
+			logger.log_async("CM4: stray notify\r\n");
+			continue;
+		}
+
+		vTaskDelay(2);
+		logger.log_async("CM4: IPCC_RECV has data\r\n");
+		// read mem barrier/flush read cache
+		__DSB();
+		auto const mb_ptr = mailbox::get_mb_ptr(mb_ptr_addr);
+		auto const mb_type = mailbox::get_mb_type(mb_ptr);
+		switch (mb_type) {
+			case mailbox::buffer:
+				g_pin_blue.pulse_once(configTICK_RATE_HZ/2);
+				logger.log_async("CM4: mailbox/buffer\r\n");
+				{
+					const auto* const mp = mailbox::mb_cast<mailbox::buffer>(mb_ptr);
+					logger.log_async(reinterpret_cast<const char*>(mp->data));
+				}
+				vTaskDelay(configTICK_RATE_HZ);
+				break;
+			case mailbox::string0:
+				g_pin_blue.pulse_once(configTICK_RATE_HZ/20);
+				logger.log_async("CM4: mailbox/string0\r\n");
+				{
+					const auto* const mp = mailbox::mb_cast<mailbox::string0>(mb_ptr);
+					logger.log_async(mp->s);
+				}
+				vTaskDelay(configTICK_RATE_HZ);
+				break;
+			default:
+				logger.log_async("CM4: mailbox: unknown type\r\n");
+		}
+		stm32_lib::ipcc::c1_mark_received<ipcc_ch_lora>();
 	}
 }
 
@@ -206,7 +238,7 @@ __attribute__ ((noreturn)) void main()
 	usart_init(USART_STLINK);
 	logger.log_sync("\r\nLogger initialized (sync)\r\n");
 
-	//g_pin_blue.init_pin();
+	g_pin_blue.init_pin();
 	g_pin_green.init_pin();
 	g_pin_green.pulse_continuous(configTICK_RATE_HZ/30, configTICK_RATE_HZ/10);
 	//g_pin_red.init_pin();

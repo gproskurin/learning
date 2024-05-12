@@ -19,10 +19,12 @@
 
 #define USART_CON_BAUDRATE 115200
 
+void* ipcc_mp; // pointer to mailbox being sent
+constexpr uint8_t ipcc_ch_lora = 3;
 
 usart_logger_t logger(USART_STLINK, "logger_cm0", PRIO_LOGGER);
 
-freertos_utils::pin_toggle_task_t g_pin_blue("blink_blue", bsp::pin_led_blue, PRIO_BLINK);
+//freertos_utils::pin_toggle_task_t g_pin_blue("blink_blue", bsp::pin_led_blue, PRIO_BLINK);
 //freertos_utils::pin_toggle_task_t g_pin_green("blink_green", bsp::pin_led_green, PRIO_BLINK);
 freertos_utils::pin_toggle_task_t g_pin_red("blink_red", bsp::pin_led_red, PRIO_BLINK);
 
@@ -393,6 +395,18 @@ static const std::array<const char*, 16> flag_descr{
 
 freertos_utils::task_data_t<1024> task_data_lora_recv;
 
+mailbox::mailbox_t<mailbox::buffer> mb_buffer;
+mailbox::mailbox_t<mailbox::string0> mb_string0;
+
+template <mailbox::mb_type Mt>
+void mb_send(mailbox::mailbox_t<Mt>* mp)
+{
+	mailbox::set(reinterpret_cast<uint32_t>(&ipcc_mp), mp);
+	// write mem barrier/flush write cache
+	__DSB();
+	stm32_lib::ipcc::c2_to_c1_send<ipcc_ch_lora>();
+}
+
 void task_function_lora_recv(void*)
 {
 	logger.log_async("CM0: LORA_RECV task started\r\n");
@@ -449,7 +463,7 @@ void task_function_lora_recv(void*)
 			}
 
 			// show off
-			g_pin_blue.pulse_once(configTICK_RATE_HZ/2);
+			//g_pin_blue.pulse_once(configTICK_RATE_HZ/2);
 			logger.log_async("CM0: LORA_RECV: recv\r\n");
 
 			static std::array<uint8_t, 256> rx_buf;
@@ -459,9 +473,26 @@ void task_function_lora_recv(void*)
 				logger.log_async("CM0: RX_SIZE\r\n");
 				log_async_1(rx_size, buf);
 			}
+
+			while (!stm32_lib::ipcc::c2_to_c1_tx_is_free<ipcc_ch_lora>()) {
+				vTaskDelay(1);
+			}
+			mb_string0.s = "CM0->CM4 logging\r\n";
+			mb_send(&mb_string0);
+
+			while (!stm32_lib::ipcc::c2_to_c1_tx_is_free<ipcc_ch_lora>()) {
+				vTaskDelay(1);
+			}
+			logger.log_async("CM0: sending\r\n");
+			mb_buffer.data = rx_buf.data();
+			mb_buffer.size = rx_size;
+			mb_send(&mb_buffer);
+
+#if 0
 			if (true || rx_size != 7) {
 				logger.log_async(reinterpret_cast<const char*>(rx_buf.data()));
 			}
+#endif
 		}
 	}
 }
@@ -520,7 +551,7 @@ __attribute__ ((noreturn)) void main()
 
 	logger.log_sync("\r\nLogger_cm0 initialized (sync)\r\n");
 
-	g_pin_blue.init_pin();
+	//g_pin_blue.init_pin();
 	g_pin_red.init_pin();
 	g_pin_red.pulse_continuous(configTICK_RATE_HZ/30, configTICK_RATE_HZ/10);
 
@@ -528,7 +559,7 @@ __attribute__ ((noreturn)) void main()
 	create_task_lora_recv();
 	logger.log_sync("CM0: Created LORA_RECV task\r\n");
 
-	create_task_ipcc_send();
+	//create_task_ipcc_send();
 
 	logger.log_sync("CM0: Starting FreeRTOS scheduler\r\n");
 	vTaskStartScheduler();

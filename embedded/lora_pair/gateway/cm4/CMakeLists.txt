@@ -37,6 +37,7 @@ target_include_directories(${FIRMWARE_ELF} PRIVATE
 target_link_libraries(${FIRMWARE_ELF} PRIVATE
 	CM4_freertos_kernel
 	-T${T_LINKER_SCRIPT}
+	-Xlinker -Map="${FIRMWARE_ELF}.map"
 	-nostartfiles
 	-ffreestanding
 	-nostdlib
