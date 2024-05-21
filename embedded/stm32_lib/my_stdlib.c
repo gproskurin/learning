@@ -23,3 +23,13 @@ char *stpcpy(char *dst, const char *src)
 	return dst-1;
 }
 
+size_t strlen(const char* s)
+{
+	size_t r = 0;
+	while (*s) {
+		++s;
+		++r;
+	}
+	return r;
+}
+

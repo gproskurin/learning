@@ -52,6 +52,7 @@ void usart_init(USART_TypeDef* const usart)
 
 	constexpr uint32_t cr1 = USART_CR1_TE;
 
+	usart->CR3 = USART_CR3_DMAT; // DMA
 	stm32_lib::gpio::set_mode_af_lowspeed_pu(bsp::usart_stlink_pin_tx, USART_STLINK_PIN_TX_AF);
 	usart->BRR = configCPU_CLOCK_HZ / USART_CON_BAUDRATE;
 
@@ -96,6 +97,15 @@ void bus_init()
 	// SPI1 & SYSCFG
 	RCC->APB2ENR |= RCC_APB2ENR_SPI1EN_Msk | RCC_APB2ENR_SYSCFGEN_Msk;
 	toggle_bits_10(&RCC->APB2RSTR, RCC_APB2RSTR_SPI1RST_Msk | RCC_APB2RSTR_SYSCFGRST_Msk);
+
+	// DMA
+	RCC->AHBENR |= RCC_AHBENR_DMAEN;
+	toggle_bits_10(&RCC->AHBRSTR, RCC_AHBRSTR_DMARST_Msk);
+
+	// configure DMA: USART2/Channel4
+	DMA1_CSELR->CSELR = (0b0100 << DMA_CSELR_C4S_Pos);
+	NVIC_SetPriority(DMA1_Channel4_5_6_7_IRQn, 0);
+	NVIC_EnableIRQ(DMA1_Channel4_5_6_7_IRQn);
 
 #if 0
 	// PB2 interrupt TODO: do not hardcode PB2, use bit masks stuff
@@ -142,6 +152,26 @@ extern "C" __attribute__ ((interrupt)) void IntHandler_EXTI4_15()
 }
 
 
+extern "C" __attribute__ ((interrupt)) void IntHandler_DMA1_Channel4_5_6_7()
+{
+	using ev = usart_logger_t::events_t;
+	uint32_t events = 0;
+
+	auto const isr = DMA1->ISR;
+	if (isr & DMA_ISR_TEIF4) {
+		events |= ev::dma_te;
+	}
+	if (isr & DMA_ISR_TCIF4) {
+		events |= ev::dma_tc;
+	}
+
+	if (events) {
+		DMA1->IFCR = DMA_IFCR_CGIF4 | DMA_IFCR_CTEIF4 | DMA_IFCR_CTCIF4;
+		xTaskNotifyFromISR(logger.task_handle_, events, eSetBits, nullptr);
+	}
+}
+
+
 StaticTask_t xTaskBufferIdle;
 freertos_utils::task_stack_t<64> idle_task_stack;
 extern "C"
@@ -162,6 +192,7 @@ void vApplicationIdleHook(void)
 __attribute__ ((noreturn)) void main()
 {
 	bus_init();
+	logger.init_dma();
 
 	usart_init(USART_STLINK);
 	logger.log_sync("\r\nLogger initialized (sync)\r\n");

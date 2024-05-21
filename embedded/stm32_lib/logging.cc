@@ -7,7 +7,22 @@ void usart_logger_t::task_function(void* arg)
 	for (;;) {
 		queue_item_t item;
 		if (xQueueReceive(lp->queue_handle_, reinterpret_cast<void*>(&item), portMAX_DELAY) == pdTRUE) {
+#ifdef TARGET_STM32L072
+			lp->log_dma(item);
+
+			// wait for DMA to complete/error
+			uint32_t events = 0;
+			while (
+				(xTaskNotifyWait(0, 0xffffffff, &events, portMAX_DELAY) != pdTRUE)
+				&& ((events & (dma_te | dma_tc)) == 0)
+			)
+			{}
+			// TODO handle TE
+
+			lp->dma_channel_->CCR = dma_channel_ccr_;
+#else
 			lp->log_sync(item);
+#endif
 		}
 	}
 }
