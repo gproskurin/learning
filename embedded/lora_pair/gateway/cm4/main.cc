@@ -172,12 +172,24 @@ void task_function_ipcc_recv(void*)
 		auto const mb_ptr = mailbox::get_mb_ptr(mb_ptr_addr);
 		auto const mb_type = mailbox::get_mb_type(mb_ptr);
 		switch (mb_type) {
-			case mailbox::buffer:
+			case mailbox::lora_packet:
 				g_pin_blue.pulse_once(configTICK_RATE_HZ/2);
-				logger.log_async("CM4: mailbox/buffer\r\n");
+				logger.log_async("CM4: mailbox/lora_packet\r\n");
 				{
-					const auto* const mp = mailbox::mb_cast<mailbox::buffer>(mb_ptr);
-					logger.log_async(reinterpret_cast<const char*>(mp->data));
+					const auto* const mp = mailbox::mb_cast<mailbox::lora_packet>(mb_ptr);
+					logger.log_async(reinterpret_cast<const char*>(mp->data.data()));
+					logger.log_async("RssiPkt SnrPkt SignalRssiPkt\r\n");
+					static std::array<char, 16> logbuf;
+					auto p = logbuf.data();
+					p = printf_byte(mp->rssi_pkt, p);
+					*p++ = ' ';
+					p = printf_byte(mp->snr_pkt, p);
+					*p++ = ' ';
+					p = printf_byte(mp->signal_rssi_pkt, p);
+					*p++ = '\r';
+					*p++ = '\n';
+					*p = 0;
+					logger.log_async(logbuf.data());
 				}
 				vTaskDelay(configTICK_RATE_HZ);
 				break;

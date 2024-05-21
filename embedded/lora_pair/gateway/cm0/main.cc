@@ -138,6 +138,16 @@ namespace subghz {
 		return rx_buf[1];
 	}
 
+	void GetPacketStatus(uint8_t* rssi_pkt, uint8_t* snr_pkt, uint8_t* signal_rssi_pkt)
+	{
+		constexpr std::array<uint8_t, 5> tx_buf{0x14, 0, 0, 0, 0};
+		std::array<uint8_t, 5> rx_buf;
+		spi_write(tx_buf.size(), tx_buf.data(), rx_buf.data());
+		*rssi_pkt = rx_buf[2];
+		*snr_pkt = rx_buf[3];
+		*signal_rssi_pkt = rx_buf[4];
+	}
+
 	void Set_BufferBaseAddress(uint8_t tx_addr, uint8_t rx_addr)
 	{
 		spi_write_array(std::array<uint8_t, 3>{0x8F, tx_addr, rx_addr});
@@ -395,8 +405,8 @@ static const std::array<const char*, 16> flag_descr{
 
 freertos_utils::task_data_t<1024> task_data_lora_recv;
 
-mailbox::mailbox_t<mailbox::buffer> mb_buffer;
 mailbox::mailbox_t<mailbox::string0> mb_string0;
+mailbox::mailbox_t<mailbox::lora_packet> mb_lora_packet;
 
 template <mailbox::mb_type Mt>
 void mb_send(mailbox::mailbox_t<Mt>* mp)
@@ -474,6 +484,9 @@ void task_function_lora_recv(void*)
 				log_async_1(rx_size, buf);
 			}
 
+			uint8_t rssi_pkt, snr_pkt, signal_rssi_pkt;
+			subghz::GetPacketStatus(&rssi_pkt, &snr_pkt, &signal_rssi_pkt);
+
 			while (!stm32_lib::ipcc::c2_to_c1_tx_is_free<ipcc_ch_lora>()) {
 				vTaskDelay(1);
 			}
@@ -484,9 +497,14 @@ void task_function_lora_recv(void*)
 				vTaskDelay(1);
 			}
 			logger.log_async("CM0: sending\r\n");
-			mb_buffer.data = rx_buf.data();
-			mb_buffer.size = rx_size;
-			mb_send(&mb_buffer);
+			for (size_t i=0; i<rx_size; ++i) {
+				mb_lora_packet.data[i] = rx_buf[i];
+			}
+			mb_lora_packet.data_len = rx_size;
+			mb_lora_packet.rssi_pkt = -rssi_pkt >> 1;
+			mb_lora_packet.snr_pkt = (int8_t(snr_pkt) + 2) >> 2;
+			mb_lora_packet.signal_rssi_pkt = -signal_rssi_pkt >> 1;
+			mb_send(&mb_lora_packet);
 
 #if 0
 			if (true || rx_size != 7) {

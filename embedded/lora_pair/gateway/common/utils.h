@@ -3,17 +3,21 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <array>
 
 
 namespace mailbox {
 
+// NOTE:
+// These structures are shared between CM0 and CM4 cores. Beware of potential alignment issues.
 
 static_assert(sizeof(uintptr_t) == sizeof(uint32_t));
 
 enum mb_type : uint32_t {
 	// some magic numbers
 	buffer = 0x1234EEFF,
-	string0 = 0xEEFF3427
+	string0 = 0xEEFF3427,
+	lora_packet = 0x547EF7BA
 };
 
 template <mb_type Mt>
@@ -30,6 +34,18 @@ template <>
 struct mailbox_t<string0> {
 	const mb_type type = string0;
 	const char* s;
+};
+
+template <>
+struct mailbox_t<lora_packet> {
+	const mb_type type = lora_packet;
+
+	std::array<uint8_t, 256> data;
+	uint8_t data_len;
+
+	int8_t rssi_pkt;
+	int8_t snr_pkt;
+	int8_t signal_rssi_pkt;
 };
 
 
@@ -66,6 +82,8 @@ void set(uint32_t addr, mailbox_t<Mt>* const mp)
 
 
 void log_async_1(uint8_t x, char* const buf);
+
+char* printf_byte(uint8_t x, char* buf);
 
 
 #endif
