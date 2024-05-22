@@ -1,0 +1,12 @@
+/ {
+    aliases {
+        my-led = &myled2;
+    };
+    leds {
+        compatible = "gpio-leds";
+        myled2: led2 {
+            gpios = <&gpio0 19 GPIO_ACTIVE_LOW>;
+        };
+    };
+};
+
