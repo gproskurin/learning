@@ -5,7 +5,7 @@ include("${CMAKE_SOURCE_DIR}/../cmake/arm-none-eabi.cmake")
 project(mp C CXX)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
-set(CMSIS_ROOT "${CMAKE_SOURCE_DIR}/../_deps/CMSIS_5")
+set(CMSIS_ROOT "${CMAKE_SOURCE_DIR}/../_deps/CMSIS_6")
 set(CMSIS_ARM_INCLUDE "${CMSIS_ROOT}/CMSIS/Core/Include")
 set(CMSIS_DEVICE_ROOT "${CMSIS_ROOT}/..")
 set(STM32_LIB_ROOT "${CMAKE_SOURCE_DIR}/../stm32_lib")

@@ -15,7 +15,7 @@ set(FIRMWARE_BIN ${PROJECT_NAME}.bin)
 #set(FIRMWARE_IHEX ${PROJECT_NAME}.ihex)
 
 set(CMSIS_ROOT "${CMAKE_SOURCE_DIR}/../_deps")
-set(CMSIS_ARM_INCLUDE "${CMAKE_SOURCE_DIR}/../_deps/CMSIS_5/CMSIS/Core/Include")
+set(CMSIS_ARM_INCLUDE "${CMAKE_SOURCE_DIR}/../_deps/CMSIS_6/CMSIS/Core/Include")
 
 set(STM32_LIB_ROOT "${CMAKE_SOURCE_DIR}/../stm32_lib")
 
