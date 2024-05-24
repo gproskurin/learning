@@ -36,9 +36,7 @@ class usart_logger_t {
 	// FreeRTOS task
 	std::array<StackType_t, 128> task_stack_;
 	StaticTask_t task_buffer_;
-	public: // FIXME
 	TaskHandle_t const task_handle_;
-	private:
 
 	static void task_function(void*);
 
@@ -48,6 +46,11 @@ public:
 		dma_te = (1 << 0),
 		dma_tc = (1 << 1),
 	};
+
+	void notify_from_isr(events_t events) const
+	{
+		xTaskNotifyFromISR(task_handle_, events, eSetBits, nullptr);
+	}
 #endif
 
 	usart_logger_t(uart_t* u, const char* task_name, UBaseType_t prio)
@@ -88,12 +91,12 @@ public:
 		xQueueSend(queue_handle_, &str, 0);
 	}
 
+#ifdef TARGET_STM32L072
 	void log_async_from_isr(const char* str)
 	{
 		xQueueSendFromISR(queue_handle_, &str, nullptr);
 	}
 
-#ifdef TARGET_STM32L072
 private:
 	static constexpr uint32_t dma_channel_ccr_ = DMA_CCR_MINC | DMA_CCR_DIR | DMA_CCR_TEIE | DMA_CCR_TCIE;
 

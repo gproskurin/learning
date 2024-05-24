@@ -167,7 +167,7 @@ extern "C" __attribute__ ((interrupt)) void IntHandler_DMA1_Channel4_5_6_7()
 
 	if (events) {
 		DMA1->IFCR = DMA_IFCR_CGIF4 | DMA_IFCR_CTEIF4 | DMA_IFCR_CTCIF4;
-		xTaskNotifyFromISR(logger.task_handle_, events, eSetBits, nullptr);
+		logger.notify_from_isr(static_cast<ev>(events));
 	}
 }
 

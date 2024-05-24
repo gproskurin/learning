@@ -14,7 +14,7 @@ void usart_logger_t::task_function(void* arg)
 			uint32_t events = 0;
 			while (
 				(xTaskNotifyWait(0, 0xffffffff, &events, portMAX_DELAY) != pdTRUE)
-				&& ((events & (dma_te | dma_tc)) == 0)
+				|| ((events & (dma_te | dma_tc)) == 0)
 			)
 			{}
 			// TODO handle TE
