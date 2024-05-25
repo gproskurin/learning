@@ -1,13 +1,18 @@
 #include "logging.h"
 
 
-void usart_logger_t::task_function(void* arg)
+namespace logging {
+namespace impl {
+
+
+template <typename DmaParams>
+void usart_logger_t<DmaParams>::task_function(void* arg)
 {
-	usart_logger_t* const lp = reinterpret_cast<usart_logger_t*>(arg);
+	auto* const lp = reinterpret_cast<usart_logger_t*>(arg);
 	for (;;) {
 		queue_item_t item;
 		if (xQueueReceive(lp->queue_handle_, reinterpret_cast<void*>(&item), portMAX_DELAY) == pdTRUE) {
-#ifdef TARGET_STM32L072
+#ifdef LOGGING_DMA
 			lp->log_dma(item);
 
 			// wait for DMA to complete/error
@@ -19,16 +24,18 @@ void usart_logger_t::task_function(void* arg)
 			{}
 			// TODO handle TE
 
-			lp->dma_channel_->CCR = dma_channel_ccr_;
+			DmaParams::dma_channel()->CCR = DmaParams::dma_channel_ccr;
 #else
 			lp->log_sync(item);
 #endif
 		}
 	}
 }
+}
 
-
-void usart_logger_t::log_sync(const char* s) const
+namespace impl {
+template <typename DmaParams>
+void usart_logger_t<DmaParams>::log_sync(const char* s) const
 {
 #ifdef TARGET_NRF52DK
 	if (!*s) {
@@ -66,4 +73,15 @@ void usart_logger_t::log_sync(const char* s) const
 	usart_->TASKS_STOPTX = 1;
 #endif
 }
+
+
+} // namespace impl
+} // namespace logging
+
+
+template
+void logging::impl::usart_logger_t<logging::dma_params_t>::task_function(void* arg);
+
+template
+void logging::impl::usart_logger_t<logging::dma_params_t>::log_sync(const char* s) const;
 

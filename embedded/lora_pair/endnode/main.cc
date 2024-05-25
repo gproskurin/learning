@@ -42,23 +42,8 @@ const sx1276::hwconf_t hwc_emb = {
 	//.pin_radio_tcxo_vcc{GPIOA_BASE, 12},
 };
 
+
 usart_logger_t logger(USART_STLINK, "logger", PRIO_LOGGER);
-
-#define USART_CON_BAUDRATE 115200
-
-void usart_init(USART_TypeDef* const usart)
-{
-	usart->CR1 = 0; // ensure UE flag is reset
-
-	constexpr uint32_t cr1 = USART_CR1_TE;
-
-	usart->CR3 = USART_CR3_DMAT; // DMA
-	stm32_lib::gpio::set_mode_af_lowspeed_pu(bsp::usart_stlink_pin_tx, USART_STLINK_PIN_TX_AF);
-	usart->BRR = configCPU_CLOCK_HZ / USART_CON_BAUDRATE;
-
-	usart->CR1 = cr1;
-	usart->CR1 = cr1 | USART_CR1_UE;
-}
 
 
 void toggle_bits_10(volatile uint32_t* const ptr, const uint32_t mask)
@@ -154,21 +139,7 @@ extern "C" __attribute__ ((interrupt)) void IntHandler_EXTI4_15()
 
 extern "C" __attribute__ ((interrupt)) void IntHandler_DMA1_Channel4_5_6_7()
 {
-	using ev = usart_logger_t::events_t;
-	uint32_t events = 0;
-
-	auto const isr = DMA1->ISR;
-	if (isr & DMA_ISR_TEIF4) {
-		events |= ev::dma_te;
-	}
-	if (isr & DMA_ISR_TCIF4) {
-		events |= ev::dma_tc;
-	}
-
-	if (events) {
-		DMA1->IFCR = DMA_IFCR_CGIF4 | DMA_IFCR_CTEIF4 | DMA_IFCR_CTCIF4;
-		logger.notify_from_isr(static_cast<ev>(events));
-	}
+	logger.handle_dma_irq();
 }
 
 
@@ -193,8 +164,12 @@ __attribute__ ((noreturn)) void main()
 {
 	bus_init();
 	logger.init_dma();
+	stm32_lib::usart::init_logger_uart<configCPU_CLOCK_HZ>(
+		USART_STLINK,
+		bsp::usart_stlink_pin_tx,
+		USART_STLINK_PIN_TX_AF
+	);
 
-	usart_init(USART_STLINK);
 	logger.log_sync("\r\nLogger initialized (sync)\r\n");
 
 	g_pin_green.init_pin();
@@ -208,6 +183,9 @@ __attribute__ ((noreturn)) void main()
 	logger.log_sync("Created LORA task\r\n");
 
 	logger.log_sync("Starting FreeRTOS scheduler\r\n");
+
+	stm32_lib::usart::enable_dmat(USART_STLINK);
+
 	vTaskStartScheduler();
 
 	logger.log_sync("Error in FreeRTOS scheduler\r\n");

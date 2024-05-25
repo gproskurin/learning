@@ -7,24 +7,67 @@
 
 #include "cmsis_device.h"
 
-#ifdef TARGET_STM32L072
 #include <string.h> // strlen
-#endif
 
 #include <array>
 
 
-class usart_logger_t {
+namespace logging {
+
+
 #ifdef TARGET_NRF52DK
-	using uart_t = NRF_UART_Type;
+using uart_t = NRF_UART_Type;
 #else
-	using uart_t = USART_TypeDef;
+using uart_t = USART_TypeDef;
 #endif
-	uart_t* const usart_;
+
+
+struct base_dma_params_t {
+	static constexpr uint32_t dma_channel_ccr = DMA_CCR_MINC | DMA_CCR_DIR | DMA_CCR_TEIE | DMA_CCR_TCIE;
+	static constexpr uint32_t dma_channel_ccr_en = dma_channel_ccr | DMA_CCR_EN;
+};
 
 #ifdef TARGET_STM32L072
-	DMA_Channel_TypeDef* const dma_channel_ = DMA1_Channel4;
+#define LOGGING_DMA
+struct dma_params_t : public base_dma_params_t {
+	static DMA_Channel_TypeDef* dma_channel() { return DMA1_Channel4; }
+	static void init_dma(uart_t* uart)
+	{
+		dma_channel()->CCR = 0;
+		dma_channel()->CCR = dma_channel_ccr;
+		dma_channel()->CPAR = reinterpret_cast<uint32_t>(&uart->TDR);
+	}
+	static constexpr uint32_t isr_flag_te = DMA_ISR_TEIF4;
+	static constexpr uint32_t isr_flag_tc = DMA_ISR_TCIF4;
+	static constexpr uint32_t ifcr_flags_clear = DMA_IFCR_CGIF4 | DMA_IFCR_CTEIF4 | DMA_IFCR_CTCIF4;
+};
+#elif defined TARGET_STM32WL55
+#define LOGGING_DMA
+struct dma_params_t : public base_dma_params_t {
+	static DMA_Channel_TypeDef* dma_channel() { return DMA1_Channel1; }
+	static DMAMUX_Channel_TypeDef* dmamux_channel() { return DMAMUX1_Channel0; }
+	static void init_dma(uart_t* uart)
+	{
+		dma_channel()->CCR = 0;
+		dma_channel()->CCR = dma_channel_ccr;
+		dma_channel()->CPAR = reinterpret_cast<uint32_t>(&uart->TDR);
+		dmamux_channel()->CCR = (22/*LPUART1_TX*/ << DMAMUX_CxCR_DMAREQ_ID_Pos);
+	}
+	static constexpr uint32_t isr_flag_te = DMA_ISR_TEIF1;
+	static constexpr uint32_t isr_flag_tc = DMA_ISR_TCIF1;
+	static constexpr uint32_t ifcr_flags_clear = DMA_IFCR_CGIF1 | DMA_IFCR_CTEIF1 | DMA_IFCR_CTCIF1;
+};
+#else
+struct dma_params_t {};
 #endif
+
+
+namespace impl {
+
+
+template <typename DmaParams>
+class usart_logger_t {
+	uart_t* const usart_;
 
 	using queue_item_t = const char*;
 
@@ -41,16 +84,11 @@ class usart_logger_t {
 	static void task_function(void*);
 
 public:
-#ifdef TARGET_STM32L072
+#ifdef LOGGING_DMA
 	enum events_t : uint32_t {
 		dma_te = (1 << 0),
 		dma_tc = (1 << 1),
 	};
-
-	void notify_from_isr(events_t events) const
-	{
-		xTaskNotifyFromISR(task_handle_, events, eSetBits, nullptr);
-	}
 #endif
 
 	usart_logger_t(uart_t* u, const char* task_name, UBaseType_t prio)
@@ -73,15 +111,6 @@ public:
 	{
 	}
 
-#ifdef TARGET_STM32L072
-	void init_dma()
-	{
-		dma_channel_->CCR = 0;
-		dma_channel_->CCR = dma_channel_ccr_;
-		dma_channel_->CPAR = reinterpret_cast<uint32_t>(&usart_->TDR);
-	}
-#endif
-
 	// API
 	void log_sync(const char* str) const;
 
@@ -91,25 +120,49 @@ public:
 		xQueueSend(queue_handle_, &str, 0);
 	}
 
-#ifdef TARGET_STM32L072
-	void log_async_from_isr(const char* str)
+#ifdef LOGGING_DMA
+	void init_dma()
 	{
-		xQueueSendFromISR(queue_handle_, &str, nullptr);
+		DmaParams::init_dma(usart_);
+	}
+
+	void handle_dma_irq()
+	{
+		uint32_t events = 0;
+
+		auto const isr = DMA1->ISR;
+		if (isr & DmaParams::isr_flag_te) {
+			events |= events_t::dma_te;
+		}
+		if (isr & DmaParams::isr_flag_tc) {
+			events |= events_t::dma_tc;
+		}
+
+		if (events) {
+			DMA1->IFCR = DmaParams::ifcr_flags_clear;
+			xTaskNotifyFromISR(task_handle_, events, eSetBits, nullptr);
+		}
 	}
 
 private:
-	static constexpr uint32_t dma_channel_ccr_ = DMA_CCR_MINC | DMA_CCR_DIR | DMA_CCR_TEIE | DMA_CCR_TCIE;
 
 	void log_dma(const char* str)
 	{
 		static_assert(sizeof(str) == sizeof(uint32_t));
-		dma_channel_->CMAR = reinterpret_cast<uint32_t>(str);
-		dma_channel_->CNDTR = strlen(str);
-		dma_channel_->CCR = dma_channel_ccr_ | DMA_CCR_EN;
+		DmaParams::dma_channel()->CMAR = reinterpret_cast<uint32_t>(str);
+		DmaParams::dma_channel()->CNDTR = strlen(str);
+		DmaParams::dma_channel()->CCR = DmaParams::dma_channel_ccr_en;
 	}
 #endif
 };
 
+
+} // namespace impl
+
+
+} // namespace logging
+
+using usart_logger_t = logging::impl::usart_logger_t<logging::dma_params_t>;
 
 #endif
 

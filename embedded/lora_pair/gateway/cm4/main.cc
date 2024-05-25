@@ -19,43 +19,12 @@
 constexpr uint8_t ipcc_ch_lora = 3;
 constexpr uint32_t mb_ptr_addr = 0x20008088; // keep it up-to-date, taken from CM0 linker map file
 
-#define USART_CON_BAUDRATE 115200
-
 
 usart_logger_t logger(USART_STLINK, "logger_cm4", PRIO_LOGGER);
 
 freertos_utils::pin_toggle_task_t g_pin_blue("blink_blue", bsp::pin_led_blue, PRIO_BLINK);
 freertos_utils::pin_toggle_task_t g_pin_green("blink_green", bsp::pin_led_green, PRIO_BLINK);
 //freertos_utils::pin_toggle_task_t g_pin_red("blink_red", bsp::pin_led_red, PRIO_BLINK);
-
-
-void usart_init(USART_TypeDef* const usart)
-{
-	usart->CR1 = 0; // ensure UE flag is reset
-
-	constexpr uint32_t cr1 = USART_CR1_FIFOEN | USART_CR1_TE;
-
-	stm32_lib::gpio::set_mode_af_lowspeed_pu(bsp::usart_stlink_pin_tx, USART_STLINK_PIN_TX_AF);
-
-	{
-		constexpr uint64_t baud = USART_CON_BAUDRATE;
-		constexpr uint64_t psc = 4;
-		constexpr uint32_t psc_reg_val = 0b0010;
-		constexpr uint64_t clk = configCPU_CLOCK_HZ / psc;
-		constexpr uint64_t brr = clk*256 / baud;
-		static_assert(brr >= 0x300);
-		static_assert(brr < (1 << 20));
-		static_assert(3*baud < clk);
-		static_assert(clk < 4096*baud);
-		constexpr uint32_t brr_reg_val = brr;
-
-		usart->PRESC = psc_reg_val;
-		usart->BRR = brr_reg_val;
-	}
-
-	usart->CR1 = cr1;
-	usart->CR1 = cr1 | USART_CR1_UE;
-}
 
 
 void toggle_bits_10(volatile uint32_t* const ptr, const uint32_t mask)
@@ -118,6 +87,12 @@ void bus_init()
 	RCC->AHB3ENR |= RCC_AHB3ENR_IPCCEN;
 	toggle_bits_10(&RCC->AHB3RSTR, RCC_AHB3RSTR_IPCCRST);
 	//toggle_bits_10(&RCC->C2AHB3RSTR, RCC_C2AHB3RSTR_IPCCRST);
+
+	// DMA
+	RCC->AHB1ENR |= RCC_AHB1ENR_DMA1EN | RCC_AHB1ENR_DMAMUX1EN;
+	toggle_bits_10(&RCC->AHB1RSTR, RCC_AHB1RSTR_DMA1RST_Msk | RCC_AHB1RSTR_DMAMUX1RST_Msk);
+	NVIC_SetPriority(DMA1_Channel1_IRQn, 0);
+	NVIC_EnableIRQ(DMA1_Channel1_IRQn);
 #endif
 }
 
@@ -236,9 +211,23 @@ extern "C" __attribute__ ((interrupt)) void IntHandler_IPCC_CPU1_RX()
 }
 
 
+extern "C" __attribute__ ((interrupt)) void IntHandler_Dma1Ch1()
+{
+	logger.handle_dma_irq();
+}
+
+
 __attribute__ ((noreturn)) void main()
 {
 	bus_init();
+	logger.init_dma();
+	stm32_lib::usart::init_logger_lpuart<configCPU_CLOCK_HZ>(
+		USART_STLINK,
+		bsp::usart_stlink_pin_tx,
+		USART_STLINK_PIN_TX_AF
+	);
+
+	logger.log_sync("\r\nLogger initialized (sync)\r\n");
 
 #if 0
 	set_pin_debug(bsp::pin_debug_subghzspi_nss);
@@ -246,9 +235,6 @@ __attribute__ ((noreturn)) void main()
 	set_pin_debug(bsp::pin_debug_subghzspi_miso);
 	set_pin_debug(bsp::pin_debug_subghzspi_mosi);
 #endif
-
-	usart_init(USART_STLINK);
-	logger.log_sync("\r\nLogger initialized (sync)\r\n");
 
 	g_pin_blue.init_pin();
 	g_pin_green.init_pin();
@@ -259,6 +245,9 @@ __attribute__ ((noreturn)) void main()
 	create_task_ipcc_recv();
 
 	logger.log_sync("CM4: Starting FreeRTOS scheduler\r\n");
+
+	stm32_lib::usart::enable_dmat(USART_STLINK);
+
 	vTaskStartScheduler();
 
 	logger.log_sync("CM4: Error in FreeRTOS scheduler\r\n");

@@ -566,6 +566,7 @@ __attribute__ ((noreturn)) void main()
 	for (volatile int i=0; i<100000; ++i) {}
 
 	bus_init();
+	logger.init_dma();
 
 	logger.log_sync("\r\nLogger_cm0 initialized (sync)\r\n");
 
