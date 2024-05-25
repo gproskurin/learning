@@ -7,6 +7,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <algorithm>
+#include <utility>
 
 
 namespace {
@@ -229,6 +230,74 @@ void set_mode_output_analog(const gpio_pin_t& pin)
 
 
 } // namespace gpio
+
+
+namespace usart {
+
+
+namespace impl {
+	constexpr uint32_t baudrate = 115200;
+	constexpr uint32_t cr1 = USART_CR1_TE;
+	constexpr uint32_t cr1_en = cr1 | USART_CR1_UE;
+
+	template <uint32_t CpuClockHz>
+	constexpr std::pair<uint32_t, uint32_t> lpuart_presc_brr()
+	{
+		constexpr uint64_t psc = 4;
+		constexpr uint32_t psc_reg_val = 0b0010;
+		constexpr uint64_t clk = CpuClockHz / psc;
+		constexpr uint64_t brr = clk*256 / uint64_t(baudrate);
+		static_assert(brr >= 0x300);
+		static_assert(brr < (1 << 20));
+		static_assert(3*baudrate < clk);
+		static_assert(clk < 4096*baudrate);
+		constexpr uint32_t brr_reg_val = brr;
+		return std::make_pair(psc_reg_val, brr);
+	}
+}
+
+template <uint32_t CpuClockHz>
+void init_logger_uart(
+	USART_TypeDef* const usart,
+	const stm32_lib::gpio::pin_t& pin_tx,
+	uint8_t af
+)
+{
+	usart->CR1 = 0; // ensure UE flag is reset
+	stm32_lib::gpio::set_mode_af_lowspeed_pu(pin_tx, af);
+	constexpr auto brr = CpuClockHz / impl::baudrate;
+	usart->BRR = brr;
+	usart->CR1 = impl::cr1;
+	usart->CR1 = impl::cr1_en;
+}
+
+#ifdef TARGET_STM32WL55
+template <uint32_t CpuClockHz>
+void init_logger_lpuart(
+	USART_TypeDef* const usart,
+	const stm32_lib::gpio::pin_t& pin_tx,
+	uint8_t af
+)
+{
+	usart->CR1 = 0; // ensure UE flag is reset
+	stm32_lib::gpio::set_mode_af_lowspeed_pu(pin_tx, af);
+	constexpr auto presc_brr = impl::lpuart_presc_brr<CpuClockHz>();
+	usart->PRESC = presc_brr.first;
+	usart->BRR = presc_brr.second;
+	usart->CR1 = impl::cr1;
+	usart->CR1 = impl::cr1_en;
+}
+#endif
+
+inline
+void enable_dmat(USART_TypeDef* const usart)
+{
+	for (volatile int i=0; i<10000; ++i) {} // wait for sync logging to complete FIXME
+	usart->CR3 = USART_CR3_DMAT;
+}
+
+
+} // namespace usart
 
 
 namespace i2c {
