@@ -1,8 +1,8 @@
+#include "logging.h"
 #include "utils.h"
 
-#include "bsp.h"
 
-#define PRIO_BLINK 1
+extern usart_logger_t logger;
 
 
 char prn_halfbyte(uint8_t x)
@@ -26,5 +26,4 @@ void log_async_1(uint8_t x, char* const buf0)
 	*buf = 0;
 	logger.log_async(buf0);
 }
-
 

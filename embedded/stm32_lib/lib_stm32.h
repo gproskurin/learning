@@ -4,10 +4,10 @@
 #include "cmsis_device.h"
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
+#include <algorithm>
 
-#include "logging.h"
-extern usart_logger_t logger;
 
 namespace {
 	constexpr uint32_t mask1(int n) { return 1 << (n); }

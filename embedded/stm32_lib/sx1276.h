@@ -1,6 +1,9 @@
 #ifndef _my_sx1276_h_included_
 #define _my_sx1276_h_included_
 
+#include "FreeRTOS.h"
+#include "task.h"
+
 #ifdef TARGET_NRF52DK
 #include "lib_nrf5.h"
 #else
