@@ -1,11 +1,14 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
+#include "freertos_utils.h"
 #include "sx1276.h"
 #include "bsp.h"
 
 #include "logging.h"
 #include "lora.h"
+
+freertos_utils::task_data_t<512> task_data_lora;
 
 extern usart_logger_t logger;
 
@@ -150,18 +153,29 @@ void task_function(void* arg)
 void lora::create_task(
 	const char* task_name,
 	UBaseType_t prio,
-	lora::task_data_t& task_data,
 	const sx1276::hwconf_t* hwp
 )
 {
-	task_data.task_handle = xTaskCreateStatic(
+	task_data_lora.task_handle = xTaskCreateStatic(
 		&task_function,
 		task_name,
-		task_data.stack.size(),
+		task_data_lora.stack.size(),
 		const_cast<void*>(reinterpret_cast<const void*>(hwp)),
 		prio,
-		task_data.stack.data(),
-		&task_data.task_buffer
+		task_data_lora.stack.data(),
+		&task_data_lora.task_buffer
 	);
+}
+
+
+extern "C" __attribute__ ((interrupt)) void IntHandler_EXTI4_15()
+{
+	if (EXTI->PR & (1 << bsp::sx1276::pin_dio0.reg)) {
+		EXTI->PR = (1 << bsp::sx1276::pin_dio0.reg);
+
+		BaseType_t yield = pdFALSE;
+		xTaskNotifyFromISR(task_data_lora.task_handle, 0, eSetBits, &yield);
+		portYIELD_FROM_ISR(yield);
+	}
 }
 

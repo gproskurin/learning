@@ -25,9 +25,6 @@ freertos_utils::pin_toggle_task_t g_pin_red("blink_red", bsp::pin_led_red, PRIO_
 freertos_utils::pin_toggle_task_t g_pin_green2("blink_green2", bsp::pin_led_green2, PRIO_BLINK);
 
 
-lora::task_data_t task_data_lora;
-
-
 extern "C"
 const sx1276::hwconf_t hwc_emb = {
 	.spi = SPI1,
@@ -125,18 +122,6 @@ void perif_init_irq_dio0()
 }
 
 
-extern "C" __attribute__ ((interrupt)) void IntHandler_EXTI4_15()
-{
-	if (EXTI->PR & (1 << bsp::sx1276::pin_dio0.reg)) {
-		EXTI->PR = (1 << bsp::sx1276::pin_dio0.reg);
-
-		BaseType_t yield = pdFALSE;
-		xTaskNotifyFromISR(task_data_lora.task_handle, 0, eSetBits, &yield);
-		portYIELD_FROM_ISR(yield);
-	}
-}
-
-
 extern "C" __attribute__ ((interrupt)) void IntHandler_DMA1_Channel4_5_6_7()
 {
 	logger.handle_dma_irq();
@@ -179,7 +164,7 @@ __attribute__ ((noreturn)) void main()
 	g_pin_green2.pulse_continuous(configTICK_RATE_HZ/50, configTICK_RATE_HZ/25);
 
 	logger.log_sync("Creating LORA task...\r\n");
-	lora::create_task("lora", PRIO_LORA, task_data_lora, &hwc_emb);
+	lora::create_task("lora", PRIO_LORA, &hwc_emb);
 	logger.log_sync("Created LORA task\r\n");
 
 	logger.log_sync("Starting FreeRTOS scheduler\r\n");
