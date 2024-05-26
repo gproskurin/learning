@@ -28,6 +28,18 @@ struct hwconf_t {
 #endif
 	spi_t* spi = nullptr;
 
+	DMA_Channel_TypeDef* const dma_channel_rx;
+	DMA_Channel_TypeDef* const dma_channel_tx;
+
+	// To wait for SPI transaction to complete we can wait for RX to complete
+	// Hence, activate only RX interrupt
+	static constexpr uint32_t dma_ccr_common = (0b01 << DMA_CCR_PL_Pos) | DMA_CCR_MINC;
+	static constexpr uint32_t dma_ccr_rx = dma_ccr_common | DMA_CCR_TCIE | DMA_CCR_TEIE;
+	static constexpr uint32_t dma_ccr_tx = dma_ccr_common | DMA_CCR_DIR;
+
+	static constexpr uint32_t dma_ccr_en_rx = dma_ccr_rx | DMA_CCR_EN;
+	static constexpr uint32_t dma_ccr_en_tx = dma_ccr_tx | DMA_CCR_EN;
+
 #ifndef TARGET_NRF52DK
 	uint8_t spi_af; // TODO per spi pin
 #endif
@@ -228,7 +240,12 @@ void spi_sx_init(const hwconf_t& hwc, bool fast)
 		;
 	hwc.spi->CR1 = cr1;
 
-	hwc.spi->CR2 = SPI_CR2_SSOE;
+	hwc.spi->CR2 = SPI_CR2_SSOE | SPI_CR2_TXDMAEN | SPI_CR2_RXDMAEN;
+
+	hwc.dma_channel_rx->CCR = 0;
+	hwc.dma_channel_rx->CCR = hwc.dma_ccr_rx;
+	hwc.dma_channel_tx->CCR = 0;
+	hwc.dma_channel_tx->CCR = hwc.dma_ccr_tx;
 
 	hwc.spi->CR1 = cr1 | SPI_CR1_SPE;
 #elif defined TARGET_NRF52DK

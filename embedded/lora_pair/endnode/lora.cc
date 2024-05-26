@@ -22,10 +22,34 @@ extern void perif_init_irq_dio0();
 extern "C"
 const sx1276::hwconf_t hwc_emb;
 
+
+enum spi_dma_flags_t {
+	rx_tc = (1 << 0),
+	rx_te = (1 << 1),
+	//tx_tc = (1 << 2),
+	//tx_te = (1 << 3),
+};
+
+
 namespace {
 
 
 namespace spi {
+	void wait_spi_complete()
+	{
+		// waiting for RX to complete
+		for (;;) {
+			uint32_t events = 0;
+			if (
+				(xTaskNotifyWait(0, 0xffffffff, &events, portMAX_DELAY) == pdTRUE)
+				&& (events & (spi_dma_flags_t::rx_tc | spi_dma_flags_t::rx_te))
+			)
+			{
+				return;
+			}
+		}
+	}
+
 	void cb_spi_nss(bool s)
 	{
 		hwc_emb.pin_spi_nss.set_state(s);
@@ -33,7 +57,22 @@ namespace spi {
 
 	void cb_spi_write(const uint8_t* tx_data, size_t size, uint8_t* rx_data)
 	{
-		stm32_lib::spi::write<uint8_t>(hwc_emb.spi, size, tx_data, rx_data);
+		//stm32_lib::spi::write<uint8_t>(hwc_emb.spi, size, tx_data, rx_data);
+
+		hwc_emb.dma_channel_rx->CNDTR = hwc_emb.dma_channel_tx->CNDTR = size;
+
+		hwc_emb.dma_channel_rx->CMAR = reinterpret_cast<uint32_t>(rx_data);
+		hwc_emb.dma_channel_tx->CMAR = reinterpret_cast<uint32_t>(tx_data);
+
+		// enable TX first
+		hwc_emb.dma_channel_tx->CCR = hwc_emb.dma_ccr_en_tx;
+		hwc_emb.dma_channel_rx->CCR = hwc_emb.dma_ccr_en_rx;
+
+		wait_spi_complete();
+
+		hwc_emb.dma_channel_tx->CCR = hwc_emb.dma_ccr_tx;
+		hwc_emb.dma_channel_rx->CCR = hwc_emb.dma_ccr_rx;
+		// TODO: check BSY flag?
 	}
 } //spi
 
@@ -176,6 +215,41 @@ extern "C" __attribute__ ((interrupt)) void IntHandler_EXTI4_15()
 		BaseType_t yield = pdFALSE;
 		xTaskNotifyFromISR(task_data_lora.task_handle, 0, eSetBits, &yield);
 		portYIELD_FROM_ISR(yield);
+	}
+}
+
+
+extern "C" __attribute__ ((interrupt)) void IntHandler_DMA1_Channel2_3()
+{
+	uint32_t events = 0;
+	uint32_t ifcr_clear = 0;
+	auto const isr = DMA1->ISR;
+
+	// channel2 - RX
+	if (isr & DMA_ISR_TEIF2) {
+		events |= spi_dma_flags_t::rx_te;
+		ifcr_clear |= DMA_IFCR_CTEIF2 | DMA_IFCR_CGIF2;
+	}
+	if (isr & DMA_ISR_TCIF2) {
+		events |= spi_dma_flags_t::rx_tc;
+		ifcr_clear |= DMA_IFCR_CTCIF2 | DMA_IFCR_CGIF2;
+	}
+
+#if 0
+	// channel3 - TX
+	if (isr & DMA_ISR_TEIF3) {
+		events |= spi_dma_flags_t::tx_te;
+		ifcr_clear |= DMA_IFCR_CTEIF3 | DMA_IFCR_CGIF3;
+	}
+	if (isr & DMA_ISR_TCIF3) {
+		events |= spi_dma_flags_t::tx_tc;
+		ifcr_clear |= DMA_IFCR_CTCIF3 | DMA_IFCR_CGIF3;
+	}
+#endif
+
+	if (events) {
+		DMA1->IFCR = ifcr_clear;
+		xTaskNotifyFromISR(task_data_lora.task_handle, events, eSetBits, nullptr);
 	}
 }
 

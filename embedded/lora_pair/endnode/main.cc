@@ -28,6 +28,8 @@ freertos_utils::pin_toggle_task_t g_pin_green2("blink_green2", bsp::pin_led_gree
 extern "C"
 const sx1276::hwconf_t hwc_emb = {
 	.spi = SPI1,
+	.dma_channel_rx = DMA1_Channel2,
+	.dma_channel_tx = DMA1_Channel3,
 	.spi_af = 0,
 	.pin_spi_nss = bsp::sx1276::pin_spi_nss,
 	.pin_spi_sck = bsp::sx1276::pin_spi_sck,
@@ -84,10 +86,19 @@ void bus_init()
 	RCC->AHBENR |= RCC_AHBENR_DMAEN;
 	toggle_bits_10(&RCC->AHBRSTR, RCC_AHBRSTR_DMARST_Msk);
 
-	// configure DMA: USART2/Channel4
-	DMA1_CSELR->CSELR = (0b0100 << DMA_CSELR_C4S_Pos);
+	DMA1_CSELR->CSELR =
+		(0b0001 << DMA_CSELR_C2S_Pos) // SPI1_RX
+		| (0b0001 << DMA_CSELR_C3S_Pos) // SPI1_TX
+		| (0b0100 << DMA_CSELR_C4S_Pos); // USART2_TX
 	NVIC_SetPriority(DMA1_Channel4_5_6_7_IRQn, 0);
 	NVIC_EnableIRQ(DMA1_Channel4_5_6_7_IRQn);
+	NVIC_SetPriority(DMA1_Channel2_3_IRQn, 0);
+	NVIC_EnableIRQ(DMA1_Channel2_3_IRQn);
+
+	// TODO move to ctor
+	hwc_emb.dma_channel_rx->CPAR
+		= hwc_emb.dma_channel_tx->CPAR
+		= reinterpret_cast<uint32_t>(&hwc_emb.spi->DR);
 
 #if 0
 	// PB2 interrupt TODO: do not hardcode PB2, use bit masks stuff
