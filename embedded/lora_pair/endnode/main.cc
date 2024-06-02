@@ -14,9 +14,10 @@
 #include <string.h>
 #include <array>
 
-#define PRIO_BLINK 1
+#define PRIO_WWDG 1
+#define PRIO_BLINK 2
 #define PRIO_LORA 6
-#define PRIO_LOGGER 8 // FIXME
+#define PRIO_LOGGER 8
 
 
 freertos_utils::pin_toggle_task_t g_pin_green("blink_green", bsp::pin_led_green, PRIO_BLINK);
@@ -74,8 +75,8 @@ void bus_init()
 	RCC->IOPENR = RCC_IOPENR_IOPAEN_Msk | RCC_IOPENR_IOPBEN_Msk | RCC_IOPENR_IOPCEN_Msk;
 	toggle_bits_10(&RCC->IOPRSTR, RCC_IOPRSTR_IOPARST | RCC_IOPRSTR_IOPBRST | RCC_IOPRSTR_IOPCRST);
 
-	// USART2
-	RCC->APB1ENR |= RCC_APB1ENR_USART2EN_Msk;
+	// USART2 & !WWDG
+	RCC->APB1ENR = (RCC->APB1ENR & ~RCC_APB1ENR_WWDGEN) | RCC_APB1ENR_USART2EN_Msk;
 	toggle_bits_10(&RCC->APB1RSTR, RCC_APB1RSTR_USART2RST_Msk);
 
 	// SPI1 & SYSCFG
@@ -99,6 +100,14 @@ void bus_init()
 	hwc_emb.dma_channel_rx->CPAR
 		= hwc_emb.dma_channel_tx->CPAR
 		= reinterpret_cast<uint32_t>(&hwc_emb.spi->DR);
+
+	// WWDG
+	NVIC_SetPriority(WWDG_IRQn, 0);
+	NVIC_EnableIRQ(WWDG_IRQn);
+
+	// LPTIM
+	NVIC_SetPriority(LPTIM1_IRQn, 20);
+	NVIC_EnableIRQ(LPTIM1_IRQn);
 
 #if 0
 	// PB2 interrupt TODO: do not hardcode PB2, use bit masks stuff
@@ -156,6 +165,62 @@ void vApplicationIdleHook(void)
 }
 
 
+freertos_utils::task_data_t<128> task_data_wwdg;
+
+void task_function_wwdg(void*)
+{
+	logger.log_async("WWDG task started\r\n");
+
+	RCC->APB1ENR |= RCC_APB1ENR_WWDGEN;
+	toggle_bits_10(&RCC->APB1RSTR, RCC_APB1RSTR_WWDGRST_Msk);
+
+	constexpr uint32_t cr1 = (0b1111111 << WWDG_CR_T_Pos);
+	constexpr uint32_t cr2 = cr1 | WWDG_CR_WDGA;
+	constexpr uint32_t cr_upd = (cr2 & ~WWDG_CR_T_Msk) | (0b1111111 << WWDG_CR_T_Pos);
+
+	WWDG->CFR = WWDG_CFR_EWI | (0b11 << WWDG_CFR_WDGTB_Pos) | (0b1111111 << WWDG_CFR_W_Pos);
+	WWDG->CR = cr1;
+	WWDG->CR = cr2;
+
+	logger.log_async("WWDG: wwdg enabled\r\n");
+	for (;;) {
+		constexpr auto ticks_delay = stm32_lib::wwdg::counts_to_ticks<
+			configCPU_CLOCK_HZ,
+			configTICK_RATE_HZ,
+			8,
+			0x7F - 0x40
+		>();
+		static_assert(ticks_delay == 12);
+		vTaskDelay(ticks_delay - 2);
+		WWDG->CR = cr_upd;
+	}
+}
+
+void create_task_wwdg()
+{
+	task_data_wwdg.task_handle = xTaskCreateStatic(
+		&task_function_wwdg,
+		"wwdg",
+		task_data_wwdg.stack.size(),
+		nullptr,
+		PRIO_WWDG,
+		task_data_wwdg.stack.data(),
+		&task_data_wwdg.task_buffer
+	);
+}
+
+
+extern "C" __attribute__ ((interrupt)) void IntHandler_WWDG()
+{
+	if (WWDG->SR & WWDG_SR_EWIF) {
+		WWDG->SR = 0;
+		BaseType_t yield = pdFALSE;
+		logger.log_async_from_isr("IRQ: wwdg\r\n", &yield);
+		portYIELD_FROM_ISR(yield);
+	}
+}
+
+
 __attribute__ ((noreturn)) void main()
 {
 	bus_init();
@@ -177,6 +242,8 @@ __attribute__ ((noreturn)) void main()
 	logger.log_sync("Creating LORA task...\r\n");
 	lora::create_task("lora", PRIO_LORA, &hwc_emb);
 	logger.log_sync("Created LORA task\r\n");
+
+	create_task_wwdg();
 
 	logger.log_sync("Starting FreeRTOS scheduler\r\n");
 

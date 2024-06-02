@@ -232,6 +232,28 @@ void set_mode_output_analog(const gpio_pin_t& pin)
 } // namespace gpio
 
 
+namespace wwdg {
+
+
+template <uint32_t CpuClockHz, uint32_t TickRateHz, uint32_t Psc, uint32_t Counts>
+constexpr
+uint32_t counts_to_ticks()
+{
+	static_assert(Psc==1 || Psc==2 || Psc==4 || Psc==8);
+	static_assert(Counts <= (0x7F - 0x40));
+	constexpr uint32_t wwdg_clock = CpuClockHz / 4096 / Psc;
+	//static_assert(wwdg_clock * Psc * 4096 == CpuClockHz); // ensure no truncation
+	constexpr uint32_t r1 = Counts * TickRateHz / wwdg_clock;
+	//static_assert(r * wwdg_clock / TickRateHz == Counts);
+	constexpr uint32_t r = Counts * TickRateHz * 4096 * Psc / CpuClockHz;
+	static_assert(r1 == r);
+	return r;
+}
+
+
+} // namespace wwdg
+
+
 namespace usart {
 
 
