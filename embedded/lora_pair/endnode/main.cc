@@ -102,9 +102,10 @@ void bus_init()
 	NVIC_EnableIRQ(DMA1_Channel2_3_IRQn);
 
 	// TODO move to ctor
-	hwc_emb.dma_channel_rx->CPAR
-		= hwc_emb.dma_channel_tx->CPAR
-		= reinterpret_cast<uint32_t>(&hwc_emb.spi->DR);
+	{
+		hwc_emb.dma_channel_rx->CPAR = reinterpret_cast<uint32_t>(&SPI1->DR);
+		hwc_emb.dma_channel_tx->CPAR = reinterpret_cast<uint32_t>(&SPI1->DR);
+	}
 
 	// WWDG
 	NVIC_SetPriority(WWDG_IRQn, 0);

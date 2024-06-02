@@ -115,7 +115,7 @@ namespace sx1276 {
 #define USART_STLINK_PIN_TX_AF 4
 constexpr stm32_lib::gpio::gpio_pin_t usart_stlink_pin_tx{GPIOA_BASE, 9};
 
-constexpr stm32_lib::gpio::pin_inverted_t pin_led{GPIOB, 12};
+constexpr stm32_lib::gpio::pin_inverted_t pin_led{GPIOB_BASE, 12};
 
 #endif
 
