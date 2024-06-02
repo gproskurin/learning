@@ -69,15 +69,20 @@ void bus_init()
 	// switch off MSI & wait
 	RCC->CR &= ~RCC_CR_MSION;
 	while (RCC->CR & RCC_CR_MSIRDY) {}
+
+	// LSI
+	RCC->CSR |= RCC_CSR_LSION;
+	while (!(RCC->CSR & RCC_CSR_LSIRDY)) {}
+
 #endif
 
 	// GPIOs
 	RCC->IOPENR = RCC_IOPENR_IOPAEN_Msk | RCC_IOPENR_IOPBEN_Msk | RCC_IOPENR_IOPCEN_Msk;
 	toggle_bits_10(&RCC->IOPRSTR, RCC_IOPRSTR_IOPARST | RCC_IOPRSTR_IOPBRST | RCC_IOPRSTR_IOPCRST);
 
-	// USART2 & !WWDG
-	RCC->APB1ENR = (RCC->APB1ENR & ~RCC_APB1ENR_WWDGEN) | RCC_APB1ENR_USART2EN_Msk;
-	toggle_bits_10(&RCC->APB1RSTR, RCC_APB1RSTR_USART2RST_Msk);
+	// USART2 & !WWDG & LPTIM1
+	RCC->APB1ENR = (RCC->APB1ENR & ~RCC_APB1ENR_WWDGEN) | RCC_APB1ENR_USART2EN_Msk | RCC_APB1ENR_LPTIM1EN_Msk;
+	toggle_bits_10(&RCC->APB1RSTR, RCC_APB1RSTR_USART2RST_Msk | RCC_APB1RSTR_LPTIM1RST_Msk);
 
 	// SPI1 & SYSCFG
 	RCC->APB2ENR |= RCC_APB2ENR_SPI1EN_Msk | RCC_APB2ENR_SYSCFGEN_Msk;
@@ -221,6 +226,18 @@ extern "C" __attribute__ ((interrupt)) void IntHandler_WWDG()
 }
 
 
+extern "C" __attribute__ ((interrupt)) void IntHandler_Lptim1()
+{
+	logger.log_async_from_isr("IRQ: lptim1 ISR_START\r\n", nullptr);
+	if (LPTIM1->ISR & LPTIM_ISR_ARRM) {
+		LPTIM1->ICR = LPTIM_ICR_ARRMCF;
+		BaseType_t yield = pdFALSE;
+		logger.log_async_from_isr("IRQ: lptim1 ARR\r\n", &yield);
+		portYIELD_FROM_ISR(yield);
+	}
+}
+
+
 __attribute__ ((noreturn)) void main()
 {
 	bus_init();
@@ -244,6 +261,27 @@ __attribute__ ((noreturn)) void main()
 	logger.log_sync("Created LORA task\r\n");
 
 	create_task_wwdg();
+
+	// LPTIM
+	constexpr uint32_t lptim_cr_en = LPTIM_CR_ENABLE;
+	constexpr uint32_t lptim_cr_en_start = lptim_cr_en | LPTIM_CR_CNTSTRT;
+	RCC->CCIPR = (RCC->CCIPR & ~RCC_CCIPR_LPTIM1SEL_Msk) | (0b01/*LSI*/ << RCC_CCIPR_LPTIM1SEL_Pos);
+	LPTIM1->CR = 0;
+	LPTIM1->CR = lptim_cr_en;
+	LPTIM1->CFGR =
+		(0b100/*16*/ << LPTIM_CFGR_PRESC_Pos)
+		| (0b00 << LPTIM_CFGR_TRIGEN_Pos)
+		| (0b000 << LPTIM_CFGR_TRIGSEL_Pos);
+
+	LPTIM1->ICR = LPTIM_ICR_ARROKCF;
+	LPTIM1->ARR = 37000-1;
+	while (!(LPTIM1->ISR & LPTIM_ISR_ARROK)) {}
+	LPTIM1->ICR = LPTIM_ICR_ARROKCF;
+
+	LPTIM1->IER = 0;
+	LPTIM1->ICR = 0xFFFFFFFF;
+	LPTIM1->IER = LPTIM_IER_ARRMIE;
+	LPTIM1->CR = lptim_cr_en_start;
 
 	logger.log_sync("Starting FreeRTOS scheduler\r\n");
 
