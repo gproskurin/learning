@@ -10,6 +10,14 @@ set(stm32l072_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/../ld/stm32l072.ld)
 set(stm32l072_DEFINITIONS "-DTARGET_STM32L072")
 set(stm32l072_C_CXX_ARCH_FLAGS -mcpu=cortex-m0plus -mthumb)
 
+set(stm32wl55cpu1_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/../ld/stm32wl55_cpu1.ld)
+set(stm32wl55cpu1_DEFINITIONS -DTARGET_STM32WL55 -DTARGET_STM32WL55_CPU1)
+set(stm32wl55cpu1_C_CXX_ARCH_FLAGS -mcpu=cortex-m4 -mthumb)
+
+set(stm32wl55cpu2_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/../ld/stm32wl55_cpu2.ld)
+set(stm32wl55cpu2_DEFINITIONS -DTARGET_STM32WL55 -DTARGET_STM32WL55_CPU2 -DCORE_CM0PLUS)
+set(stm32wl55cpu2_C_CXX_ARCH_FLAGS -mcpu=cortex-m0plus -mthumb)
+
 set(stm32f103_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/../ld/stm32f103.ld)
 set(stm32f103_DEFINITIONS "-DTARGET_STM32F103")
 set(stm32f103_C_CXX_ARCH_FLAGS -mcpu=cortex-m3 -mthumb)
@@ -78,7 +86,9 @@ function(generate_targets T)
 endfunction()
 
 
-generate_targets("stm32l072")
+#generate_targets("stm32l072")
+generate_targets("stm32wl55cpu1")
+#generate_targets("stm32wl55cpu2")
 #generate_targets("stm32f103")
 
 ###
