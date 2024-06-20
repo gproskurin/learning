@@ -395,6 +395,116 @@ void read(I2C_TypeDef* const i2c, uint16_t addr, uint8_t* data, uint16_t size)
 } // namespace i2c
 
 
+namespace dma {
+
+
+#if defined TARGET_STM32WL55
+namespace impl {
+	inline
+	DMAMUX_Channel_TypeDef* dmamux_channel(uint32_t dmamux_channel_base)
+	{
+		return reinterpret_cast<DMAMUX_Channel_TypeDef*>(dmamux_channel_base);
+	}
+
+	template <uint32_t DmamuxChannelBase>
+	DMA_Channel_TypeDef* dmamux_channel_to_dma_channel();
+	//template<> DMA_Channel_TypeDef* dmamux_channel_to_dma_channel<DMAMUX1_Channel0_BASE>() { return DMA1_Channel1; }
+	//template<> DMA_Channel_TypeDef* dmamux_channel_to_dma_channel<DMAMUX1_Channel1_BASE>() { return DMA1_Channel2; }
+	//template<> DMA_Channel_TypeDef* dmamux_channel_to_dma_channel<DMAMUX1_Channel2_BASE>() { return DMA1_Channel3; }
+	template<> DMA_Channel_TypeDef* dmamux_channel_to_dma_channel<DMAMUX1_Channel7_BASE>() { return DMA2_Channel1; }
+	template<> DMA_Channel_TypeDef* dmamux_channel_to_dma_channel<DMAMUX1_Channel8_BASE>() { return DMA2_Channel2; }
+	template<> DMA_Channel_TypeDef* dmamux_channel_to_dma_channel<DMAMUX1_Channel9_BASE>() { return DMA2_Channel3; }
+	template<> DMA_Channel_TypeDef* dmamux_channel_to_dma_channel<DMAMUX1_Channel10_BASE>() { return DMA2_Channel4; }
+	template<> DMA_Channel_TypeDef* dmamux_channel_to_dma_channel<DMAMUX1_Channel11_BASE>() { return DMA2_Channel5; }
+
+	template <uint32_t SpiBase> constexpr uint32_t dmamux_reqid_tx();
+	template <uint32_t SpiBase> constexpr uint32_t dmamux_reqid_rx();
+	template<> uint32_t dmamux_reqid_tx<SUBGHZSPI_BASE>() { return 42; }
+	template<> uint32_t dmamux_reqid_rx<SUBGHZSPI_BASE>() { return 41; }
+	template<> uint32_t dmamux_reqid_tx<SPI1_BASE>() { return 8; }
+	template<> uint32_t dmamux_reqid_rx<SPI1_BASE>() { return 7; }
+}
+
+template <uint32_t SpiBase, uint32_t DmamuxChannelBaseTx, uint32_t DmamuxChannelBaseRx>
+struct spi_dmamux_t {
+	static void init()
+	{
+		init_channel<DmamuxChannelBaseTx>(dma_ccr_tx, impl::dmamux_reqid_tx<SpiBase>());
+		init_channel<DmamuxChannelBaseRx>(dma_ccr_rx, impl::dmamux_reqid_rx<SpiBase>());
+	}
+
+	static void start(size_t size, const uint8_t* tx_data, uint8_t* rx_data)
+	{
+		auto const s = spi();
+		auto cr2 = s->CR2;
+
+		// RX
+		auto const ccr_rx = prepare_data<DmamuxChannelBaseRx>(size, rx_data, dma_ccr_rx);
+		impl::dmamux_channel_to_dma_channel<DmamuxChannelBaseRx>()->CCR = ccr_rx | DMA_CCR_EN;
+		s->CR2 = (cr2 |= SPI_CR2_RXDMAEN);
+
+		// TX
+		auto const ccr_tx = prepare_data<DmamuxChannelBaseTx>(size, const_cast<uint8_t*>(tx_data), dma_ccr_tx);
+		impl::dmamux_channel_to_dma_channel<DmamuxChannelBaseTx>()->CCR = ccr_tx | DMA_CCR_EN;
+
+		s->CR1 |= SPI_CR1_SPE;
+		s->CR2 = (cr2 |= SPI_CR2_TXDMAEN);
+	}
+
+	static void stop()
+	{
+		// SPI disabling procedure
+		auto const s = spi();
+		while (s->SR & SPI_SR_FTLVL_Msk) {}
+		while (s->SR & SPI_SR_BSY) {}
+		s->CR1 &= ~SPI_CR1_SPE;
+		while (s->SR & SPI_SR_FRLVL_Msk) {}
+		s->CR2 &= ~(SPI_CR2_TXDMAEN | SPI_CR2_RXDMAEN);
+		impl::dmamux_channel_to_dma_channel<DmamuxChannelBaseTx>()->CCR = 0;
+		impl::dmamux_channel_to_dma_channel<DmamuxChannelBaseRx>()->CCR = 0;
+	}
+
+private:
+	static constexpr uint32_t dma_ccr_common_ = (0b01 << DMA_CCR_PL_Pos);
+	static constexpr uint32_t dma_ccr_rx = dma_ccr_common_ | DMA_CCR_TCIE | DMA_CCR_TEIE; // enable interrupts for RX only
+	static constexpr uint32_t dma_ccr_tx = dma_ccr_common_ | DMA_CCR_DIR;
+
+	static SPI_TypeDef* spi() { return reinterpret_cast<SPI_TypeDef*>(SpiBase); }
+
+	template <uint32_t DmamuxChannelBase>
+	static void init_channel(uint32_t dma_ccr, uint32_t dmamux_channel_reqid)
+	{
+		auto const dma_channel = impl::dmamux_channel_to_dma_channel<DmamuxChannelBase>();
+		dma_channel->CCR = 0;
+		dma_channel->CPAR = reinterpret_cast<uint32_t>(&spi()->DR);
+		impl::dmamux_channel(DmamuxChannelBase)->CCR = (dmamux_channel_reqid << DMAMUX_CxCR_DMAREQ_ID_Pos);
+	}
+
+	template <uint32_t DmamuxChannelBase>
+	static uint32_t prepare_data(size_t size, uint8_t* data, uint32_t ccr)
+	{
+		auto const dma_channel = impl::dmamux_channel_to_dma_channel<DmamuxChannelBase>();
+		dma_channel->CNDTR = size;
+		if (data) {
+			dma_channel->CMAR = reinterpret_cast<uint32_t>(data);
+			ccr |= DMA_CCR_MINC;
+		} else {
+			// buffer pointer is null (unused)
+			// use 1-byte buffer and disable MINC
+			static uint8_t unused_data;
+			dma_channel->CMAR = reinterpret_cast<uint32_t>(&unused_data);
+			ccr &= ~DMA_CCR_MINC;
+		}
+		dma_channel->CCR = ccr;
+		return ccr;
+	}
+};
+#endif
+
+
+} // namespace dma
+
+
 namespace spi {
 
 inline
