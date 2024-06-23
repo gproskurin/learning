@@ -10,26 +10,16 @@
 
 
 #define PRIO_BLINK 1
-#define PRIO_LOGGER 2
+#define PRIO_TEST1 2
+#define PRIO_LOGGER 3
 
 
-#define USART_CON_BAUDRATE 115200
+using log_dev_t = stm32_lib::dma::dev_usart_dmamux_t<USART3_BASE, DMAMUX1_Channel1_BASE>;
+logging::logger_t<log_dev_t> logger("logger_cm4", PRIO_LOGGER);
 
-
-usart_logger_t logger(USART_STLINK, "logger_cm4", PRIO_LOGGER);
-
-
-void usart_init(USART_TypeDef* const usart)
+void log_sync(const char* s)
 {
-	usart->CR1 = 0; // ensure UE flag is reset
-
-	constexpr uint32_t cr1 = USART_CR1_FIFOEN | USART_CR1_TE;
-
-	stm32_lib::gpio::set_mode_af_lowspeed_pu(bsp::usart_stlink_pin_tx, USART_STLINK_PIN_TX_AF);
-	usart->BRR = configCPU_CLOCK_HZ / USART_CON_BAUDRATE;
-
-	usart->CR1 = cr1;
-	usart->CR1 = cr1 | USART_CR1_UE;
+	stm32_lib::usart::send(USART_STLINK, s);
 }
 
 
@@ -67,6 +57,28 @@ void periph_init_hsem()
 {
 	RCC->AHB4ENR |= RCC_AHB4ENR_HSEMEN_Msk;
 	//toggle_bits_10(&RCC->AHB4RSTR, RCC_AHB4RSTR_HSEMRST_Msk);
+}
+
+
+extern "C" __attribute__ ((interrupt)) void IntHandler_Dma1S1()
+{
+	auto const isr = DMA1->LISR;
+	uint32_t events = 0;
+	if (isr & DMA_LISR_TCIF1) {
+		DMA1->LIFCR = DMA_LIFCR_CTCIF1;
+		events |= stm32_lib::dma::dma_result_t::tc;
+	}
+	if (isr & DMA_LISR_TEIF1) {
+		DMA1->LIFCR = DMA_LIFCR_CTEIF1;
+		events |= stm32_lib::dma::dma_result_t::te;
+	}
+	if (isr & DMA_LISR_DMEIF1) {
+		DMA1->LIFCR = DMA_LIFCR_CDMEIF1;
+		events |= stm32_lib::dma::dma_result_t::te;
+	}
+	if (events) {
+		logger.notify_from_isr(events);
+	}
 }
 
 
@@ -116,16 +128,19 @@ __attribute__ ((noreturn)) void main()
 	HSEM_COMMON->ICR = (1 << 0); // clear interrupt status flag for sem0
 #endif
 
+	NVIC_SetPriority(DMA1_Stream1_IRQn, 12);
+	NVIC_EnableIRQ(DMA1_Stream1_IRQn);
+
 	g_pin_red.init_pin();
 	g_pin_red.pulse_continuous(configTICK_RATE_HZ/10, configTICK_RATE_HZ);
 
 	g_pin_red_otg.init_pin();
 	g_pin_red_otg.pulse_continuous(configTICK_RATE_HZ/10, configTICK_RATE_HZ);
 
-	usart_init(USART_STLINK);
-	logger.log_sync("\r\nCM4: USART initialized (sync)\r\n");
+	log_sync("\r\nCM4: USART initialized (sync)\r\n");
 
-	logger.log_sync("Starting FreeRTOS scheduler\r\n");
+	log_sync("CM4: Starting FreeRTOS scheduler\r\n");
+	logger.init();
 	vTaskStartScheduler();
 
 	for (;;) {}

@@ -53,7 +53,6 @@ add_subdirectory("${CMAKE_SOURCE_DIR}/../_deps/FreeRTOS-Kernel" "FreeRTOS")
 add_executable(${FIRMWARE_ELF}
 	src/startup.c
 	src/main.cc
-	#${STM32_LIB_ROOT}/logging.cc
 	${STM32_LIB_ROOT}/my_stdlib.c
 	${STM32_LIB_ROOT}/startup.c
 )

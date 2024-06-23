@@ -7,12 +7,11 @@ MEMORY {
   sram3(rwx): ORIGIN = 0x30040000, LENGTH = 32k
   sram4(rwx): ORIGIN = 0x38000000, LENGTH = 64k
 }
-_estack     = ORIGIN(sram1) + LENGTH(sram1);    /* stack points to end of DTCM */
+_estack     = ORIGIN(sram1) + LENGTH(sram1);
 
 SECTIONS {
   .vectors  : {
     KEEP(*(.vectors))
-    . = 0x200; /* skip remaining vectors. FIXME: better? */
   } > flash2
 
   .init_array : {

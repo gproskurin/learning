@@ -5,9 +5,10 @@ extern void vPortSVCHandler(void);
 extern void xPortPendSVHandler(void);
 extern void xPortSysTickHandler(void);
 
+extern void IntHandler_Dma1S1(void);
 
-//#if defined TARGET_STM32H745_CM7
-__attribute__((section(".vectors"))) void (*tab[])(void) =
+
+__attribute__((section(".vectors"))) void (*tab[16 + 150])(void) =
 {
 	_estack,
 	_reset,
@@ -26,36 +27,6 @@ __attribute__((section(".vectors"))) void (*tab[])(void) =
 	&xPortPendSVHandler,
 	&xPortSysTickHandler,
 
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0 //&IntHandler_Timer // TIM3
+	[16 + 12] = IntHandler_Dma1S1,
 };
-//#endif
 

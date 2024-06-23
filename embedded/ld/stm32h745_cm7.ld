@@ -1,16 +1,16 @@
 ENTRY(_reset);
 MEMORY {
   flash1(rx): ORIGIN = 0x08000000, LENGTH = 1024k
-  flash2(rx): ORIGIN = 0x08100000, LENGTH = 1024k
-  sram_axi(rwx): ORIGIN = 0x24000000, LENGTH = 512k,
+  /* flash2(rx): ORIGIN = 0x08100000, LENGTH = 1024k */
+  sram_axi(rwx): ORIGIN = 0x24000000, LENGTH = 512k
   dtcm(rwx) : ORIGIN = 0x20000000, LENGTH = 128k
 }
-_estack     = ORIGIN(dtcm) + LENGTH(dtcm);    /* stack points to end of DTCM */
+/* _estack     = ORIGIN(dtcm) + LENGTH(dtcm); */ /* doesn't work with DMA */
+_estack     = ORIGIN(sram_axi) + LENGTH(sram_axi);
 
 SECTIONS {
   .vectors  : {
     KEEP(*(.vectors))
-    . = 0x200; /* skip remaining vectors. FIXME: better? */
   } > flash1
 
   .init_array : {

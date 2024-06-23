@@ -267,7 +267,6 @@ __attribute__ ((noreturn)) void main()
 		bsp::usart_stlink_pin_tx,
 		USART_STLINK_PIN_TX_AF
 	);
-	logger.init();
 
 	log_sync("\r\nLogger initialized (sync)\r\n");
 
@@ -287,7 +286,7 @@ __attribute__ ((noreturn)) void main()
 	create_task_ipcc_recv();
 
 	log_sync("CM4: Starting FreeRTOS scheduler\r\n");
-
+	logger.init();
 	vTaskStartScheduler();
 
 	log_sync("CM4: Error in FreeRTOS scheduler\r\n");

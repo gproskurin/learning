@@ -19,26 +19,16 @@
 #define I2C_TS I2C4
 
 
-#define USART_CON_BAUDRATE 115200
+using log_dev_t = stm32_lib::dma::dev_usart_dmamux_t<USART3_BASE, DMAMUX1_Channel0_BASE>;
+logging::logger_t<log_dev_t> logger("logger_cm7", PRIO_LOGGER);
 
+void log_sync(const char* s)
+{
+	stm32_lib::usart::send(USART_STLINK, s);
+}
 
-usart_logger_t logger(USART_STLINK, "logger_cm7", PRIO_LOGGER);
 
 stm32_lib::hsem::hsem_t<0> hsem0;
-
-
-void usart_init(USART_TypeDef* const usart)
-{
-	usart->CR1 = 0; // ensure UE flag is reset
-
-	constexpr uint32_t cr1 = USART_CR1_FIFOEN | USART_CR1_TE;
-
-	stm32_lib::gpio::set_mode_af_lowspeed_pu(bsp::usart_stlink_pin_tx, USART_STLINK_PIN_TX_AF);
-	usart->BRR = configCPU_CLOCK_HZ / USART_CON_BAUDRATE;
-
-	usart->CR1 = cr1;
-	usart->CR1 = cr1 | USART_CR1_UE;
-}
 
 
 void toggle_bits_10(volatile uint32_t* const ptr, const uint32_t mask)
@@ -78,6 +68,12 @@ void periph_init()
 	RCC->APB1LENR |= RCC_APB1LENR_USART3EN_Msk;
 	toggle_bits_10(&RCC->APB1LRSTR, RCC_APB1LRSTR_USART3RST_Msk);
 
+	// DMA
+	RCC->AHB1ENR |= RCC_AHB1ENR_DMA1EN;
+	toggle_bits_10(&RCC->AHB1RSTR, RCC_AHB1RSTR_DMA1RST);
+
+	NVIC_SetPriority(DMA1_Stream0_IRQn, 11);
+	NVIC_EnableIRQ(DMA1_Stream0_IRQn);
 }
 
 
@@ -418,6 +414,28 @@ void create_task_ugui()
 	);
 }
 
+
+extern "C" __attribute__ ((interrupt)) void IntHandler_Dma1S0()
+{
+	auto const isr = DMA1->LISR;
+	uint32_t events = 0;
+	if (isr & DMA_LISR_TCIF0) {
+		DMA1->LIFCR = DMA_LIFCR_CTCIF0;
+		events |= stm32_lib::dma::dma_result_t::tc;
+	}
+	if (isr & DMA_LISR_TEIF0) {
+		DMA1->LIFCR = DMA_LIFCR_CTEIF0;
+		events |= stm32_lib::dma::dma_result_t::te;
+	}
+	if (isr & DMA_LISR_DMEIF0) {
+		DMA1->LIFCR = DMA_LIFCR_CDMEIF0;
+		events |= stm32_lib::dma::dma_result_t::te;
+	}
+	if (events) {
+		logger.notify_from_isr(events);
+	}
+}
+
 #if 1
 template <typename Pin>
 void blink(const Pin& pin, int n)
@@ -466,18 +484,23 @@ __attribute__ ((noreturn)) void main()
 	g_pin_green_vbus.init_pin();
 	g_pin_green_vbus.pulse_continuous(configTICK_RATE_HZ/2, configTICK_RATE_HZ);
 
-	usart_init(USART_STLINK);
-	logger.log_sync("\r\nCM7: USART initialized (sync)\r\n");
+	stm32_lib::usart::init_logger_uart<configCPU_CLOCK_HZ>(
+		USART_STLINK,
+		bsp::usart_stlink_pin_tx,
+		USART_STLINK_PIN_TX_AF
+	);
+	log_sync("\r\nCM7: USART initialized (sync)\r\n");
 
-	logger.log_sync("Creating LCD task...\r\n");
+	log_sync("Creating LCD task...\r\n");
 	create_task_lcd();
-	logger.log_sync("Created LCD task\r\n");
+	log_sync("Created LCD task\r\n");
 
-	logger.log_sync("Creating UGUI task...\r\n");
+	log_sync("Creating UGUI task...\r\n");
 	create_task_ugui();
-	logger.log_sync("Created UGUI task\r\n");
+	log_sync("Created UGUI task\r\n");
 
-	logger.log_sync("Starting FreeRTOS scheduler\r\n");
+	log_sync("CM7: Starting FreeRTOS scheduler\r\n");
+	logger.init();
 	vTaskStartScheduler();
 
 	for (;;) {}

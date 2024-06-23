@@ -2,6 +2,7 @@
 #define __logging_h_included__
 
 #include "lib_stm32.h"
+#include "freertos_utils.h"
 
 #include "FreeRTOS.h"
 #include "queue.h"
