@@ -220,21 +220,17 @@ extern "C" __attribute__ ((interrupt)) void IntHandler_WWDG()
 {
 	if (WWDG->SR & WWDG_SR_EWIF) {
 		WWDG->SR = 0;
-		BaseType_t yield = pdFALSE;
-		logger.log_async_from_isr("IRQ: wwdg\r\n", &yield);
-		portYIELD_FROM_ISR(yield);
+		logger.log_async_from_isr("IRQ: wwdg\r\n");
 	}
 }
 
 
 extern "C" __attribute__ ((interrupt)) void IntHandler_Lptim1()
 {
-	logger.log_async_from_isr("IRQ: lptim1 ISR_START\r\n", nullptr);
+	logger.log_async_from_isr("IRQ: lptim1 ISR_START\r\n");
 	if (LPTIM1->ISR & LPTIM_ISR_ARRM) {
 		LPTIM1->ICR = LPTIM_ICR_ARRMCF;
-		BaseType_t yield = pdFALSE;
-		logger.log_async_from_isr("IRQ: lptim1 ARR\r\n", &yield);
-		portYIELD_FROM_ISR(yield);
+		logger.log_async_from_isr("IRQ: lptim1 ARR\r\n");
 	}
 }
 

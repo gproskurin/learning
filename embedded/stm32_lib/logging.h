@@ -120,9 +120,9 @@ public:
 		xQueueSend(queue_handle_, &str, 0);
 	}
 
-	void log_async_from_isr(const char* str, BaseType_t* const woken)
+	void log_async_from_isr(const char* str)
 	{
-		xQueueSendFromISR(queue_handle_, &str, woken);
+		xQueueSendFromISR(queue_handle_, &str, nullptr);
 	}
 
 #ifdef LOGGING_DMA
