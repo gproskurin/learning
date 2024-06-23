@@ -397,7 +397,8 @@ void task_function_ugui(void*)
 	}
 
 	for(;;) {
-		vTaskDelay(configTICK_RATE_HZ);
+		vTaskDelay(configTICK_RATE_HZ*9+13);
+		logger.log_async("CM7: UGUI task keep-alive\r\n");
 	}
 }
 

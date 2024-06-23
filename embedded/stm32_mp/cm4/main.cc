@@ -60,6 +60,31 @@ void periph_init_hsem()
 }
 
 
+freertos_utils::task_data_t<1024> task_data_test1;
+
+void task_function_test1(void*)
+{
+	logger.log_async("CM4: TEST1 task started\r\n");
+	for(;;) {
+		vTaskDelay(configTICK_RATE_HZ*10);
+		logger.log_async("CM4: TEST1 task keep-alive\r\n");
+	}
+}
+
+void create_task_test1()
+{
+	task_data_test1.task_handle = xTaskCreateStatic(
+		&task_function_test1,
+		"test1",
+		task_data_test1.stack.size(),
+		nullptr,
+		PRIO_TEST1,
+		task_data_test1.stack.data(),
+		&task_data_test1.task_buffer
+	);
+}
+
+
 extern "C" __attribute__ ((interrupt)) void IntHandler_Dma1S1()
 {
 	auto const isr = DMA1->LISR;
@@ -138,6 +163,8 @@ __attribute__ ((noreturn)) void main()
 	g_pin_red_otg.pulse_continuous(configTICK_RATE_HZ/10, configTICK_RATE_HZ);
 
 	log_sync("\r\nCM4: USART initialized (sync)\r\n");
+
+	create_task_test1();
 
 	log_sync("CM4: Starting FreeRTOS scheduler\r\n");
 	logger.init();
