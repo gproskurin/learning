@@ -24,6 +24,19 @@ struct task_data_t {
 };
 
 
+inline
+uint32_t notify_wait_any(uint32_t events_mask)
+{
+	uint32_t events = 0;
+	while (
+		(xTaskNotifyWait(0, 0xffffffff, &events, portMAX_DELAY) != pdTRUE)
+		|| ((events & events_mask) == 0)
+	)
+	{}
+	return events;
+}
+
+
 namespace pin_toggle_task_impl {
 	enum pin_toggle_cmd_t : uint32_t {
 		nop = 0b000,

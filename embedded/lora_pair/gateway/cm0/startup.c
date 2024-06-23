@@ -5,6 +5,7 @@ extern void vPortSVCHandler(void);
 extern void xPortPendSVHandler(void);
 extern void xPortSysTickHandler(void);
 
+extern void IntHandler_DMA2();
 
 #if defined TARGET_STM32WL55_CPU2
 __attribute__((section(".vectors"))) void (*tab[16+32])(void) =
@@ -26,7 +27,7 @@ __attribute__((section(".vectors"))) void (*tab[16+32])(void) =
 	&xPortPendSVHandler,
 	&xPortSysTickHandler,
 
-	0
+	[16 + 10] = &IntHandler_DMA2,
 };
 #endif
 

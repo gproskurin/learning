@@ -3,7 +3,6 @@
 
 #include "cmsis_device.h"
 
-#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <algorithm>
@@ -311,11 +310,46 @@ void init_logger_lpuart(
 }
 #endif
 
-inline
-void enable_dmat(USART_TypeDef* const usart)
+
+// send zero-terminated string
+template <typename Usart>
+void send(Usart* const usart, const char* s)
 {
-	for (volatile int i=0; i<10000; ++i) {} // wait for sync logging to complete FIXME
-	usart->CR3 = USART_CR3_DMAT;
+#ifdef TARGET_NRF52DK
+	if (!*s) {
+		return;
+	}
+
+	usart->TASKS_STARTTX = 1;
+
+	// tx_byte
+	usart->EVENTS_TXDRDY = 0;
+	usart->TXD = *s;
+	++s;
+#endif
+
+	while (*s) {
+#if defined TARGET_STM32H745_CM4 || defined TARGET_STM32H745_CM7 || defined TARGET_STM32WB55 || defined TARGET_STM32WL55 || defined TARGET_STM32G030 || defined TARGET_STM32G031
+		while (! (usart->ISR & USART_ISR_TXE_TXFNF)) {}
+		usart->TDR = *s;
+#elif defined TARGET_STM32L072
+		while (! (usart->ISR & USART_ISR_TXE)) {}
+		usart->TDR = *s;
+#elif defined TARGET_NRF52DK
+		while (! (usart->EVENTS_TXDRDY)) {}
+		usart->EVENTS_TXDRDY = 0;
+		usart->TXD = *s;
+#else
+		while (! (usart->SR & USART_SR_TXE)) {}
+		usart->DR = *s;
+#endif
+		++s;
+	}
+
+#ifdef TARGET_NRF52DK
+	while (! (usart->EVENTS_TXDRDY)) {}
+	usart->TASKS_STOPTX = 1;
+#endif
 }
 
 
@@ -398,39 +432,57 @@ void read(I2C_TypeDef* const i2c, uint16_t addr, uint8_t* data, uint16_t size)
 namespace dma {
 
 
-#if defined TARGET_STM32WL55
-namespace impl {
-	inline
-	DMAMUX_Channel_TypeDef* dmamux_channel(uint32_t dmamux_channel_base)
-	{
-		return reinterpret_cast<DMAMUX_Channel_TypeDef*>(dmamux_channel_base);
-	}
+enum dma_result_t : uint32_t {
+	tc = (1 << 0),
+	te = (1 << 1),
+};
 
-	template <uint32_t DmamuxChannelBase>
-	DMA_Channel_TypeDef* dmamux_channel_to_dma_channel();
-	//template<> DMA_Channel_TypeDef* dmamux_channel_to_dma_channel<DMAMUX1_Channel0_BASE>() { return DMA1_Channel1; }
-	//template<> DMA_Channel_TypeDef* dmamux_channel_to_dma_channel<DMAMUX1_Channel1_BASE>() { return DMA1_Channel2; }
-	//template<> DMA_Channel_TypeDef* dmamux_channel_to_dma_channel<DMAMUX1_Channel2_BASE>() { return DMA1_Channel3; }
-	template<> DMA_Channel_TypeDef* dmamux_channel_to_dma_channel<DMAMUX1_Channel7_BASE>() { return DMA2_Channel1; }
-	template<> DMA_Channel_TypeDef* dmamux_channel_to_dma_channel<DMAMUX1_Channel8_BASE>() { return DMA2_Channel2; }
-	template<> DMA_Channel_TypeDef* dmamux_channel_to_dma_channel<DMAMUX1_Channel9_BASE>() { return DMA2_Channel3; }
-	template<> DMA_Channel_TypeDef* dmamux_channel_to_dma_channel<DMAMUX1_Channel10_BASE>() { return DMA2_Channel4; }
-	template<> DMA_Channel_TypeDef* dmamux_channel_to_dma_channel<DMAMUX1_Channel11_BASE>() { return DMA2_Channel5; }
 
-	template <uint32_t SpiBase> constexpr uint32_t dmamux_reqid_tx();
-	template <uint32_t SpiBase> constexpr uint32_t dmamux_reqid_rx();
-	template<> uint32_t dmamux_reqid_tx<SUBGHZSPI_BASE>() { return 42; }
-	template<> uint32_t dmamux_reqid_rx<SUBGHZSPI_BASE>() { return 41; }
-	template<> uint32_t dmamux_reqid_tx<SPI1_BASE>() { return 8; }
-	template<> uint32_t dmamux_reqid_rx<SPI1_BASE>() { return 7; }
+namespace cast_convert {
+#if defined(TARGET_STM32WL55)
+	template <uint32_t DmamuxChannelBase> constexpr uint32_t dmamux_to_dmachannel();
+	template<> inline constexpr uint32_t dmamux_to_dmachannel<DMAMUX1_Channel0_BASE>() { return DMA1_Channel1_BASE; }
+	template<> inline constexpr uint32_t dmamux_to_dmachannel<DMAMUX1_Channel1_BASE>() { return DMA1_Channel2_BASE; }
+	template<> inline constexpr uint32_t dmamux_to_dmachannel<DMAMUX1_Channel2_BASE>() { return DMA1_Channel3_BASE; }
+	template<> inline constexpr uint32_t dmamux_to_dmachannel<DMAMUX1_Channel7_BASE>() { return DMA2_Channel1_BASE; }
+	template<> inline constexpr uint32_t dmamux_to_dmachannel<DMAMUX1_Channel8_BASE>() { return DMA2_Channel2_BASE; }
+	template<> inline constexpr uint32_t dmamux_to_dmachannel<DMAMUX1_Channel9_BASE>() { return DMA2_Channel3_BASE; }
+	template<> inline constexpr uint32_t dmamux_to_dmachannel<DMAMUX1_Channel10_BASE>() { return DMA2_Channel4_BASE; }
+	template<> inline constexpr uint32_t dmamux_to_dmachannel<DMAMUX1_Channel11_BASE>() { return DMA2_Channel5_BASE; }
+#endif
 }
 
-template <uint32_t SpiBase, uint32_t DmamuxChannelBaseTx, uint32_t DmamuxChannelBaseRx>
-struct spi_dmamux_t {
+namespace cast {
+	inline DMA_Channel_TypeDef* dma_channel(uint32_t DmaChannelBase)
+	{
+		return reinterpret_cast<DMA_Channel_TypeDef*>(DmaChannelBase);
+	}
+#if defined(TARGET_STM32WL55)
+	inline DMAMUX_Channel_TypeDef* dmamux_channel(uint32_t DmamuxChannelBase)
+	{
+		return reinterpret_cast<DMAMUX_Channel_TypeDef*>(DmamuxChannelBase);
+	}
+#endif
+}
+
+namespace consts {
+#if defined(TARGET_STM32WL55)
+	template <uint32_t PeriphBase> constexpr uint32_t dmamux_reqid_tx();
+	template <uint32_t PeriphBase> constexpr uint32_t dmamux_reqid_rx();
+	template<> constexpr inline uint32_t dmamux_reqid_tx<SUBGHZSPI_BASE>() { return 42; }
+	template<> constexpr inline uint32_t dmamux_reqid_rx<SUBGHZSPI_BASE>() { return 41; }
+	template<> constexpr inline uint32_t dmamux_reqid_tx<SPI1_BASE>() { return 8; }
+	template<> constexpr inline uint32_t dmamux_reqid_rx<SPI1_BASE>() { return 7; }
+	template<> constexpr inline uint32_t dmamux_reqid_tx<LPUART1_BASE>() { return 22; }
+#endif
+}
+
+template <uint32_t SpiBase, uint32_t DmaChannelBaseTx, uint32_t DmaChannelBaseRx>
+struct spi_dma_t {
 	static void init()
 	{
-		init_channel<DmamuxChannelBaseTx>(dma_ccr_tx, impl::dmamux_reqid_tx<SpiBase>());
-		init_channel<DmamuxChannelBaseRx>(dma_ccr_rx, impl::dmamux_reqid_rx<SpiBase>());
+		init_channel<DmaChannelBaseTx>();
+		init_channel<DmaChannelBaseRx>();
 	}
 
 	static void start(size_t size, const uint8_t* tx_data, uint8_t* rx_data)
@@ -439,29 +491,62 @@ struct spi_dmamux_t {
 		auto cr2 = s->CR2;
 
 		// RX
-		auto const ccr_rx = prepare_data<DmamuxChannelBaseRx>(size, rx_data, dma_ccr_rx);
-		impl::dmamux_channel_to_dma_channel<DmamuxChannelBaseRx>()->CCR = ccr_rx | DMA_CCR_EN;
 		s->CR2 = (cr2 |= SPI_CR2_RXDMAEN);
+		{
+			auto const ccr_rx = prepare_data<DmaChannelBaseRx>(size, rx_data, dma_ccr_rx);
+			auto const dc = cast::dma_channel(DmaChannelBaseRx);
+			dc->CCR = ccr_rx;
+			dc->CCR = ccr_rx | DMA_CCR_EN;
+		}
 
 		// TX
-		auto const ccr_tx = prepare_data<DmamuxChannelBaseTx>(size, const_cast<uint8_t*>(tx_data), dma_ccr_tx);
-		impl::dmamux_channel_to_dma_channel<DmamuxChannelBaseTx>()->CCR = ccr_tx | DMA_CCR_EN;
+		{
+			auto const ccr_tx = prepare_data<DmaChannelBaseTx>(size, const_cast<uint8_t*>(tx_data), dma_ccr_tx);
+			auto const dc = cast::dma_channel(DmaChannelBaseTx);
+			dc->CCR = ccr_tx;
+			dc->CCR = ccr_tx | DMA_CCR_EN;
+		}
+		s->CR2 = (cr2 |= SPI_CR2_TXDMAEN);
 
 		s->CR1 |= SPI_CR1_SPE;
-		s->CR2 = (cr2 |= SPI_CR2_TXDMAEN);
 	}
 
 	static void stop()
 	{
-		// SPI disabling procedure
+		cast::dma_channel(DmaChannelBaseTx)->CCR = 0;
+		cast::dma_channel(DmaChannelBaseRx)->CCR = 0;
+
+		// SPI disabling procedure, see datasheet/SPI
 		auto const s = spi();
-		while (s->SR & SPI_SR_FTLVL_Msk) {}
-		while (s->SR & SPI_SR_BSY) {}
+		auto sr = s->SR;
+
+#if defined(TARGET_STM32WL55)
+		while (sr & SPI_SR_FTLVL_Msk) {
+			sr = s->SR;
+		}
+		while (sr & SPI_SR_BSY) {
+			sr = s->SR;
+		}
 		s->CR1 &= ~SPI_CR1_SPE;
-		while (s->SR & SPI_SR_FRLVL_Msk) {}
+		while (sr & SPI_SR_FRLVL_Msk) {
+			sr = s->SR;
+		}
+#elif defined(TARGET_STM32L072)
+		//TODO
+		//while (!(sr & SPI_SR_RXNE)) {
+		//	sr = s->SR;
+		//}
+		while (!(sr & SPI_SR_TXE)) {
+			sr = s->SR;
+		}
+		while (sr & SPI_SR_BSY) {
+			sr = s->SR;
+		}
+		s->CR1 &= ~SPI_CR1_SPE;
+#else
+#error TODO
+#endif
 		s->CR2 &= ~(SPI_CR2_TXDMAEN | SPI_CR2_RXDMAEN);
-		impl::dmamux_channel_to_dma_channel<DmamuxChannelBaseTx>()->CCR = 0;
-		impl::dmamux_channel_to_dma_channel<DmamuxChannelBaseRx>()->CCR = 0;
 	}
 
 private:
@@ -471,33 +556,109 @@ private:
 
 	static SPI_TypeDef* spi() { return reinterpret_cast<SPI_TypeDef*>(SpiBase); }
 
-	template <uint32_t DmamuxChannelBase>
-	static void init_channel(uint32_t dma_ccr, uint32_t dmamux_channel_reqid)
+	template <uint32_t DmaChannelBase>
+	static void init_channel()
 	{
-		auto const dma_channel = impl::dmamux_channel_to_dma_channel<DmamuxChannelBase>();
-		dma_channel->CCR = 0;
-		dma_channel->CPAR = reinterpret_cast<uint32_t>(&spi()->DR);
-		impl::dmamux_channel(DmamuxChannelBase)->CCR = (dmamux_channel_reqid << DMAMUX_CxCR_DMAREQ_ID_Pos);
+		auto const dc = cast::dma_channel(DmaChannelBase);
+		dc->CCR = 0;
+		dc->CPAR = reinterpret_cast<uint32_t>(&spi()->DR);
 	}
 
-	template <uint32_t DmamuxChannelBase>
+	template <uint32_t DmaChannelBase>
 	static uint32_t prepare_data(size_t size, uint8_t* data, uint32_t ccr)
 	{
-		auto const dma_channel = impl::dmamux_channel_to_dma_channel<DmamuxChannelBase>();
-		dma_channel->CNDTR = size;
+		auto const dc = cast::dma_channel(DmaChannelBase);
+		dc->CNDTR = size;
 		if (data) {
-			dma_channel->CMAR = reinterpret_cast<uint32_t>(data);
+			dc->CMAR = reinterpret_cast<uint32_t>(data);
 			ccr |= DMA_CCR_MINC;
 		} else {
 			// buffer pointer is null (unused)
 			// use 1-byte buffer and disable MINC
 			static uint8_t unused_data;
-			dma_channel->CMAR = reinterpret_cast<uint32_t>(&unused_data);
+			dc->CMAR = reinterpret_cast<uint32_t>(&unused_data);
 			ccr &= ~DMA_CCR_MINC;
 		}
-		dma_channel->CCR = ccr;
 		return ccr;
 	}
+};
+
+#if defined(TARGET_STM32WL55)
+namespace impl {
+	template <uint32_t SpiBase, uint32_t DmamuxChannelBaseTx, uint32_t DmamuxChannelBaseRx>
+	using spi_dmamux_base_t = spi_dma_t<
+		SpiBase,
+		cast_convert::dmamux_to_dmachannel<DmamuxChannelBaseTx>(),
+		cast_convert::dmamux_to_dmachannel<DmamuxChannelBaseRx>()
+	>;
+}
+
+template <uint32_t SpiBase, uint32_t DmamuxChannelBaseTx, uint32_t DmamuxChannelBaseRx>
+struct spi_dmamux_t : public impl::spi_dmamux_base_t<SpiBase, DmamuxChannelBaseTx, DmamuxChannelBaseRx> {
+	static void init()
+	{
+		base_t::init();
+		cast::dmamux_channel(DmamuxChannelBaseTx)->CCR = (consts::dmamux_reqid_tx<SpiBase>() << DMAMUX_CxCR_DMAREQ_ID_Pos);
+		cast::dmamux_channel(DmamuxChannelBaseRx)->CCR = (consts::dmamux_reqid_rx<SpiBase>() << DMAMUX_CxCR_DMAREQ_ID_Pos);
+	}
+private:
+	using base_t = impl::spi_dmamux_base_t<SpiBase, DmamuxChannelBaseTx, DmamuxChannelBaseRx>;
+};
+#endif
+
+template <uint32_t UsartBase, uint32_t DmaChannelBaseTx>
+struct dev_usart_dma_t {
+	static void init()
+	{
+		auto const dc = dma_channel();
+		dc->CCR = dma_ccr_tx;
+		dc->CPAR = reinterpret_cast<uint32_t>(&usart()->TDR);
+	}
+
+	static void start(size_t size, const uint8_t* tx_data)
+	{
+		auto const dc = dma_channel();
+		dc->CMAR = reinterpret_cast<uint32_t>(tx_data);
+		dc->CNDTR = size;
+		dc->CCR = dma_ccr_tx_en;
+		usart()->CR3 = USART_CR3_DMAT;
+	}
+
+	static void stop()
+	{
+		usart()->CR3 = 0;
+		dma_channel()->CCR = dma_ccr_tx;
+	}
+
+private:
+	static USART_TypeDef* usart() { return reinterpret_cast<USART_TypeDef*>(UsartBase); }
+	static DMA_Channel_TypeDef* dma_channel() { return cast::dma_channel(DmaChannelBaseTx); }
+	static constexpr uint32_t dma_ccr_tx =
+		(0b00 << DMA_CCR_PL_Pos)
+		| DMA_CCR_MINC
+		| DMA_CCR_DIR
+		| DMA_CCR_TCIE
+		| DMA_CCR_TEIE
+		;
+	static constexpr uint32_t dma_ccr_tx_en = dma_ccr_tx | DMA_CCR_EN;
+};
+
+
+#if defined TARGET_STM32WL55
+namespace impl {
+	template <uint32_t UsartBase, uint32_t DmamuxChannelBase>
+	using dev_usart_dmamux_base_t = dev_usart_dma_t<UsartBase, cast_convert::dmamux_to_dmachannel<DmamuxChannelBase>()>;
+}
+
+template <uint32_t UsartBase, uint32_t DmamuxChannelBaseTx>
+struct dev_usart_dmamux_t : public impl::dev_usart_dmamux_base_t<UsartBase, DmamuxChannelBaseTx> {
+	static void init()
+	{
+		base_t::init();
+		cast::dmamux_channel(DmamuxChannelBaseTx)->CCR = consts::dmamux_reqid_tx<UsartBase>() << DMAMUX_CxCR_DMAREQ_ID_Pos;
+	}
+private:
+	using base_t = impl::dev_usart_dmamux_base_t<UsartBase, DmamuxChannelBaseTx>;
 };
 #endif
 

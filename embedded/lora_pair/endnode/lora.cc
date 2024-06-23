@@ -8,9 +8,10 @@
 #include "logging.h"
 #include "lora.h"
 
-freertos_utils::task_data_t<512> task_data_lora;
+#include "logger_fwd.h"
 
-extern usart_logger_t logger;
+
+freertos_utils::task_data_t<512> task_data_lora;
 
 extern freertos_utils::pin_toggle_task_t<stm32_lib::gpio::pin_t> g_pin_green;
 extern freertos_utils::pin_toggle_task_t<stm32_lib::gpio::pin_t> g_pin_blue;
@@ -21,14 +22,7 @@ extern void perif_init_irq_dio0();
 
 extern "C"
 const sx1276::hwconf_t hwc_emb;
-
-
-enum spi_dma_flags_t {
-	rx_tc = (1 << 0),
-	rx_te = (1 << 1),
-	//tx_tc = (1 << 2),
-	//tx_te = (1 << 3),
-};
+using emb_spi_dma_t = stm32_lib::dma::spi_dma_t<SPI1_BASE, DMA1_Channel3_BASE, DMA1_Channel2_BASE>;
 
 
 namespace {
@@ -37,17 +31,9 @@ namespace {
 namespace spi {
 	void wait_spi_complete()
 	{
-		// waiting for RX to complete
-		for (;;) {
-			uint32_t events = 0;
-			if (
-				(xTaskNotifyWait(0, 0xffffffff, &events, portMAX_DELAY) == pdTRUE)
-				&& (events & (spi_dma_flags_t::rx_tc | spi_dma_flags_t::rx_te))
-			)
-			{
-				return;
-			}
-		}
+		auto const _events = freertos_utils::notify_wait_any(
+			stm32_lib::dma::dma_result_t::te | stm32_lib::dma::dma_result_t::tc
+		);
 	}
 
 	void cb_spi_nss(bool s)
@@ -57,22 +43,10 @@ namespace spi {
 
 	void cb_spi_write(const uint8_t* tx_data, size_t size, uint8_t* rx_data)
 	{
-		//stm32_lib::spi::write<uint8_t>(hwc_emb.spi, size, tx_data, rx_data);
-
-		hwc_emb.dma_channel_rx->CNDTR = hwc_emb.dma_channel_tx->CNDTR = size;
-
-		hwc_emb.dma_channel_rx->CMAR = reinterpret_cast<uint32_t>(rx_data);
-		hwc_emb.dma_channel_tx->CMAR = reinterpret_cast<uint32_t>(tx_data);
-
-		// enable TX first
-		hwc_emb.dma_channel_tx->CCR = hwc_emb.dma_ccr_en_tx;
-		hwc_emb.dma_channel_rx->CCR = hwc_emb.dma_ccr_en_rx;
-
+		emb_spi_dma_t::start(size, tx_data, rx_data);
 		wait_spi_complete();
+		emb_spi_dma_t::stop();
 
-		hwc_emb.dma_channel_tx->CCR = hwc_emb.dma_ccr_tx;
-		hwc_emb.dma_channel_rx->CCR = hwc_emb.dma_ccr_rx;
-		// TODO: check BSY flag?
 	}
 } //spi
 
@@ -84,6 +58,7 @@ void task_function(void* arg)
 	const sx1276::hwconf_t* const hwp = reinterpret_cast<const sx1276::hwconf_t*>(arg);
 
 	sx1276::spi_sx_init(*hwp, true);
+	emb_spi_dma_t::init();
 
 	//sx1276::init_radio_pin(hwp->pin_radio_tcxo_vcc);
 	//sx1276::init_radio_pin(hwp->pin_radio_ant_sw_rx);
@@ -227,25 +202,13 @@ extern "C" __attribute__ ((interrupt)) void IntHandler_DMA1_Channel2_3()
 
 	// channel2 - RX
 	if (isr & DMA_ISR_TEIF2) {
-		events |= spi_dma_flags_t::rx_te;
+		events |= stm32_lib::dma::dma_result_t::te;
 		ifcr_clear |= DMA_IFCR_CTEIF2 | DMA_IFCR_CGIF2;
 	}
 	if (isr & DMA_ISR_TCIF2) {
-		events |= spi_dma_flags_t::rx_tc;
+		events |= stm32_lib::dma::dma_result_t::tc;
 		ifcr_clear |= DMA_IFCR_CTCIF2 | DMA_IFCR_CGIF2;
 	}
-
-#if 0
-	// channel3 - TX
-	if (isr & DMA_ISR_TEIF3) {
-		events |= spi_dma_flags_t::tx_te;
-		ifcr_clear |= DMA_IFCR_CTEIF3 | DMA_IFCR_CGIF3;
-	}
-	if (isr & DMA_ISR_TCIF3) {
-		events |= spi_dma_flags_t::tx_tc;
-		ifcr_clear |= DMA_IFCR_CTCIF3 | DMA_IFCR_CGIF3;
-	}
-#endif
 
 	if (events) {
 		DMA1->IFCR = ifcr_clear;

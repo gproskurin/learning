@@ -13,24 +13,44 @@
 
 #define PRIO_BLINK 1
 #define PRIO_LORA_RECV 5
-#define PRIO_IPCC_SEND 6
-#define PRIO_LOGGER 8 // FIXME
+#define PRIO_LOGGER 6
 
-
-#define USART_CON_BAUDRATE 115200
 
 void* ipcc_mp; // pointer to mailbox being sent
 constexpr uint8_t ipcc_ch_lora = 3;
 
-usart_logger_t logger(USART_STLINK, "logger_cm0", PRIO_LOGGER);
+using subghzspi_dma_t = stm32_lib::dma::spi_dmamux_t<SUBGHZSPI_BASE, DMAMUX1_Channel8_BASE, DMAMUX1_Channel9_BASE>;
+
+using log_dev_t = stm32_lib::dma::dev_usart_dmamux_t<LPUART1_BASE, DMAMUX1_Channel7_BASE>;
+logging::logger_t<log_dev_t> logger("logger_cm0", PRIO_LOGGER);
+
+
+void log_sync(const char* s)
+{
+	stm32_lib::usart::send(LPUART1, s);
+}
+
+
+void log_async_1(uint8_t x, char* const buf0)
+{
+	auto buf = buf0;
+	buf = printf_byte(x, buf);
+	*buf++ = '\r';
+	*buf++ = '\n';
+	*buf = 0;
+	logger.log_async(buf0);
+}
+
 
 //freertos_utils::pin_toggle_task_t g_pin_blue("blink_blue", bsp::pin_led_blue, PRIO_BLINK);
 //freertos_utils::pin_toggle_task_t g_pin_green("blink_green", bsp::pin_led_green, PRIO_BLINK);
 freertos_utils::pin_toggle_task_t g_pin_red("blink_red", bsp::pin_led_red, PRIO_BLINK);
 
-
-void bus_init()
+void periph_init()
 {
+	//RCC->APB3ENR |= RCC_APB3ENR_SUBGHZSPIEN; // TODO not needed?
+	NVIC_SetPriority(DMA2_DMAMUX1_OVR_IRQn, 13);
+	NVIC_EnableIRQ(DMA2_DMAMUX1_OVR_IRQn);
 }
 
 
@@ -70,6 +90,10 @@ namespace subghz {
 
 	void init()
 	{
+		RCC->APB3ENR |= RCC_APB3ENR_SUBGHZSPIEN;
+		RCC->APB3RSTR |= RCC_APB3RSTR_SUBGHZSPIRST;
+		RCC->APB3RSTR &= ~RCC_APB3RSTR_SUBGHZSPIRST;
+
 		// reset radio
 		RCC->CSR |= RCC_CSR_RFRST;
 		while (!(RCC->CSR & RCC_CSR_RFRSTF)) {}
@@ -81,32 +105,43 @@ namespace subghz {
 		PWR->SCR = PWR_SCR_CWRFBUSYF;
 
 		nss_0();
-		vTaskDelay(configTICK_RATE_HZ/10); // TODO
+		vTaskDelay(1); // at least 20us
 		nss_1();
 
 		//while (PWR->SR2 & PWR_SR2_RFBUSYMS) {}
 		while (PWR->SR2 & PWR_SR2_RFBUSYS) {}
 
 		constexpr uint32_t cr1 =
-			SPI_CR1_SSM_Msk
-			| SPI_CR1_MSTR_Msk
-			| SPI_CR1_SSI_Msk
-			| (0b001/*div4*/ << SPI_CR1_BR_Pos) // PCLK3 divider
+			SPI_CR1_SSM
+			| SPI_CR1_MSTR
+			| SPI_CR1_SSI
+			//| (0b001/*div4*/ << SPI_CR1_BR_Pos) // PCLK3 divider
+			| (0b010/*div8*/ << SPI_CR1_BR_Pos) // PCLK3 divider
 			//| (0b101/*div64*/ << SPI_CR1_BR_Pos) // PCLK3 divider
 			;
 
 		SUBGHZSPI->CR1 = 0;
 		SUBGHZSPI->CR1 = cr1;
-		SUBGHZSPI->CR2 = SPI_CR2_FRXTH | (0b111/*8bit*/ << SPI_CR2_DS_Pos);
+		SUBGHZSPI->CR2 = SPI_CR2_FRXTH | (0b0111/*8bit*/ << SPI_CR2_DS_Pos);
+	}
 
-		SUBGHZSPI->CR1 = cr1 | SPI_CR1_SPE;
+	void wait_spi_complete()
+	{
+		auto const _events = freertos_utils::notify_wait_any(
+			stm32_lib::dma::dma_result_t::tc | stm32_lib::dma::dma_result_t::te
+		);
 	}
 
 	void spi_write(size_t size, const uint8_t* tx_buf, uint8_t* rx_buf)
 	{
-		vTaskDelay(1); // TODO check busy
+		while (PWR->SR2 & PWR_SR2_RFBUSYS) {}
+
 		subghz::nss_0();
-		stm32_lib::spi::write<uint8_t>(SUBGHZSPI, size, tx_buf, rx_buf);
+
+		subghzspi_dma_t::start(size, tx_buf, rx_buf);
+		wait_spi_complete();
+		subghzspi_dma_t::stop();
+
 		subghz::nss_1();
 	}
 
@@ -306,9 +341,17 @@ namespace subghz {
 		auto const rx_off = rx_stat[3];
 
 		const std::array<uint8_t, 3> tx_fifo_cmd{0x1E, rx_off, 0}; // ReadBuffer
+
 		subghz::nss_0();
-		stm32_lib::spi::write<uint8_t>(SUBGHZSPI, tx_fifo_cmd.size(), tx_fifo_cmd.data(), nullptr);
-		stm32_lib::spi::write<uint8_t>(SUBGHZSPI, rx_size, nullptr, rx_data);
+
+		subghzspi_dma_t::start(tx_fifo_cmd.size(), tx_fifo_cmd.data(), nullptr);
+		wait_spi_complete();
+		subghzspi_dma_t::stop();
+
+		subghzspi_dma_t::start(rx_size, nullptr, rx_data);
+		wait_spi_complete();
+		subghzspi_dma_t::stop();
+
 		subghz::nss_1();
 
 		return rx_size;
@@ -423,7 +466,8 @@ void task_function_lora_recv(void*)
 	vTaskDelay(configTICK_RATE_HZ/10);
 	//subghz::config_debug_pins();
 
-	subghz::init();
+	subghz::init(); // init radio, init SUBGHZSPI
+	subghzspi_dma_t::init();
 	logger.log_async("CM0: LORA_RECV subghz::init done\r\n");
 	vTaskDelay(configTICK_RATE_HZ/10);
 
@@ -468,7 +512,7 @@ void task_function_lora_recv(void*)
 		{
 			const bool crc_error = flags & irqmask_CrcErr;
 			if (crc_error) {
-				g_pin_red.pulse_once(configTICK_RATE_HZ*2);
+				//g_pin_red.pulse_once(configTICK_RATE_HZ*2);
 				logger.log_async("CM0: LORA_RECV: recv crc error\r\n");
 			}
 
@@ -530,34 +574,41 @@ void create_task_lora_recv()
 }
 
 
-freertos_utils::task_data_t<1024> task_data_ipcc_send;
-
-void task_function_ipcc_send(void*)
+extern "C" __attribute__ ((interrupt)) void IntHandler_DMA2()
 {
-	logger.log_async("CM0: IPCC_SEND task started\r\n");
-	constexpr uint8_t ch = 3;
-	for (;;) {
-		vTaskDelay(configTICK_RATE_HZ*5);
-		if ((IPCC->C2TOC1SR & (1 << ch)) == 0) {
-			logger.log_async("CM0: ipcc sending\r\n");
-			IPCC->C2SCR = (1 << (ch+16));
-		} else {
-			logger.log_async("CM0: ipcc busy\r\n");
+	auto const isr = DMA2->ISR;
+
+	// logger
+	{
+		uint32_t ev_logger = 0;
+		if (isr & DMA_ISR_TCIF1) {
+			DMA2->IFCR = DMA_IFCR_CTCIF1;
+			ev_logger |= stm32_lib::dma::dma_result_t::tc;
+		}
+		if (isr & DMA_ISR_TEIF1) {
+			DMA2->IFCR = DMA_IFCR_CTEIF1;
+			ev_logger |= stm32_lib::dma::dma_result_t::te;
+		}
+		if (ev_logger) {
+			logger.notify_from_isr(ev_logger);
 		}
 	}
-}
 
-void create_task_ipcc_send()
-{
-	task_data_lora_recv.task_handle = xTaskCreateStatic(
-		&task_function_ipcc_send,
-		"ipcc_send_cm0",
-		task_data_ipcc_send.stack.size(),
-		nullptr,
-		PRIO_IPCC_SEND,
-		task_data_ipcc_send.stack.data(),
-		&task_data_ipcc_send.task_buffer
-	);
+	// SUBGHZSPI
+	{
+		uint32_t ev_sg = 0;
+		if (isr & DMA_ISR_TCIF3) {
+			DMA2->IFCR = DMA_IFCR_CTCIF3;
+			ev_sg |= stm32_lib::dma::dma_result_t::tc;
+		}
+		if (isr & DMA_ISR_TEIF3) {
+			DMA2->IFCR = DMA_IFCR_CTEIF3;
+			ev_sg |= stm32_lib::dma::dma_result_t::te;
+		}
+		if (ev_sg) {
+			xTaskNotifyFromISR(task_data_lora_recv.task_handle, ev_sg, eSetBits, nullptr);
+		}
+	}
 }
 
 
@@ -565,25 +616,25 @@ __attribute__ ((noreturn)) void main()
 {
 	for (volatile int i=0; i<100000; ++i) {}
 
-	bus_init();
-	logger.init_dma();
+	periph_init();
 
-	logger.log_sync("\r\nLogger_cm0 initialized (sync)\r\n");
+	stm32_lib::usart::init_logger_lpuart<configCPU_CLOCK_HZ>(USART_STLINK, bsp::usart_stlink_pin_tx, USART_STLINK_PIN_TX_AF);
+
+	log_sync("\r\nLogger_cm0 initialized (sync)\r\n");
 
 	//g_pin_blue.init_pin();
 	g_pin_red.init_pin();
 	g_pin_red.pulse_continuous(configTICK_RATE_HZ/30, configTICK_RATE_HZ/10);
 
-	logger.log_sync("CM0: Creating LORA_RECV task...\r\n");
+	log_sync("CM0: Creating LORA_RECV task...\r\n");
 	create_task_lora_recv();
-	logger.log_sync("CM0: Created LORA_RECV task\r\n");
+	log_sync("CM0: Created LORA_RECV task\r\n");
 
-	//create_task_ipcc_send();
-
-	logger.log_sync("CM0: Starting FreeRTOS scheduler\r\n");
+	log_sync("CM0: Starting FreeRTOS scheduler\r\n");
+	logger.init();
 	vTaskStartScheduler();
 
-	logger.log_sync("CM0: Error in FreeRTOS scheduler\r\n");
+	log_sync("CM0: Error in FreeRTOS scheduler\r\n");
 	for (;;) {}
 }
 

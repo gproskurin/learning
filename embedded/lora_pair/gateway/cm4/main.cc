@@ -13,18 +13,24 @@
 
 #define PRIO_BLINK 1
 #define PRIO_IPCC_RECV 5
-#define PRIO_LOGGER 8 // FIXME
+#define PRIO_LOGGER 8
 
 
 constexpr uint8_t ipcc_ch_lora = 3;
 constexpr uint32_t mb_ptr_addr = 0x2000807c; // keep it up-to-date, taken from CM0 linker map file
 
-
-usart_logger_t logger(USART_STLINK, "logger_cm4", PRIO_LOGGER);
+using log_dev_t = stm32_lib::dma::dev_usart_dmamux_t<LPUART1_BASE, DMAMUX1_Channel0_BASE>;
+logging::logger_t<log_dev_t> logger("logger_cm4", PRIO_LOGGER);
 
 freertos_utils::pin_toggle_task_t g_pin_blue("blink_blue", bsp::pin_led_blue, PRIO_BLINK);
 freertos_utils::pin_toggle_task_t g_pin_green("blink_green", bsp::pin_led_green, PRIO_BLINK);
 //freertos_utils::pin_toggle_task_t g_pin_red("blink_red", bsp::pin_led_red, PRIO_BLINK);
+
+
+void log_sync(const char* s)
+{
+	stm32_lib::usart::send(LPUART1, s);
+}
 
 
 void toggle_bits_10(volatile uint32_t* const ptr, const uint32_t mask)
@@ -54,7 +60,7 @@ void bus_init()
 		| (0b1011 << RCC_CR_MSIRANGE_Pos)
 		;
 #endif
-	// PCLK3
+	// PCLK3(subghzspi)
 	RCC->EXTCFGR = (RCC->EXTCFGR & ~RCC_EXTCFGR_SHDHPRE_Msk)
 		| ((0b0000) << RCC_EXTCFGR_SHDHPRE_Pos)
 		;
@@ -64,34 +70,58 @@ void bus_init()
 	//RCC->CR |= RCC_CR_HSEON;
 	//while (!(RCC->CR & RCC_CR_HSERDY)) {} // TODO
 
-	// GPIOs
+	// AHB1: DMA1 & DMAMUX1
+	RCC->AHB1ENR |= RCC_AHB1ENR_DMAMUX1EN | RCC_AHB1ENR_DMA1EN | RCC_AHB1ENR_DMA2EN;
+	RCC->AHB1SMENR |= RCC_AHB1SMENR_DMAMUX1SMEN | RCC_AHB1SMENR_DMA1SMEN | RCC_AHB1SMENR_DMA2SMEN;
+	RCC->C2AHB1ENR |= RCC_C2AHB1ENR_DMAMUX1EN | RCC_C2AHB1ENR_DMA1EN | RCC_C2AHB1ENR_DMA2EN;
+	RCC->C2AHB1SMENR |= RCC_C2AHB1SMENR_DMAMUX1SMEN | RCC_C2AHB1SMENR_DMA1SMEN | RCC_C2AHB1SMENR_DMA2SMEN;
+	toggle_bits_10(&RCC->AHB1RSTR, RCC_AHB1RSTR_DMA1RST_Msk | RCC_AHB1RSTR_DMA2RST_Msk| RCC_AHB1RSTR_DMAMUX1RST_Msk);
+
+	// AHB2: GPIOs
 	RCC->AHB2ENR |= RCC_AHB2ENR_GPIOAEN_Msk | RCC_AHB2ENR_GPIOBEN_Msk | RCC_AHB2ENR_GPIOCEN_Msk;
+	RCC->AHB2SMENR |= RCC_AHB2SMENR_GPIOASMEN_Msk | RCC_AHB2SMENR_GPIOBSMEN_Msk | RCC_AHB2SMENR_GPIOCSMEN_Msk;
+	RCC->C2AHB2ENR |= RCC_C2AHB2ENR_GPIOAEN_Msk | RCC_C2AHB2ENR_GPIOBEN_Msk | RCC_C2AHB2ENR_GPIOCEN_Msk;
+	RCC->C2AHB2SMENR |= RCC_C2AHB2SMENR_GPIOASMEN_Msk | RCC_C2AHB2SMENR_GPIOBSMEN_Msk | RCC_C2AHB2SMENR_GPIOCSMEN_Msk;
 	toggle_bits_10(
 		&RCC->AHB2RSTR,
 		RCC_AHB2RSTR_GPIOARST_Msk | RCC_AHB2RSTR_GPIOBRST_Msk | RCC_AHB2RSTR_GPIOCRST_Msk
 	);
 
-	// LPUART1
-	RCC->APB1ENR2 |= RCC_APB1ENR2_LPUART1EN_Msk;
+	// AHB3
+	RCC->AHB3ENR |= RCC_AHB3ENR_FLASHEN | RCC_AHB3ENR_IPCCEN;
+	RCC->AHB3SMENR |= RCC_AHB3SMENR_FLASHSMEN | RCC_AHB3SMENR_SRAM2SMEN | RCC_AHB3SMENR_SRAM1SMEN;
+	RCC->C2AHB3ENR |= RCC_C2AHB3ENR_FLASHEN | RCC_C2AHB3ENR_IPCCEN;
+	RCC->C2AHB3SMENR |= RCC_C2AHB3SMENR_FLASHSMEN | RCC_C2AHB3SMENR_SRAM2SMEN | RCC_C2AHB3SMENR_SRAM1SMEN;
+	toggle_bits_10(&RCC->AHB3RSTR, RCC_AHB3RSTR_IPCCRST);
+
+	// APB1: LPUART1
+	RCC->APB1ENR1 |= 0;
+	RCC->APB1SMENR1 |= 0;
+	RCC->APB1ENR2 |= RCC_APB1ENR2_LPUART1EN;
+	RCC->APB1SMENR2 |= RCC_APB1SMENR2_LPUART1SMEN;
+	RCC->C2APB1ENR1 |= 0;
+	RCC->C2APB1SMENR1 |= 0;
+	RCC->C2APB1ENR2 |= RCC_C2APB1ENR2_LPUART1EN;
+	RCC->C2APB1SMENR2 |= RCC_C2APB1SMENR2_LPUART1SMEN;
 	toggle_bits_10(&RCC->APB1RSTR2, RCC_APB1RSTR2_LPUART1RST_Msk);
 	RCC->CCIPR = (RCC->CCIPR & ~(RCC_CCIPR_LPUART1SEL_Msk))
 		| (0b01 << RCC_CCIPR_LPUART1SEL_Pos)
 		;
 
-	// SUBGHZSPI
-	RCC->APB3ENR |= RCC_APB3ENR_SUBGHZSPIEN;
+	// APB2
+	RCC->APB2ENR |= RCC_APB2ENR_USART1EN;
+	RCC->APB2SMENR |= RCC_APB2SMENR_USART1SMEN;
+	RCC->C2APB2ENR |= RCC_C2APB2ENR_USART1EN;
+	RCC->C2APB2SMENR |= RCC_C2APB2SMENR_USART1SMEN;
+
+	// APB3: SUBGHZSPI
+	RCC->APB3ENR |= RCC_APB3ENR_SUBGHZSPIEN; // TODO not needed?
+	RCC->APB3SMENR |= RCC_APB3SMENR_SUBGHZSPISMEN;
+	RCC->C2APB3ENR |= RCC_C2APB3ENR_SUBGHZSPIEN;
+	RCC->C2APB3SMENR |= RCC_C2APB3SMENR_SUBGHZSPISMEN;
 	toggle_bits_10(&RCC->APB3RSTR, RCC_APB3RSTR_SUBGHZSPIRST);
 
-	// IPCC
-	RCC->C2AHB3ENR |= RCC_C2AHB3ENR_IPCCEN;
-	RCC->AHB3ENR |= RCC_AHB3ENR_IPCCEN;
-	toggle_bits_10(&RCC->AHB3RSTR, RCC_AHB3RSTR_IPCCRST);
-	//toggle_bits_10(&RCC->C2AHB3RSTR, RCC_C2AHB3RSTR_IPCCRST);
-
-	// DMA
-	RCC->AHB1ENR |= RCC_AHB1ENR_DMA1EN | RCC_AHB1ENR_DMAMUX1EN;
-	toggle_bits_10(&RCC->AHB1RSTR, RCC_AHB1RSTR_DMA1RST_Msk | RCC_AHB1RSTR_DMAMUX1RST_Msk);
-	NVIC_SetPriority(DMA1_Channel1_IRQn, 0);
+	NVIC_SetPriority(DMA1_Channel1_IRQn, 11);
 	NVIC_EnableIRQ(DMA1_Channel1_IRQn);
 #endif
 }
@@ -213,21 +243,33 @@ extern "C" __attribute__ ((interrupt)) void IntHandler_IPCC_CPU1_RX()
 
 extern "C" __attribute__ ((interrupt)) void IntHandler_Dma1Ch1()
 {
-	logger.handle_dma_irq();
+	auto const isr = DMA1->ISR;
+	uint32_t events = 0;
+	if (isr & DMA_ISR_TCIF1) {
+		DMA1->IFCR = DMA_IFCR_CTCIF1;
+		events |= stm32_lib::dma::dma_result_t::tc;
+	}
+	if (isr & DMA_ISR_TEIF1) {
+		DMA1->IFCR = DMA_IFCR_CTEIF1;
+		events |= stm32_lib::dma::dma_result_t::te;
+	}
+	if (events) {
+		logger.notify_from_isr(events);
+	}
 }
 
 
 __attribute__ ((noreturn)) void main()
 {
 	bus_init();
-	logger.init_dma();
 	stm32_lib::usart::init_logger_lpuart<configCPU_CLOCK_HZ>(
 		USART_STLINK,
 		bsp::usart_stlink_pin_tx,
 		USART_STLINK_PIN_TX_AF
 	);
+	logger.init();
 
-	logger.log_sync("\r\nLogger initialized (sync)\r\n");
+	log_sync("\r\nLogger initialized (sync)\r\n");
 
 #if 0
 	set_pin_debug(bsp::pin_debug_subghzspi_nss);
@@ -244,13 +286,11 @@ __attribute__ ((noreturn)) void main()
 
 	create_task_ipcc_recv();
 
-	logger.log_sync("CM4: Starting FreeRTOS scheduler\r\n");
-
-	stm32_lib::usart::enable_dmat(USART_STLINK);
+	log_sync("CM4: Starting FreeRTOS scheduler\r\n");
 
 	vTaskStartScheduler();
 
-	logger.log_sync("CM4: Error in FreeRTOS scheduler\r\n");
+	log_sync("CM4: Error in FreeRTOS scheduler\r\n");
 	for (;;) {}
 }
 

@@ -4,6 +4,7 @@
 #include "bsp.h"
 #include "freertos_utils.h"
 #include "logging.h"
+#include "logger_fwd.h"
 
 #include "lora.h"
 
@@ -29,8 +30,6 @@ freertos_utils::pin_toggle_task_t g_pin_green2("blink_green2", bsp::pin_led_gree
 extern "C"
 const sx1276::hwconf_t hwc_emb = {
 	.spi = SPI1,
-	.dma_channel_rx = DMA1_Channel2,
-	.dma_channel_tx = DMA1_Channel3,
 	.spi_af = 0,
 	.pin_spi_nss = bsp::sx1276::pin_spi_nss,
 	.pin_spi_sck = bsp::sx1276::pin_spi_sck,
@@ -43,7 +42,13 @@ const sx1276::hwconf_t hwc_emb = {
 };
 
 
-usart_logger_t logger(USART_STLINK, "logger", PRIO_LOGGER);
+logging::logger_t<log_dev_t> logger("logger", PRIO_LOGGER);
+
+
+void log_sync(const char* s)
+{
+	stm32_lib::usart::send(USART_STLINK, s);
+}
 
 
 void toggle_bits_10(volatile uint32_t* const ptr, const uint32_t mask)
@@ -101,12 +106,6 @@ void bus_init()
 	NVIC_SetPriority(DMA1_Channel2_3_IRQn, 0);
 	NVIC_EnableIRQ(DMA1_Channel2_3_IRQn);
 
-	// TODO move to ctor
-	{
-		hwc_emb.dma_channel_rx->CPAR = reinterpret_cast<uint32_t>(&SPI1->DR);
-		hwc_emb.dma_channel_tx->CPAR = reinterpret_cast<uint32_t>(&SPI1->DR);
-	}
-
 	// WWDG
 	NVIC_SetPriority(WWDG_IRQn, 0);
 	NVIC_EnableIRQ(WWDG_IRQn);
@@ -150,7 +149,22 @@ void perif_init_irq_dio0()
 
 extern "C" __attribute__ ((interrupt)) void IntHandler_DMA1_Channel4_5_6_7()
 {
-	logger.handle_dma_irq();
+	auto const isr = DMA1->ISR;
+
+	{
+		uint32_t ev_log = 0;
+		if (isr & DMA_ISR_TCIF4) {
+			DMA1->IFCR = DMA_IFCR_CTCIF4;
+			ev_log |= stm32_lib::dma::dma_result_t::tc;
+		}
+		if (isr & DMA_ISR_TEIF4) {
+			DMA1->IFCR = DMA_IFCR_CTEIF4;
+			ev_log |= stm32_lib::dma::dma_result_t::te;
+		}
+		if (ev_log) {
+			logger.notify_from_isr(ev_log);
+		}
+	}
 }
 
 
@@ -238,14 +252,13 @@ extern "C" __attribute__ ((interrupt)) void IntHandler_Lptim1()
 __attribute__ ((noreturn)) void main()
 {
 	bus_init();
-	logger.init_dma();
 	stm32_lib::usart::init_logger_uart<configCPU_CLOCK_HZ>(
 		USART_STLINK,
 		bsp::usart_stlink_pin_tx,
 		USART_STLINK_PIN_TX_AF
 	);
 
-	logger.log_sync("\r\nLogger initialized (sync)\r\n");
+	log_sync("\r\nLogger initialized (sync)\r\n");
 
 	g_pin_green.init_pin();
 	g_pin_blue.init_pin();
@@ -253,9 +266,9 @@ __attribute__ ((noreturn)) void main()
 	g_pin_green2.init_pin();
 	g_pin_green2.pulse_continuous(configTICK_RATE_HZ/50, configTICK_RATE_HZ/25);
 
-	logger.log_sync("Creating LORA task...\r\n");
+	log_sync("Creating LORA task...\r\n");
 	lora::create_task("lora", PRIO_LORA, &hwc_emb);
-	logger.log_sync("Created LORA task\r\n");
+	log_sync("Created LORA task\r\n");
 
 	create_task_wwdg();
 
@@ -280,13 +293,11 @@ __attribute__ ((noreturn)) void main()
 	LPTIM1->IER = LPTIM_IER_ARRMIE;
 	LPTIM1->CR = lptim_cr_en_start;
 
-	logger.log_sync("Starting FreeRTOS scheduler\r\n");
-
-	stm32_lib::usart::enable_dmat(USART_STLINK);
-
+	log_sync("Starting FreeRTOS scheduler\r\n");
+	logger.init();
 	vTaskStartScheduler();
 
-	logger.log_sync("Error in FreeRTOS scheduler\r\n");
+	log_sync("Error in FreeRTOS scheduler\r\n");
 	for (;;) {}
 }
 

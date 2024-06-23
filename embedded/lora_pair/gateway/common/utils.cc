@@ -1,8 +1,5 @@
-#include "logging.h"
+//#include "logging.h"
 #include "utils.h"
-
-
-extern usart_logger_t logger;
 
 
 char prn_halfbyte(uint8_t x)
@@ -17,6 +14,7 @@ char* printf_byte(uint8_t x, char* buf)
 	return buf+2;
 }
 
+#if 0
 void log_async_1(uint8_t x, char* const buf0)
 {
 	auto buf = buf0;
@@ -26,4 +24,5 @@ void log_async_1(uint8_t x, char* const buf0)
 	*buf = 0;
 	logger.log_async(buf0);
 }
+#endif
 
