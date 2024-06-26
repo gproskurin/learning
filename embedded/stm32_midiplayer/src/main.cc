@@ -1,8 +1,8 @@
 #include "player.h"
+#include "logger_fwd.h"
 
 #include "lib_stm32.h"
 #include "bsp.h"
-#include "logging.h"
 #include "freertos_utils.h"
 
 #include "FreeRTOS.h"
@@ -19,25 +19,11 @@
 #define PRIO_PLAYER 4
 
 
-#define USART_CON_BAUDRATE 115200
+logging::logger_t<log_dev_t> logger("logger", PRIO_LOGGER);
 
-
-usart_logger_t logger;
-
-
-void usart_init(USART_TypeDef* const usart)
+void log_sync(const char* s)
 {
-	usart->CR1 = 0; // ensure UE flag is reset
-
-	constexpr uint32_t cr1 = USART_CR1_TE;
-
-#ifndef TARGET_STM32F103
-	stm32_lib::gpio::set_mode_af_lowspeed_pu(bsp::usart_stlink_pin_tx, USART_STLINK_PIN_TX_AF);
-	usart->BRR = configCPU_CLOCK_HZ / USART_CON_BAUDRATE;
-#endif
-
-	usart->CR1 = cr1;
-	usart->CR1 = cr1 | USART_CR1_UE;
+	stm32_lib::usart::send(USART_STLINK, s);
 }
 
 
@@ -296,39 +282,56 @@ void create_task_sender()
 }
 
 
+extern "C" __attribute__ ((interrupt)) void IntHandler_DMA1_Channel4_5_6_7()
+{
+	auto const isr = DMA1->ISR;
+
+	{
+		uint32_t ev_log = 0;
+		if (isr & DMA_ISR_TCIF4) {
+			DMA1->IFCR = DMA_IFCR_CTCIF4;
+			ev_log |= stm32_lib::dma::dma_result_t::tc;
+		}
+		if (isr & DMA_ISR_TEIF4) {
+			DMA1->IFCR = DMA_IFCR_CTEIF4;
+			ev_log |= stm32_lib::dma::dma_result_t::te;
+		}
+		if (ev_log) {
+			logger.notify_from_isr(ev_log);
+		}
+	}
+}
+
+
 __attribute__ ((noreturn)) void main()
 {
 	bus_init();
+	stm32_lib::usart::init_logger_uart<configCPU_CLOCK_HZ>(
+		USART_STLINK,
+		bsp::usart_stlink_pin_tx,
+		USART_STLINK_PIN_TX_AF
+	);
 
-	usart_init(USART_STLINK);
-	logger.set_usart(USART_STLINK);
-	logger.log_sync("\r\nLogger initialized (sync)\r\n");
+	log_sync("\r\nLogger initialized (sync)\r\n");
 
-	logger.log_sync("Creating logger queue...\r\n");
-	logger.init_queue();
-	logger.log_sync("Created logger queue\r\n");
-
-	logger.log_sync("Creating logger task...\r\n");
-	logger.create_task("logger", PRIO_LOGGER);
-	logger.log_sync("Created logger task\r\n");
-
-	logger.log_sync("Initializing blink task pin...\r\n");
+	log_sync("Initializing blink task pin...\r\n");
 	g_pin_green2.init_pin();
 	g_pin_green2.pulse_continuous(configTICK_RATE_HZ/50, configTICK_RATE_HZ/25);
-	logger.log_sync("Initialized blink task pin\r\n");
+	log_sync("Initialized blink task pin\r\n");
 
-	logger.log_sync("Creating player task...\r\n");
+	log_sync("Creating player task...\r\n");
 	player::create_task("player", PRIO_PLAYER);
-	logger.log_sync("Created player task\r\n");
+	log_sync("Created player task\r\n");
 
-	logger.log_sync("Creating sender task...\r\n");
+	log_sync("Creating sender task...\r\n");
 	create_task_sender();
-	logger.log_sync("Created sender task\r\n");
+	log_sync("Created sender task\r\n");
 
-	logger.log_sync("Starting FreeRTOS scheduler\r\n");
+	log_sync("Starting FreeRTOS scheduler\r\n");
+	logger.init();
 	vTaskStartScheduler();
 
-	logger.log_sync("Error in FreeRTOS scheduler\r\n");
+	log_sync("Error in FreeRTOS scheduler\r\n");
 	for (;;) {}
 }
 

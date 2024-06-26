@@ -5,7 +5,8 @@ extern void vPortSVCHandler(void);
 extern void xPortPendSVHandler(void);
 extern void xPortSysTickHandler(void);
 
-extern void IntHandler_DmaCh2();
+extern void IntHandler_DMA1_Channel2_3();
+extern void IntHandler_DMA1_Channel4_5_6_7();
 
 
 #if defined TARGET_STM32L072
@@ -28,17 +29,8 @@ __attribute__((section(".vectors"))) void (*tab[16+32])(void) =
 	&xPortPendSVHandler,
 	&xPortSysTickHandler,
 
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	0,
-	IntHandler_DmaCh2
+	[16 + 10] = IntHandler_DMA1_Channel2_3,
+	[16 + 11] = IntHandler_DMA1_Channel4_5_6_7,
 };
 #endif
 

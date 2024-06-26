@@ -4,17 +4,30 @@
 #include "lib_stm32.h"
 #include "bsp.h"
 #include "freertos_utils.h"
-#include "logging.h"
+#include "logger_fwd.h"
 
 #include <array>
 #include <limits>
 
-extern usart_logger_t logger;
 
 #define DDS_FREQ 40000 // keep in sync with python generator
 #define TIM_DAC TIM6
+constexpr uint16_t tim_dac_cr1 = 0;
+constexpr uint16_t tim_dac_cr1_en = TIM_CR1_CEN;
+constexpr uint32_t dma_ccr =
+	(0b10 << DMA_CCR_PL_Pos) // priority
+	| (0b01 << DMA_CCR_MSIZE_Pos) // 16bit
+	| (0b01 << DMA_CCR_PSIZE_Pos)
+	| DMA_CCR_MINC
+	| DMA_CCR_CIRC
+	| DMA_CCR_DIR
+	| DMA_CCR_HTIE
+	| DMA_CCR_TCIE
+	| DMA_CCR_TEIE
+	;
+constexpr uint32_t dma_ccr_en = dma_ccr | DMA_CCR_EN;
 
-const stm32_lib::gpio::gpio_pin_t pin_dac(GPIOA_BASE, 4);
+constexpr stm32_lib::gpio::gpio_pin_t pin_dac(GPIOA_BASE, 4);
 
 freertos_utils::pin_toggle_task_t pin_green("pin_toggle_green", bsp::pin_led_green, 1);
 freertos_utils::pin_toggle_task_t pin_blue("pin_toggle_blue", bsp::pin_led_blue, 1);
@@ -29,7 +42,7 @@ typedef dds_value_t (*lookup_func_t)(uint32_t);
 
 struct instr_info_t {
 	const lookup_func_t lookup_func;
-	instr_info_t(lookup_func_t f) : lookup_func(f) {}
+	explicit constexpr instr_info_t(lookup_func_t f) : lookup_func(f) {}
 };
 
 
@@ -92,7 +105,7 @@ dds_value_t lookup_sin12(uint32_t x)
 	return lookup_sin_quarter(lookup_table_sin12, x >> 20);
 }
 
-const std::array<instr_info_t, 6> g_instr_info{
+constexpr std::array<instr_info_t, 6> g_instr_info{
 	instr_info_t{&lookup_sq},
 	instr_info_t{&lookup_sin3},
 	instr_info_t{&lookup_sin4},
@@ -150,6 +163,7 @@ size_t find_free_voice()
 			return i;
 		}
 		if (g_voices[i].note_id < g_voices[idx].note_id) {
+			// found "older" note, switch to it
 			idx = i;
 		}
 	}
@@ -200,25 +214,29 @@ void player::enqueue_note(notes::sym_t n, notes::duration_t d, notes::instrument
 }
 
 
-extern "C" __attribute__ ((interrupt)) void IntHandler_DmaCh2()
+extern "C" __attribute__ ((interrupt)) void IntHandler_DMA1_Channel2_3()
 {
 	uint32_t events = 0;
+	uint32_t clear = 0;
 	const auto isr = DMA1->ISR;
 	if (isr & DMA_ISR_HTIF2) {
+		clear |= DMA_IFCR_CHTIF2;
 		events |= player_nf_t::nf_ht;
 	}
 	if (isr & DMA_ISR_TCIF2) {
+		clear |= DMA_IFCR_CTCIF2;
 		events |= player_nf_t::nf_tc;
 	}
 	if (isr & DMA_ISR_TEIF2) {
+		clear |= DMA_IFCR_CTEIF2;
 		events |= player_nf_t::nf_te;
 	}
 	if (events) {
-		DMA1->IFCR = DMA_IFCR_CHTIF2 | DMA_IFCR_CTCIF2 | DMA_IFCR_CTEIF2; // clear flags
+		DMA1->IFCR = clear;
 
 		BaseType_t yield = pdFALSE;
 		xTaskNotifyFromISR(player_task_data.task_handle, events, eSetBits, &yield);
-		portYIELD_FROM_ISR(yield);
+		//portYIELD_FROM_ISR(yield);
 	}
 }
 
@@ -255,6 +273,10 @@ void dac_init()
 	NVIC_SetPriority(DMA1_Channel2_3_IRQn, 3);
 	NVIC_EnableIRQ(DMA1_Channel2_3_IRQn);
 
+	// TODO move to main
+	NVIC_SetPriority(DMA1_Channel4_5_6_7_IRQn, 4);
+	NVIC_EnableIRQ(DMA1_Channel4_5_6_7_IRQn);
+
 	stm32_lib::gpio::set_mode_output_analog(pin_dac);
 
 	DAC->CR = 0;
@@ -267,49 +289,40 @@ void dac_init()
 
 	// init DMA
 	DMA1_Channel2->CCR = 0;
-	DMA1_Channel2->CCR =
-		(0b10 << DMA_CCR_PL_Pos) // priority
-		| (0b01 << DMA_CCR_MSIZE_Pos) // 16bit
-		| (0b01 << DMA_CCR_PSIZE_Pos)
-		| DMA_CCR_MINC
-		| DMA_CCR_CIRC
-		| DMA_CCR_DIR
-		| DMA_CCR_HTIE
-		| DMA_CCR_TCIE
-		| DMA_CCR_TEIE
+	DMA1_Channel2->CCR = dma_ccr;
+	DMA1_CSELR->CSELR =
+		(0b1001/*TIM6&DAC1*/ << DMA_CSELR_C2S_Pos)
+		| (0b0100/*USART2_TX*/ << DMA_CSELR_C4S_Pos) // TODO move to main
 		;
-	DMA1_CSELR->CSELR = (DMA1_CSELR->CSELR & ~DMA_CSELR_C2S_Msk) | (/*TIM6&DAC1*/0b1001 << DMA_CSELR_C2S_Pos);
-
-	// src
-	//DMA1_Channel2->CMAR = reinterpret_cast<uint32_t>(player_task_data.dma_buffer.data());
-	//DMA1_Channel2->CNDTR = player_task_data.dma_buffer.size();
-	// dst
 	DMA1_Channel2->CPAR = reinterpret_cast<uint32_t>(&DAC1->DHR12L1);
-
-	// enable
-	//DMA1_Channel3->CCR |= DMA_CCR_EN;
-	//TIM_DAC->CR1 = TIM_CR1_CEN;
-	//DAC->CR |= DAC_CR_EN1;
+	DMA1_Channel2->CMAR = reinterpret_cast<uint32_t>(player_task_data.dma_buffer.data());
+	DMA1_Channel2->CNDTR = player_task_data.dma_buffer.size();
 }
 
 
 void timer_start()
 {
-	pin_green.on();
+	// DMA
+	DMA1_Channel2->CCR = dma_ccr;
+	while (DMA1_Channel2->CCR & DMA_CCR_EN) {} // wait for DMA to be disabled
+	DMA1->IFCR = DMA_IFCR_CHTIF2 | DMA_IFCR_CTCIF2 | DMA_IFCR_CTEIF2;
+	DMA1_Channel2->CCR = dma_ccr_en;
 
-	DMA1_Channel2->CMAR = reinterpret_cast<uint32_t>(player_task_data.dma_buffer.data());
-	DMA1_Channel2->CNDTR = player_task_data.dma_buffer.size();
-
-	DMA1_Channel2->CCR |= DMA_CCR_EN;
-	TIM_DAC->CR1 |= TIM_CR1_CEN;
+	// DAC
 	DAC->CR |= DAC_CR_TEN1;
+
+	// timer
+	TIM_DAC->CR1 = tim_dac_cr1_en;
+
+	pin_green.on();
 }
 
 void timer_stop()
 {
+	TIM_DAC->CR1 = tim_dac_cr1;
+	TIM_DAC->CNT = 0; // is it enough?
 	DAC->CR &= ~DAC_CR_TEN1;
-	TIM_DAC->CR1 &= ~TIM_CR1_CEN;
-	DMA1_Channel2->CCR &= ~DMA_CCR_EN;
+	DMA1_Channel2->CCR = dma_ccr;
 
 	pin_green.off();
 }
