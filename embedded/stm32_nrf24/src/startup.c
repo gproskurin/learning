@@ -10,7 +10,8 @@ extern void IntHandler_EXTI5_9();
 
 
 #if defined TARGET_STM32WB55
-__attribute__((section(".vectors"))) void (*tab[16+62])(void) =
+// 16+32 interrupts in cpu2 (M0+)
+__attribute__((section(".vectors"))) void (*tab[16+63])(void) =
 {
 	_estack,
 	_reset,

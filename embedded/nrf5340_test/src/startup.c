@@ -7,7 +7,11 @@ extern void xPortSysTickHandler(void);
 
 
 #if defined TARGET_NRF5340DK_APP
-__attribute__((section(".vectors"))) void (*tab[16+112])(void) =
+#define NVIC_SIZE (16+240)
+#elif defined TARGET_NRF5340DK_NET
+#define NVIC_SIZE (16+129)
+#endif
+__attribute__((section(".vectors"))) void (*tab[NVIC_SIZE])(void) =
 {
 	_estack,
 	_reset,
@@ -28,5 +32,4 @@ __attribute__((section(".vectors"))) void (*tab[16+112])(void) =
 
 	0
 };
-#endif
 

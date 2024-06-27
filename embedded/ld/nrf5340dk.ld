@@ -15,7 +15,6 @@ _estack     = ORIGIN(ram) + LENGTH(ram);    /* stack points to end of SRAM */
 SECTIONS {
   .vectors  : {
     KEEP(*(.vectors))
-    . = 0x200; /* skip remaining vectors. FIXME: better? */
   } > flash
 
   .init_array : {
