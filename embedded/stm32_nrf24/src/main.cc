@@ -17,10 +17,13 @@
 #define PRIO_LOGGER 3
 
 
-#define USART_CON_BAUDRATE 115200
+using log_dev_t = stm32_lib::dma::dev_usart_dmamux_t<USART1_BASE, DMAMUX1_Channel0_BASE>;
+logging::logger_t<log_dev_t> logger("logger", PRIO_LOGGER);
 
-
-usart_logger_t logger;
+void log_sync(const char* s)
+{
+	stm32_lib::usart::send(USART1, s);
+}
 
 
 enum cmd_t : uint8_t {
@@ -64,19 +67,6 @@ enum nrf_task_nf : uint32_t {
 	irq = 1 << 0
 };
 
-void usart_init(USART_TypeDef* const usart)
-{
-	usart->CR1 = 0; // ensure UE flag is reset
-
-	constexpr uint32_t cr1 = USART_CR1_FIFOEN | USART_CR1_TE;
-
-	stm32_lib::gpio::set_mode_af_lowspeed_pu(bsp::usart_stlink_pin_tx, USART_STLINK_PIN_TX_AF);
-	usart->BRR = configCPU_CLOCK_HZ / USART_CON_BAUDRATE;
-
-	usart->CR1 = cr1;
-	usart->CR1 = cr1 | USART_CR1_UE;
-}
-
 
 void toggle_bits_10(volatile uint32_t* const ptr, const uint32_t mask)
 {
@@ -92,6 +82,10 @@ void bus_init()
 	// flash & clock
 	FLASH->ACR = (FLASH->ACR & ~FLASH_ACR_LATENCY_Msk) | (0b010 << FLASH_ACR_LATENCY_Pos);
 	RCC->CR = (RCC->CR & ~RCC_CR_MSIRANGE_Msk) | (0b1011 << RCC_CR_MSIRANGE_Pos);
+
+	// DMA1 & DMAMUX1
+	RCC->AHB1ENR = RCC_AHB1ENR_DMA1EN | RCC_AHB1ENR_DMAMUX1EN;
+	toggle_bits_10(&RCC->AHB2RSTR, RCC_AHB1RSTR_DMA1RST | RCC_AHB1RSTR_DMAMUX1RST);
 
 	// GPIOs
 	RCC->AHB2ENR |=
@@ -137,6 +131,8 @@ void bus_init()
 		NVIC_EnableIRQ(EXTI2_IRQn);
 	}
 
+	NVIC_SetPriority(DMA1_Channel1_IRQn, 11);
+	NVIC_EnableIRQ(DMA1_Channel1_IRQn);
 #endif
 }
 
@@ -622,6 +618,24 @@ void create_nrf2_task(const char* task_name, UBaseType_t prio, nrf_task_data_t& 
 }
 
 
+extern "C" __attribute__ ((interrupt)) void IntHandler_Dma1Ch1()
+{
+	auto const isr = DMA1->ISR;
+	uint32_t events = 0;
+	if (isr & DMA_ISR_TCIF1) {
+		DMA1->IFCR = DMA_IFCR_CTCIF1;
+		events |= stm32_lib::dma::dma_result_t::tc;
+	}
+	if (isr & DMA_ISR_TEIF1) {
+		DMA1->IFCR = DMA_IFCR_CTEIF1;
+		events |= stm32_lib::dma::dma_result_t::te;
+	}
+	if (events) {
+		logger.notify_from_isr(events);
+	}
+}
+
+
 __attribute__ ((noreturn)) void main()
 {
 	bus_init();
@@ -633,36 +647,28 @@ __attribute__ ((noreturn)) void main()
 	g_pin_red.pulse_once(configTICK_RATE_HZ/10);
 	g_pin_blue.pulse_once(configTICK_RATE_HZ/10);
 
-	usart_init(USART_STLINK);
-	logger.set_usart(USART_STLINK);
-	logger.log_sync("\r\nLogger initialized (sync)\r\n");
-
-	logger.log_sync("Creating logger queue...\r\n");
-	logger.init_queue();
-	logger.log_sync("Created logger queue\r\n");
-
-	logger.log_sync("Creating logger task...\r\n");
-	logger.create_task("logger", PRIO_LOGGER);
-	logger.log_sync("Created logger task\r\n");
+	stm32_lib::usart::init_logger_uart<configCPU_CLOCK_HZ>(
+		USART_STLINK,
+		bsp::usart_stlink_pin_tx,
+		USART_STLINK_PIN_TX_AF
+	);
+	log_sync("\r\nLogger initialized (sync)\r\n");
 
 #if 0
-	logger.log_sync("Creating pinpoll task...\r\n");
+	log_sync("Creating pinpoll task...\r\n");
 	freertos_utils::pinpoll::create_task("pinpoll", PRIO_BUTTONS_POLL, &pinpoll_task_arg);
-	logger.log_sync("Created pinpoll task\r\n");
+	log_sync("Created pinpoll task\r\n");
 #endif
 
-	logger.log_sync("Creating NRF-1 task...\r\n");
 	create_nrf1_task("nrf1_task", PRIO_NRF1, nrf1_task_data, &nrf1_conf);
-	logger.log_sync("Created NRF-1 task\r\n");
 
-	logger.log_sync("Creating NRF-2 task...\r\n");
 	create_nrf2_task("nrf2_task", PRIO_NRF2, nrf2_task_data, &nrf2_conf);
-	logger.log_sync("Created NRF-2 task\r\n");
 
-	logger.log_sync("Starting FreeRTOS scheduler\r\n");
+	log_sync("Starting FreeRTOS scheduler\r\n");
+	logger.init();
 	vTaskStartScheduler();
 
-	logger.log_sync("Error in FreeRTOS scheduler\r\n");
+	log_sync("Error in FreeRTOS scheduler\r\n");
 	for (;;) {}
 }
 

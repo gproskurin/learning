@@ -16,6 +16,7 @@ namespace bsp {
 #define USART_STLINK_PIN_TX_AF 7
 constexpr stm32_lib::gpio::gpio_pin_t usart_stlink_pin_tx{GPIOB_BASE, 6};
 
+constexpr stm32_lib::gpio::gpio_pin_t pin_led_blue_dongle{GPIOA_BASE, 4};
 constexpr stm32_lib::gpio::gpio_pin_t pin_led_blue{GPIOB_BASE, 5};
 constexpr stm32_lib::gpio::gpio_pin_t pin_led_green{GPIOB_BASE, 0};
 constexpr stm32_lib::gpio::gpio_pin_t pin_led_red{GPIOB_BASE, 1};

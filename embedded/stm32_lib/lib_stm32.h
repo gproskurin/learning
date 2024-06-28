@@ -453,7 +453,7 @@ namespace impl {
 
 namespace cast_convert {
 	template <uint32_t DmamuxChannelBase> constexpr uint32_t dmamux_to_dmachannel();
-#if defined(TARGET_STM32WL55)
+#if defined(TARGET_STM32WL55) || defined(TARGET_STM32WB55)
 	template<> inline constexpr uint32_t dmamux_to_dmachannel<DMAMUX1_Channel0_BASE>() { return DMA1_Channel1_BASE; }
 	template<> inline constexpr uint32_t dmamux_to_dmachannel<DMAMUX1_Channel1_BASE>() { return DMA1_Channel2_BASE; }
 	template<> inline constexpr uint32_t dmamux_to_dmachannel<DMAMUX1_Channel2_BASE>() { return DMA1_Channel3_BASE; }
@@ -474,7 +474,7 @@ namespace cast {
 	{
 		return reinterpret_cast<impl::dma_channel_t*>(DmaChannelBase);
 	}
-#if defined(TARGET_STM32WL55) || defined(TARGET_STM32H745_CM7) || defined(TARGET_STM32H745_CM4)
+#if defined(TARGET_STM32WL55) || defined(TARGET_STM32WB55) || defined(TARGET_STM32H745_CM7) || defined(TARGET_STM32H745_CM4)
 	inline DMAMUX_Channel_TypeDef* dmamux_channel(uint32_t DmamuxChannelBase)
 	{
 		return reinterpret_cast<DMAMUX_Channel_TypeDef*>(DmamuxChannelBase);
@@ -491,6 +491,9 @@ namespace consts {
 	template<> constexpr inline uint32_t dmamux_reqid_tx<SPI1_BASE>() { return 8; }
 	template<> constexpr inline uint32_t dmamux_reqid_rx<SPI1_BASE>() { return 7; }
 	template<> constexpr inline uint32_t dmamux_reqid_tx<LPUART1_BASE>() { return 22; }
+#endif
+#if defined(TARGET_STM32WB55)
+	template<> constexpr inline uint32_t dmamux_reqid_tx<USART1_BASE>() { return 15; }
 #endif
 #if defined(TARGET_STM32H745_CM7) || defined(TARGET_STM32H745_CM4)
 	// NOTE: constants are for DMAMUX1 (not for DMAMUX2)
@@ -682,7 +685,7 @@ private:
 };
 
 
-#if defined(TARGET_STM32WL55) || defined(TARGET_STM32H745_CM7) || defined(TARGET_STM32H745_CM4)
+#if defined(TARGET_STM32WL55) || defined(TARGET_STM32WB55) || defined(TARGET_STM32H745_CM7) || defined(TARGET_STM32H745_CM4)
 namespace impl {
 	template <uint32_t UsartBase, uint32_t DmamuxChannelBase>
 	using dev_usart_dmamux_base_t = dev_usart_dma_t<UsartBase, cast_convert::dmamux_to_dmachannel<DmamuxChannelBase>()>;
