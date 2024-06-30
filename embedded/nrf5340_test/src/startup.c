@@ -6,6 +6,8 @@ extern void xPortPendSVHandler(void);
 extern void xPortSysTickHandler(void);
 
 
+extern void IntHandler_Serial0();
+
 #if defined TARGET_NRF5340DK_APP
 #define NVIC_SIZE (16+240)
 #elif defined TARGET_NRF5340DK_NET
@@ -30,6 +32,6 @@ __attribute__((section(".vectors"))) void (*tab[NVIC_SIZE])(void) =
 	&xPortPendSVHandler,
 	&xPortSysTickHandler,
 
-	0
+	[16 + 8] = IntHandler_Serial0,
 };
 

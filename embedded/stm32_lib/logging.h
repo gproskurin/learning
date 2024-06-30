@@ -4,6 +4,9 @@
 #ifdef TARGET_NRF52DK
 #include "lib_nrf5.h"
 #include "nrf52832_xxaa_memory.h"
+#elif defined TARGET_NRF5340DK_APP
+#include "lib_nrf5.h"
+#include "nrf5340_xxaa_application_memory.h"
 #else
 #include "lib_stm32.h"
 #endif
@@ -124,6 +127,13 @@ private:
 	{
 		auto const addr = reinterpret_cast<uint32_t>(ptr);
 		return (addr >= NRF_MEMORY_RAM_BASE) && (addr < (NRF_MEMORY_RAM_BASE + NRF_MEMORY_RAM_SIZE));
+	}
+#endif
+#if defined(TARGET_NRF5340DK_APP)
+	static bool is_ram(const void* ptr)
+	{
+		auto const addr = reinterpret_cast<uint32_t>(ptr);
+		return (addr >= NRF_MEMORY_RAM0_BASE) && (addr < (NRF_MEMORY_RAM0_BASE + NRF_MEMORY_RAM0_SIZE));
 	}
 #endif
 

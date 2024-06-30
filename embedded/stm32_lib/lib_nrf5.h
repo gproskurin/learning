@@ -5,10 +5,14 @@
 
 #if defined(TARGET_NRF52DK)
 #include "nrf52_bitfields.h"
+#elif defined(TARGET_NRF5340DK_APP)
+#include "nrf5340_application_bitfields.h"
 #endif
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
+
 
 namespace {
 	constexpr uint32_t mask1(int n) { return 1 << (n); }
@@ -170,6 +174,15 @@ void uarte_init(NRF_UARTE_Type* uarte, uint8_t pin_reg)
 	uarte->PSEL.CTS = 0xFFFFFFFF;
 	uarte->PSEL.RTS = 0xFFFFFFFF;
 	uarte->ENABLE = 8;
+}
+
+void uarte_send(NRF_UARTE_Type* uarte, const char* s)
+{
+	uarte->TXD.MAXCNT = strlen(s);
+	uarte->TXD.PTR = reinterpret_cast<uint32_t>(s);
+	uarte->EVENTS_ENDTX = 0;
+	uarte->TASKS_STARTTX = 1;
+	while (! (uarte->EVENTS_ENDTX)) {}
 }
 
 
