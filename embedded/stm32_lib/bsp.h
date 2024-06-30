@@ -184,36 +184,38 @@ namespace lcd {
 
 
 #if defined TARGET_NRF52DK
-constexpr nrf5_lib::gpio::pin_t pin_button_1{13};
-constexpr nrf5_lib::gpio::pin_t pin_button_2{14};
-constexpr nrf5_lib::gpio::pin_t pin_button_3{15};
-constexpr nrf5_lib::gpio::pin_t pin_button_4{16};
+constexpr nrf5_lib::gpio::pin_t pin_button_1{NRF_P0_BASE, 13};
+constexpr nrf5_lib::gpio::pin_t pin_button_2{NRF_P0_BASE, 14};
+constexpr nrf5_lib::gpio::pin_t pin_button_3{NRF_P0_BASE, 15};
+constexpr nrf5_lib::gpio::pin_t pin_button_4{NRF_P0_BASE, 16};
 
-constexpr nrf5_lib::gpio::pin_inverted_t pin_led_1{17};
-constexpr nrf5_lib::gpio::pin_inverted_t pin_led_2{18};
-constexpr nrf5_lib::gpio::pin_inverted_t pin_led_3{19};
-constexpr nrf5_lib::gpio::pin_inverted_t pin_led_4{20};
+constexpr nrf5_lib::gpio::pin_inverted_t pin_led_1{NRF_P0_BASE, 17};
+constexpr nrf5_lib::gpio::pin_inverted_t pin_led_2{NRF_P0_BASE, 18};
+constexpr nrf5_lib::gpio::pin_inverted_t pin_led_3{NRF_P0_BASE, 19};
+constexpr nrf5_lib::gpio::pin_inverted_t pin_led_4{NRF_P0_BASE, 20};
 
-constexpr nrf5_lib::gpio::pin_t pin_reset{21};
+constexpr nrf5_lib::gpio::pin_t pin_reset{NRF_P0_BASE, 21};
 
 #define UART_VCOM NRF_UART0
 #define UARTE_VCOM NRF_UARTE0
-//constexpr nrf5_lib::gpio::pin_t pin_vcom_rts{5};
-constexpr nrf5_lib::gpio::pin_t pin_vcom_txd{6};
-//constexpr nrf5_lib::gpio::pin_t pin_vcom_cts{7};
-//constexpr nrf5_lib::gpio::pin_t pin_vcom_rxd{8};
+//constexpr nrf5_lib::gpio::pin_t pin_vcom_rts{NRF_P0_BASE, 5};
+constexpr nrf5_lib::gpio::pin_t pin_vcom_txd{NRF_P0_BASE, 6};
+//constexpr nrf5_lib::gpio::pin_t pin_vcom_cts{NRF_P0_BASE, 7};
+//constexpr nrf5_lib::gpio::pin_t pin_vcom_rxd{NRF_P0_BASE, 8};
 #endif
 
 #if defined TARGET_NRF5340DK_APP
-constexpr nrf5_lib::gpio::pin_t pin_button_1{23};
-constexpr nrf5_lib::gpio::pin_t pin_button_2{24};
-constexpr nrf5_lib::gpio::pin_t pin_button_3{8};
-constexpr nrf5_lib::gpio::pin_t pin_button_4{9};
+constexpr nrf5_lib::gpio::pin_t pin_button_1{NRF_P0_S_BASE, 23};
+constexpr nrf5_lib::gpio::pin_t pin_button_2{NRF_P0_S_BASE, 24};
+constexpr nrf5_lib::gpio::pin_t pin_button_3{NRF_P0_S_BASE, 8};
+constexpr nrf5_lib::gpio::pin_t pin_button_4{NRF_P0_S_BASE, 9};
 
-constexpr nrf5_lib::gpio::pin_inverted_t pin_led_1{28};
-constexpr nrf5_lib::gpio::pin_inverted_t pin_led_2{29};
-constexpr nrf5_lib::gpio::pin_inverted_t pin_led_3{30};
-constexpr nrf5_lib::gpio::pin_inverted_t pin_led_4{31};
+constexpr nrf5_lib::gpio::pin_inverted_t pin_led_1{NRF_P0_S_BASE, 28};
+constexpr nrf5_lib::gpio::pin_inverted_t pin_led_2{NRF_P0_S_BASE, 29};
+constexpr nrf5_lib::gpio::pin_inverted_t pin_led_3{NRF_P0_S_BASE, 30};
+constexpr nrf5_lib::gpio::pin_inverted_t pin_led_4{NRF_P0_S_BASE, 31};
+#define UARTE_VCOM0 NRF_UARTE0_S
+constexpr nrf5_lib::gpio::pin_t pin_vcom0_txd{NRF_P1_S_BASE, 1};
 #endif
 
 
