@@ -1,7 +1,13 @@
 #ifndef __logging_h_included__
 #define __logging_h_included__
 
+#ifdef TARGET_NRF52DK
+#include "lib_nrf5.h"
+#include "nrf52832_xxaa_memory.h"
+#else
 #include "lib_stm32.h"
+#endif
+
 #include "freertos_utils.h"
 
 #include "FreeRTOS.h"
@@ -18,6 +24,27 @@
 namespace logging {
 
 
+#if defined(TARGET_NRF52DK) || defined (TARGET_NRF5340DK_APP)
+template <uint32_t UarteBase>
+struct uarte_dev_t {
+	static void init()
+	{
+	}
+
+	static void start(size_t size, const uint8_t* data)
+	{
+		uarte()->TXD.MAXCNT = size;
+		uarte()->TXD.PTR = reinterpret_cast<uint32_t>(data);
+		uarte()->TASKS_STARTTX = 1;
+	}
+
+	static void stop() {}
+private:
+	static NRF_UARTE_Type* uarte() { return reinterpret_cast<NRF_UARTE_Type*>(UarteBase); }
+};
+#endif
+
+
 template <typename dev_t>
 class logger_t {
 	using queue_item_t = const char*;
@@ -31,6 +58,10 @@ class logger_t {
 	std::array<StackType_t, 128> task_stack_;
 	StaticTask_t task_buffer_;
 	TaskHandle_t const task_handle_;
+
+#if defined(TARGET_NRF52DK) || defined(TARGET_NRF5340DK_APP)
+	std::array<uint8_t, 16> dma_copy_;
+#endif
 
 public:
 	logger_t(const char* task_name, UBaseType_t prio)
@@ -76,23 +107,73 @@ public:
 	}
 
 private:
+	static void wait()
+	{
+#if defined(TARGET_NRF52DK) || defined(TARGET_NRF5340DK_APP)
+		constexpr uint32_t wait_mask = 1; // FIXME
+#else
+		// wait for DMA to complete/error
+		constexpr uint32_t wait_mask = stm32_lib::dma::dma_result_t::te | stm32_lib::dma::dma_result_t::tc;
+#endif
+		auto const _events = freertos_utils::notify_wait_any(wait_mask);
+		// TODO handle TE
+	}
+
+#if defined(TARGET_NRF52DK)
+	static bool is_ram(const void* ptr)
+	{
+		auto const addr = reinterpret_cast<uint32_t>(ptr);
+		return (addr >= NRF_MEMORY_RAM_BASE) && (addr < (NRF_MEMORY_RAM_BASE + NRF_MEMORY_RAM_SIZE));
+	}
+#endif
+
 	static void task_function(void* arg)
 	{
 		auto* const lp = reinterpret_cast<logger_t<dev_t>*>(arg);
 		for (;;) {
-			queue_item_t item;
-			if (xQueueReceive(lp->queue_handle_, reinterpret_cast<void*>(&item), portMAX_DELAY) == pdTRUE) {
-				auto const size = strlen(item);
-				dev_t::start(size, reinterpret_cast<const uint8_t*>(item));
-
-				// wait for DMA to complete/error
-				constexpr uint32_t wait_mask = stm32_lib::dma::dma_result_t::te | stm32_lib::dma::dma_result_t::tc;
-				auto const _events = freertos_utils::notify_wait_any(wait_mask);
-				// TODO handle TE
-
+#if defined(TARGET_NRF52DK) || defined(TARGET_NRF5340DK_APP)
+			auto item = lp->queue_receive();
+			// nrf can do DMA from RAM only
+			if (is_ram(item)) {
+				dev_t::start(strlen(item), reinterpret_cast<const uint8_t*>(item));
+				wait();
 				dev_t::stop();
+			} else {
+				// not RAM, copy to RAM and do DMA from copy (in chunks)
+				for (;;) {
+					size_t chunk_size = 0;
+					while (chunk_size < lp->dma_copy_.size() && *item) {
+						lp->dma_copy_[chunk_size] = *item;
+						++chunk_size;
+						static_assert(sizeof(*item) == 1);
+						++item;
+					}
+					if (chunk_size == 0) {
+						break;
+					}
+					dev_t::start(chunk_size, lp->dma_copy_.data());
+					//vTaskDelay(configTICK_RATE_HZ/2);
+					wait();
+					dev_t::stop();
+				}
 			}
+#else
+			// stm32 can DMA from any type of memory
+			auto const item = lp->queue_receive();
+			dev_t::start(strlen(item), reinterpret_cast<const uint8_t*>(item));
+			wait();
+			dev_t::stop();
+#endif
 		}
+	}
+
+	queue_item_t queue_receive()
+	{
+		queue_item_t item;
+		while (xQueueReceive(queue_handle_, reinterpret_cast<void*>(&item), portMAX_DELAY) != pdTRUE)
+		{
+		}
+		return item;
 	}
 };
 
