@@ -7,8 +7,10 @@
 
 namespace notes {
 
-	enum sym_t {
-		C0 = 0,
+	enum sym_t : uint8_t {
+		sym_none = 0,
+
+		C0,
 		C0s, D0f = C0s,
 		D0,
 		D0s, E0f = D0s,
@@ -127,7 +129,8 @@ namespace notes {
 	};
 	static_assert(sym_t::B8 <= 255);
 
-	enum duration_t {
+	enum duration_t : uint8_t {
+		dur_zero = 0,
 		l1 = 64,
 		l2 = 32,
 		l2d = 48,
@@ -136,7 +139,7 @@ namespace notes {
 		l16 = 4
 	};
 
-	enum instrument_t {
+	enum instrument_t : uint8_t {
 		sq, sin3, sin4, sin5, sin10, sin12
 	};
 

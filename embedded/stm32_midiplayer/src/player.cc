@@ -46,11 +46,10 @@ struct instr_info_t {
 };
 
 
-enum player_nf_t : uint32_t {
-	nf_ht = 1UL << 0,
-	nf_tc = 1UL << 1,
-	nf_te = 1UL << 2,
-	nf_note = 1UL << 3
+enum queue_nf_t : uint8_t {
+	ht = 1U << 0,
+	tc = 1U << 1,
+	te = 1U << 2
 };
 
 
@@ -134,12 +133,6 @@ public:
 	}
 
 	void reset() { set(nullptr, 0, 0, 0); }
-	void maybe_reset(note_id_t ni)
-	{
-		if (is_busy() && note_id == ni) {
-			reset();
-		}
-	}
 
 	bool is_busy() const { return lookup_func != nullptr; }
 
@@ -174,19 +167,21 @@ size_t find_free_voice()
 
 typedef uint32_t queue_item_t;
 
-queue_item_t queue_item_encode(notes::sym_t n, notes::duration_t d, notes::instrument_t instr)
+queue_item_t queue_item_encode(notes::sym_t n, notes::duration_t d, notes::instrument_t instr, queue_nf_t nf)
 {
 	return
-		(static_cast<uint32_t>(instr) << 16)
+		(static_cast<uint32_t>(nf) << 24)
+		| (static_cast<uint32_t>(instr) << 16)
 		| (static_cast<uint32_t>(d) << 8)
 		| static_cast<uint32_t>(n);
 }
 
-void queue_item_decode(queue_item_t item, notes::sym_t& n, notes::duration_t& d, notes::instrument_t& instr)
+void queue_item_decode(queue_item_t item, notes::sym_t& n, notes::duration_t& d, notes::instrument_t& instr, queue_nf_t& nf)
 {
 	n = static_cast<notes::sym_t>(item & 0xff);
 	d = static_cast<notes::duration_t>((item >> 8) & 0xff);
 	instr = static_cast<notes::instrument_t>((item >> 16) & 0xff);
+	nf = static_cast<queue_nf_t>((item >> 24) & 0xff);
 }
 
 
@@ -206,37 +201,44 @@ struct player_task_data_t {
 
 void player::enqueue_note(notes::sym_t n, notes::duration_t d, notes::instrument_t instr)
 {
-	const queue_item_t item = queue_item_encode(n, d, instr);
-
-	// player task waits on notification, notes queue in checked only when appropriate notification arrives
-	xQueueSend(player_task_data.queue_handle, &item, 0);
-	xTaskNotify(player_task_data.task_handle, player_nf_t::nf_note, eSetBits);
+	queue_item_t const item = queue_item_encode(n, d, instr, static_cast<queue_nf_t>(0));
+	if (xQueueSend(player_task_data.queue_handle, &item, 0) != pdTRUE) {
+		logger.log_async("PLAYER: enqueue_note fail\r\n");
+		pin_red.pulse_once(configTICK_RATE_HZ/2);
+	}
 }
 
 
 extern "C" __attribute__ ((interrupt)) void IntHandler_DMA1_Channel2_3()
 {
-	uint32_t events = 0;
+	uint8_t events = 0;
 	uint32_t clear = 0;
 	const auto isr = DMA1->ISR;
 	if (isr & DMA_ISR_HTIF2) {
 		clear |= DMA_IFCR_CHTIF2;
-		events |= player_nf_t::nf_ht;
+		events |= queue_nf_t::ht;
 	}
 	if (isr & DMA_ISR_TCIF2) {
 		clear |= DMA_IFCR_CTCIF2;
-		events |= player_nf_t::nf_tc;
+		events |= queue_nf_t::tc;
 	}
 	if (isr & DMA_ISR_TEIF2) {
 		clear |= DMA_IFCR_CTEIF2;
-		events |= player_nf_t::nf_te;
+		events |= queue_nf_t::te;
 	}
 	if (events) {
 		DMA1->IFCR = clear;
 
+		// DMA events are higher priority, send them to the front of the queue
 		BaseType_t yield = pdFALSE;
-		xTaskNotifyFromISR(player_task_data.task_handle, events, eSetBits, &yield);
-		//portYIELD_FROM_ISR(yield);
+		queue_item_t const item = queue_item_encode(
+			notes::sym_t::sym_none,
+			notes::duration_t::dur_zero,
+			static_cast<notes::instrument_t>(0),
+			static_cast<queue_nf_t>(events)
+		);
+		xQueueSendToFrontFromISR(player_task_data.queue_handle, reinterpret_cast<const void*>(&item), &yield);
+		portYIELD_FROM_ISR(yield);
 	}
 }
 
@@ -338,21 +340,6 @@ void play_note(notes::sym_t n, notes::duration_t d, notes::instrument_t instr, n
 }
 
 
-void drain_notes_queue()
-{
-	queue_item_t item;
-	while (xQueueReceive(player_task_data.queue_handle, &item, 0/*poll*/) == pdTRUE) {
-		notes::sym_t n;
-		notes::duration_t d;
-		notes::instrument_t instr;
-		queue_item_decode(item, n, d, instr);
-		play_note(n, d, instr, player_task_data.next_note_id);
-		++player_task_data.next_note_id; // TODO handle wrap
-		pin_blue.pulse_once(configTICK_RATE_HZ/50);
-	}
-}
-
-
 void player_task_function(void*); // FIXME
 void player::create_task(const char* task_name, UBaseType_t prio)
 {
@@ -443,74 +430,87 @@ void player_task_function(void*)
 
 	state_t state = dma_empty;
 	for(;;) {
-		uint32_t events = 0;
-		if (xTaskNotifyWait(0, 0xffffffff, &events, configTICK_RATE_HZ /*1sec*/) == pdTRUE) {
-			if (events & player_nf_t::nf_note) {
-				// update voices, notes will start sounding on next dma transfer
-				drain_notes_queue();
-			}
+		queue_item_t item;
+		if (xQueueReceive(player_task_data.queue_handle, &item, portMAX_DELAY) != pdTRUE) {
+			// spurious wakeup?
+			logger.log_async("PLAYER: spurious\r\n");
+			continue;
+		}
 
-			if (events & player_nf_t::nf_te) {
-				// TODO reset dma, disable/enable, ...
-				timer_stop();
-				state = dma_empty;
-				logger.log_async("PLAYER error: dma te\r\n");
-				continue;
-			}
+		notes::sym_t item_n;
+		notes::duration_t item_d;
+		notes::instrument_t item_i;
+		queue_nf_t item_nf;
+		queue_item_decode(item, item_n, item_d, item_i, item_nf);
 
-			const bool ht = events & player_nf_t::nf_ht;
-			const bool tc = events & player_nf_t::nf_tc;
-			if (ht) {
-				if (tc) {
-					// ht=1 tc=1
-					// should not happen: missed ht-only, and received both later?
-					// do our best
-					if (action_fill()) {
-						if (state == dma_empty) {
-							timer_start();
-						}
+		if (item_n != notes::sym_t::sym_none) {
+			// got note from queue
+			// update voices, note will start sounding on next dma transfer
+			play_note(item_n, item_d, item_i, player_task_data.next_note_id);
+			++player_task_data.next_note_id; // TODO handle wrap
+			pin_blue.pulse_once(configTICK_RATE_HZ/50);
+		}
+
+		if (item_nf & queue_nf_t::te) {
+			// TODO reset dma, disable/enable, ...
+			timer_stop();
+			state = dma_empty;
+			logger.log_async("PLAYER error: dma te\r\n");
+			continue;
+		}
+
+		const bool ht = item_nf & queue_nf_t::ht;
+		const bool tc = item_nf & queue_nf_t::tc;
+		if (ht) {
+			if (tc) {
+				// ht=1 tc=1
+				// should not happen: missed ht-only, and received both later?
+				// do our best
+				if (action_fill()) {
+					if (state == dma_empty) {
+						timer_start();
+					}
+					state = dma_full;
+				} else {
+					timer_stop();
+					state = dma_empty;
+				}
+				logger.log_async("PLAYER error: ht=1 tc=1\r\n");
+				pin_red.pulse_once(configTICK_RATE_HZ/10);
+			} else {
+				// ht=1 tc=0
+				if (state == dma_full) {
+					state = dma_halfdone;
+					if (!action_fill_bottom_half()) {
+						timer_stop();
+						state = dma_empty;
+					}
+				} else {
+					logger.log_async("PLAYER error: ht=1 tc=0 state!=dma_full\r\n");
+					pin_red.pulse_once(configTICK_RATE_HZ/10);
+				}
+			}
+		} else {
+			if (tc) {
+				// ht=0 tc=1
+				if (state == dma_halfdone) {
+					if (action_fill_top_half()) {
 						state = dma_full;
 					} else {
 						timer_stop();
 						state = dma_empty;
 					}
-					logger.log_async("PLAYER error: ht=1 tc=1\r\n");
-					pin_red.pulse_once(configTICK_RATE_HZ/10);
 				} else {
-					// ht=1 tc=0
-					if (state == dma_full) {
-						state = dma_halfdone;
-						if (!action_fill_bottom_half()) {
-							timer_stop();
-							state = dma_empty;
-						}
-					} else {
-						logger.log_async("PLAYER error: ht=1 tc=0 state!=dma_full\r\n");
-						pin_red.pulse_once(configTICK_RATE_HZ/10);
-					}
+					logger.log_async("PLAYER error: ht=0 tc=1 state!=dma_halfdone\r\n");
+					pin_red.pulse_once(configTICK_RATE_HZ/10);
 				}
 			} else {
-				if (tc) {
-					// ht=0 tc=1
-					if (state == dma_halfdone) {
-						if (action_fill_top_half()) {
-							state = dma_full;
-						} else {
-							timer_stop();
-							state = dma_empty;
-						}
-					} else {
-						logger.log_async("PLAYER error: ht=0 tc=1 state!=dma_halfdone\r\n");
-						pin_red.pulse_once(configTICK_RATE_HZ/10);
-					}
-				} else {
-					// ht=0 tc=0
-					// probably just note added
-					if (state == dma_empty) {
-						if (action_fill()) {
-							state = dma_full;
-							timer_start();
-						}
+				// ht=0 tc=0
+				// probably just note added
+				if (state == dma_empty) {
+					if (action_fill()) {
+						state = dma_full;
+						timer_start();
 					}
 				}
 			}
