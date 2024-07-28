@@ -3,9 +3,10 @@ cmake_minimum_required(VERSION 3.25)
 include("${CMAKE_SOURCE_DIR}/../cmake/arm-none-eabi.cmake")
 #include("${CMAKE_SOURCE_DIR}/../cmake/freertos.cmake")
 
-#set(PICO_SDK_ROOT "${CMAKE_SOURCE_DIR}/../_deps")
-#set(PICO_TOOLCHAIN_PATH "${tools_prefix_bin}") # FIXME
-#include("${PICO_SDK_ROOT}/pico-sdk/pico_sdk_init.cmake")
+set(PICO_SDK_ROOT "${CMAKE_SOURCE_DIR}/../_deps")
+set(PICO_SDK_PATH "${PICO_SDK_ROOT}/pico-sdk")
+set(PICO_TOOLCHAIN_PATH "${tools_prefix_bin}") # FIXME
+include("${PICO_SDK_PATH}/pico_sdk_init.cmake")
 
 project(rp2040_test C)
 set(CMAKE_VERBOSE_MAKEFILE ON)
@@ -16,14 +17,14 @@ set(T_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/rp2040.ld)
 set(T_C_CXX_ARCH_FLAGS -mcpu=cortex-m0plus -mthumb)
 #set(T_FREERTOS_PREFIX "RP2040_CPU1_")
 
-set(T_FIRMWARE_ELF ${PROJECT_NAME}.elf) # pico-sdk spoils .elf suffix
+set(T_FIRMWARE_ELF ${PROJECT_NAME}) # pico-sdk spoils .elf suffix
 #set(T_FIRMWARE_BIN ${PROJECT_NAME}.bin)
 set(T_FIRMWARE_UF2 ${PROJECT_NAME}.uf2)
 
 # PICO
 #set(PICO_BARE_METAL "1")
-#set(PICO_PLATFORM "rp2040")
-#pico_sdk_init()
+set(PICO_PLATFORM "rp2040")
+pico_sdk_init()
 #pico_add_subdirectory("${PICO_SDK_ROOT}/pico-sdk/src/common/pico_sync" "ps")
 ###
 
@@ -87,6 +88,10 @@ set_target_properties(${T_FIRMWARE_ELF}
 	PROPERTIES LINK_OPTIONS "${link_options}"
 )
 
+target_link_libraries(${T_FIRMWARE_ELF}
+	hardware_regs_headers
+	hardware_structs_headers
+)
 set_target_properties(${T_FIRMWARE_ELF}
 	PROPERTIES COMPILE_OPTIONS "${T_PROJECT_FLAGS}"
 )
@@ -102,7 +107,7 @@ set_target_properties(${T_FIRMWARE_ELF}
 add_custom_target(${T_FIRMWARE_UF2}
 	ALL
 	DEPENDS ${T_FIRMWARE_ELF}
-        COMMAND ${ELF2UF2} -v ${CMAKE_CURRENT_BINARY_DIR}/${T_FIRMWARE_ELF} ${CMAKE_CURRENT_BINARY_DIR}/${T_FIRMWARE_UF2}
+	COMMAND ${ELF2UF2} -v ${CMAKE_CURRENT_BINARY_DIR}/${T_FIRMWARE_ELF}.elf ${CMAKE_CURRENT_BINARY_DIR}/${T_FIRMWARE_UF2}
 )
 
 ###
