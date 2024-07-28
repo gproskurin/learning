@@ -8,7 +8,7 @@ set(PICO_SDK_PATH "${PICO_SDK_ROOT}/pico-sdk")
 set(PICO_TOOLCHAIN_PATH "${tools_prefix_bin}") # FIXME
 include("${PICO_SDK_PATH}/pico_sdk_init.cmake")
 
-project(rp2040_test C)
+project(rp2040_test C CXX)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
 set(ELF2UF2 /Users/gpr/src/learning/embedded/_deps/pico-examples/_BUILD/elf2uf2/elf2uf2)
@@ -33,11 +33,11 @@ pico_sdk_init()
 
 set(T_C_CXX_COMMON_FLAGS
 	${T_C_CXX_ARCH_FLAGS}
-	-O0 -fpic -Wall -Wno-unused-but-set-variable -Wno-unused-variable
+	-Os -Wall -Wno-unused-but-set-variable -Wno-unused-variable
 	-fno-builtin-memset -fno-builtin-memcpy -fno-builtin-stpcpy
 )
-#set(T_PROJECT_FLAGS ${CMAKE_CXX_FLAGS} ${T_C_CXX_ARCH_FLAGS} -std=c++20 -fno-rtti -fno-exceptions)
-set(T_PROJECT_FLAGS ${CMAKE_CXX_FLAGS} ${T_C_CXX_ARCH_FLAGS} -std=c2x)
+set(T_PROJECT_FLAGS ${CMAKE_CXX_FLAGS} ${T_C_CXX_ARCH_FLAGS} -std=c++20 -fno-rtti -fno-exceptions)
+#set(T_PROJECT_FLAGS ${CMAKE_CXX_FLAGS} ${T_C_CXX_ARCH_FLAGS} -std=c2x)
 
 set(FREERTOS_C_FLAGS
 	${T_C_CXX_COMMON_FLAGS}
@@ -61,7 +61,7 @@ set(FREERTOS_INCLUDE
 ###
 
 add_executable(${T_FIRMWARE_ELF}
-	src/startup.c
+	src/startup.cc
 )
 
 #target_include_directories(${T_FIRMWARE_ELF} PRIVATE

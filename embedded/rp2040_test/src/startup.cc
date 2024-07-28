@@ -36,7 +36,7 @@ __attribute__((naked, noreturn)) void _reset()
 }
 
 
-extern void _estack();
+extern "C" void _estack();
 __attribute__((section(".vectors"))) void (*tab[2])(void) =
 {
 	_estack,
