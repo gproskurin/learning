@@ -1,32 +1,29 @@
 #include "hardware/regs/addressmap.h"
 #include "hardware/structs/iobank0.h"
 #include "hardware/structs/resets.h"
-#include "hardware/structs/sio.h"
 
-
-#define LED 25
+#include "lib_rp2040.h"
+#include "bsp.h"
 
 
 __attribute__((noreturn)) void my_main()
 {
 	// unreset io_bank0
-	((resets_hw_t*)(RESETS_BASE + REG_ALIAS_CLR_BITS))->reset = RESETS_RESET_IO_BANK0_BITS; // TODO better?
-
-	// wait for unreset done
+	resets_hw->reset = ~RESETS_RESET_IO_BANK0_BITS;
 	while (! (resets_hw->reset_done & RESETS_RESET_DONE_IO_BANK0_BITS) ) {}
 
-	iobank0_hw->io[LED].ctrl = 5; // function = sio
-	sio_hw->gpio_oe_set = 1 << LED;
+	bsp::pin_led.set(
+		rp2040_lib::gpio::af_t(5), // function = sio
+		rp2040_lib::gpio::mode_t::output
+	);
 
-        for(;;) {
-		// LED on
-		sio_hw->gpio_set = 1 << LED;
+	for(;;) {
+		bsp::pin_led.set_state(1);
 		for (volatile unsigned i=0; i<10000; ++i) {}
 
-		// LED off
-		sio_hw->gpio_clr = 1 << LED;
+		bsp::pin_led.set_state(0);
 		for (volatile unsigned i=0; i<200000; ++i) {}
-        }
+	}
 }
 
 

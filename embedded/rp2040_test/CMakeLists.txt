@@ -13,7 +13,7 @@ set(CMAKE_VERBOSE_MAKEFILE ON)
 
 set(ELF2UF2 /Users/gpr/src/learning/embedded/_deps/pico-examples/_BUILD/elf2uf2/elf2uf2)
 set(T_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/rp2040.ld)
-#set(T_DEFINITIONS "-DTARGET_RP2040")
+set(T_DEFINITIONS "-DTARGET_RP2040")
 set(T_C_CXX_ARCH_FLAGS -mcpu=cortex-m0plus -mthumb)
 #set(T_FREERTOS_PREFIX "RP2040_CPU1_")
 
@@ -28,7 +28,7 @@ pico_sdk_init()
 #pico_add_subdirectory("${PICO_SDK_ROOT}/pico-sdk/src/common/pico_sync" "ps")
 ###
 
-#set(STM32_LIB_ROOT "${CMAKE_SOURCE_DIR}/../stm32_lib")
+set(STM32_LIB_ROOT "${CMAKE_SOURCE_DIR}/../stm32_lib")
 
 
 set(T_C_CXX_COMMON_FLAGS
@@ -78,19 +78,26 @@ add_executable(${T_FIRMWARE_ELF}
 #	${T_FREERTOS_PREFIX}freertos_kernel
 #)
 
+target_link_libraries(${T_FIRMWARE_ELF}
+	hardware_regs_headers
+	hardware_structs_headers
+)
+
 set(link_options
 	-T${T_LINKER_SCRIPT} --entry 0x20040001
 	-nostartfiles
 	-ffreestanding
 	-nostdlib
 )
+
 set_target_properties(${T_FIRMWARE_ELF}
 	PROPERTIES LINK_OPTIONS "${link_options}"
 )
-
-target_link_libraries(${T_FIRMWARE_ELF}
-	hardware_regs_headers
-	hardware_structs_headers
+target_include_directories(${T_FIRMWARE_ELF}
+	PRIVATE ${STM32_LIB_ROOT}
+)
+target_compile_definitions(${T_FIRMWARE_ELF}
+	PRIVATE ${T_DEFINITIONS}
 )
 set_target_properties(${T_FIRMWARE_ELF}
 	PROPERTIES COMPILE_OPTIONS "${T_PROJECT_FLAGS}"

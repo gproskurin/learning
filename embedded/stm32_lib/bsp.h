@@ -3,11 +3,18 @@
 
 #if defined(TARGET_NRF52DK) || defined(TARGET_NRF5340DK_APP)
 #include "lib_nrf5.h"
+#elif defined(TARGET_RP2040)
+#include "lib_rp2040.h"
 #else
 #include "lib_stm32.h"
 #endif
 
 namespace bsp {
+
+
+#ifdef TARGET_RP2040
+constexpr rp2040_lib::gpio::pin_t pin_led{25};
+#endif
 
 
 #ifdef TARGET_STM32WB55
