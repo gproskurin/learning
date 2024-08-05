@@ -24,7 +24,7 @@ set(STM32_LIB_ROOT "${CMAKE_SOURCE_DIR}/../stm32_lib")
 set(T_C_CXX_FLAGS
 	${target_C_CXX_ARCH_FLAGS}
 	-D_POSIX_C_SOURCE=200809
-	-g -O0 -ffreestanding -Wall -Wno-unused-but-set-variable -Wno-unused-variable
+	-g -Og -ffreestanding -Wall -Wno-unused-but-set-variable -Wno-unused-variable
 	-fno-builtin-memset -fno-builtin-memcpy -fno-builtin-stpcpy
 	${target_DEFINITIONS}
 	-I${CMAKE_SOURCE_DIR}/../_deps/FreeRTOS-Kernel/include
@@ -53,7 +53,6 @@ add_subdirectory("${CMAKE_SOURCE_DIR}/../_deps/FreeRTOS-Kernel" "FreeRTOS")
 add_executable(${FIRMWARE_ELF}
 	src/startup.c
 	src/main.cc
-	#${STM32_LIB_ROOT}/logging.cc
 	${STM32_LIB_ROOT}/my_stdlib.c
 	${STM32_LIB_ROOT}/startup.c
 )

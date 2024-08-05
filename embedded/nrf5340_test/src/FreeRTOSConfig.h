@@ -3,10 +3,10 @@
 
 #define configUSE_PREEMPTION				1
 #define configUSE_PORT_OPTIMISED_TASK_SELECTION		1
-#define configUSE_TICKLESS_IDLE				1
+#define configUSE_TICKLESS_IDLE				0
 
 #if defined TARGET_NRF5340DK_APP
-	#define configCPU_CLOCK_HZ			32000000
+	#define configCPU_CLOCK_HZ			64000000
 #endif
 
 //#define configSYSTICK_CLOCK_HZ			1000000

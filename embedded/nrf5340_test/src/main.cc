@@ -13,16 +13,18 @@
 #include <string.h>
 
 #define PRIO_BLINK 1
-#define PRIO_NRF52 2
+#define PRIO_NRF53 2
 #define PRIO_PINPOLL 3
 #define PRIO_LOGGER 4
 
+
+#define LOG_UART UARTE_VCOM0
 
 logging::logger_t<logging::uarte_dev_t<NRF_UARTE0_S_BASE>> logger("logger", PRIO_LOGGER);
 
 void log_sync(const char* s)
 {
-	nrf5_lib::uart::uarte_send(UARTE_VCOM0, s);
+	nrf5_lib::uart::uarte_send(LOG_UART, s);
 }
 
 
@@ -76,59 +78,69 @@ void vApplicationIdleHook(void)
 }
 
 
-void nrf52_task_function(void* arg)
+void nrf53_task_function(void* arg)
 {
-	//logger.log_async("NRF-52 task started\r\n");
+	logger.log_async("NRF-53 task started\r\n");
+	g_pin_led4.pulse_continuous(configTICK_RATE_HZ/10, configTICK_RATE_HZ/10*9);
 	for (;;) {
-		g_pin_led4.pulse_continuous(configTICK_RATE_HZ/10, configTICK_RATE_HZ/5);
 		vTaskDelay(configTICK_RATE_HZ*5);
+		logger.log_async("NRF-53 task keep-alive\r\n");
 	}
 }
 
 
-freertos_utils::task_data_t<128> nrf52_task_data;
+freertos_utils::task_data_t<128> nrf53_task_data;
 
-void create_nrf52_task(const char* task_name, UBaseType_t prio)
+void create_nrf53_task(const char* task_name, UBaseType_t prio)
 {
-	nrf52_task_data.task_handle = xTaskCreateStatic(
-		&nrf52_task_function,
+	nrf53_task_data.task_handle = xTaskCreateStatic(
+		&nrf53_task_function,
 		task_name,
-		nrf52_task_data.stack.size(),
+		nrf53_task_data.stack.size(),
 		nullptr,
 		prio,
-		nrf52_task_data.stack.data(),
-		&nrf52_task_data.task_buffer
+		nrf53_task_data.stack.data(),
+		&nrf53_task_data.task_buffer
 	);
 }
 
 
 extern "C" __attribute__ ((interrupt)) void IntHandler_Serial0()
 {
-	UARTE_VCOM0->EVENTS_ENDTX = 0;
-	logger.notify_from_isr(0b11); // FIXME
+	if (LOG_UART->EVENTS_ENDTX) {
+		LOG_UART->EVENTS_ENDTX = 0;
+		logger.notify_from_isr(0b11); // FIXME
+	}
 }
 
 
 __attribute__ ((noreturn)) void main()
 {
+	nrf5_lib::uart::uarte_init(LOG_UART, bsp::pin_vcom0_txd);
+	LOG_UART->INTEN = 0;
+	log_sync("\r\nLogger initialized\r\n");
+
 	g_pin_led1.init_pin();
 	g_pin_led2.init_pin();
 	g_pin_led3.init_pin();
 	g_pin_led4.init_pin();
+	g_pin_led4.pulse_continuous(configTICK_RATE_HZ/10, configTICK_RATE_HZ/5);
+	g_pin_led3.pulse_continuous(configTICK_RATE_HZ/30, configTICK_RATE_HZ/30);
+	g_pin_led2.pulse_continuous(configTICK_RATE_HZ/7, configTICK_RATE_HZ*8/13);
+	g_pin_led1.pulse_continuous(configTICK_RATE_HZ/2, configTICK_RATE_HZ/2);
 
-	log_sync("Creating NRF-52 task...\r\n");
-	create_nrf52_task("nrf52_task", PRIO_NRF52);
-	log_sync("Created NRF-52 task\r\n");
+	log_sync("Creating NRF-53 task...\r\n");
+	create_nrf53_task("nrf53_task", PRIO_NRF53);
+	log_sync("Created NRF-53 task\r\n");
 
 	log_sync("Creating PINPOLL task...\r\n");
 	freertos_utils::pinpoll::create_task("pinpoll", PRIO_PINPOLL, &pinpoll_task_args);
 	log_sync("Created PINPOLL task\r\n");
 
 	log_sync("Starting FreeRTOS scheduler\r\n");
-	nrf5_lib::uart::uarte_init(UARTE_VCOM0, bsp::pin_vcom0_txd.reg);
-	UARTE_VCOM0->INTEN = UARTE_INTEN_ENDTX_Msk;
-	logger.init();
 
+	LOG_UART->INTEN = UARTE_INTEN_ENDTX_Msk;
+	logger.init();
 	NVIC_EnableIRQ(SERIAL0_IRQn);
 	vTaskStartScheduler();
 
