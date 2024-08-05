@@ -155,50 +155,6 @@ using pin_inverted_t = pin_impl_t<true>;
 namespace uart {
 
 
-#if 0
-#ifdef TARGET_NRF52DK
-void uart_init(NRF_UART_Type* uart, uint8_t pin_reg)
-{
-	uart->ENABLE = 0;
-	uart->CONFIG = 0;
-	uart->BAUDRATE = UART_BAUDRATE_BAUDRATE_Baud115200;
-	uart->PSELTXD = pin_reg;
-	uart->PSELRXD = 0xFFFFFFFF;
-	uart->PSELCTS = 0xFFFFFFFF;
-	uart->PSELRTS = 0xFFFFFFFF;
-	uart->ENABLE = 4;
-}
-
-
-void uart_send(NRF_UART_Type* uart, const char* s)
-{
-	uart->TASKS_STARTTX = 1;
-
-	// tx_byte
-	uart->EVENTS_TXDRDY = 0;
-	uart->TXD = *s;
-	++s;
-
-	while (*s) {
-		while (! (uart->EVENTS_TXDRDY)) {}
-		uart->EVENTS_TXDRDY = 0;
-		uart->TXD = *s;
-		++s;
-	}
-
-	while (! (uart->EVENTS_TXDRDY)) {}
-	uart->TASKS_STOPTX = 1;
-}
-
-
-void uart_deinit(NRF_UART_Type* uart)
-{
-	uart->ENABLE = 0;
-}
-#endif
-#endif
-
-
 template <typename Pin>
 void uarte_init(NRF_UARTE_Type* uarte, const Pin& pin)
 {

@@ -203,7 +203,6 @@ constexpr nrf5_lib::gpio::pin_inverted_t pin_led_4{NRF_P0_BASE, 20};
 
 constexpr nrf5_lib::gpio::pin_t pin_reset{NRF_P0_BASE, 21};
 
-//#define UART_VCOM NRF_UART0
 #define UARTE_VCOM NRF_UARTE0
 //constexpr nrf5_lib::gpio::pin_t pin_vcom_rts{NRF_P0_BASE, 5};
 constexpr nrf5_lib::gpio::pin_t pin_vcom_txd{NRF_P0_BASE, 6};
@@ -221,8 +220,13 @@ constexpr nrf5_lib::gpio::pin_inverted_t pin_led_1{NRF_P0_S_BASE, 28};
 constexpr nrf5_lib::gpio::pin_inverted_t pin_led_2{NRF_P0_S_BASE, 29};
 constexpr nrf5_lib::gpio::pin_inverted_t pin_led_3{NRF_P0_S_BASE, 30};
 constexpr nrf5_lib::gpio::pin_inverted_t pin_led_4{NRF_P0_S_BASE, 31};
+
 #define UARTE_VCOM0 NRF_UARTE0_S
 constexpr nrf5_lib::gpio::pin_t pin_vcom0_txd{NRF_P1_S_BASE, 1};
+
+#define UARTE_VCOM1 NRF_UARTE1_S
+constexpr nrf5_lib::gpio::pin_t pin_vcom1_txd{NRF_P0_S_BASE, 20};
+
 #endif
 
 
