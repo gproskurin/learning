@@ -1,12 +1,8 @@
 #ifndef __logging_h_included__
 #define __logging_h_included__
 
-#ifdef TARGET_NRF52DK
+#if defined(TARGET_NRF52DK) || defined(TARGET_NRF5340DK_APP)
 #include "lib_nrf5.h"
-#include "nrf52832_xxaa_memory.h"
-#elif defined TARGET_NRF5340DK_APP
-#include "lib_nrf5.h"
-#include "nrf5340_xxaa_application_memory.h"
 #else
 #include "lib_stm32.h"
 #endif
@@ -28,21 +24,17 @@ namespace logging {
 
 
 #if defined(TARGET_NRF52DK) || defined (TARGET_NRF5340DK_APP)
+constexpr uint32_t max_dma_size = 255;
+
 template <uint32_t UarteBase>
 struct uarte_dev_t {
-	static void init()
-	{
-	}
-
+	static void init() {}
 	static void start(size_t size, const uint8_t* data)
 	{
-		uarte()->TXD.MAXCNT = size;
-		uarte()->TXD.PTR = reinterpret_cast<uint32_t>(data);
-		uarte()->TASKS_STARTTX = 1;
+		nrf5_lib::uart::impl::uarte_send_start(uarte(), data, size);
 	}
-
 	static void stop() {}
-private:
+//private:
 	static NRF_UARTE_Type* uarte() { return reinterpret_cast<NRF_UARTE_Type*>(UarteBase); }
 };
 #endif
@@ -63,7 +55,7 @@ class logger_t {
 	TaskHandle_t const task_handle_;
 
 #if defined(TARGET_NRF52DK) || defined(TARGET_NRF5340DK_APP)
-	std::array<uint8_t, 16> dma_copy_;
+	std::array<uint8_t, 64> dma_copy_;
 #endif
 
 public:
@@ -122,21 +114,6 @@ private:
 		// TODO handle TE
 	}
 
-#if defined(TARGET_NRF52DK)
-	static bool is_ram(const void* ptr)
-	{
-		auto const addr = reinterpret_cast<uint32_t>(ptr);
-		return (addr >= NRF_MEMORY_RAM_BASE) && (addr < (NRF_MEMORY_RAM_BASE + NRF_MEMORY_RAM_SIZE));
-	}
-#endif
-#if defined(TARGET_NRF5340DK_APP)
-	static bool is_ram(const void* ptr)
-	{
-		auto const addr = reinterpret_cast<uint32_t>(ptr);
-		return (addr >= NRF_MEMORY_RAM0_BASE) && (addr < (NRF_MEMORY_RAM0_BASE + NRF_MEMORY_RAM0_SIZE));
-	}
-#endif
-
 	static void task_function(void* arg)
 	{
 		auto* const lp = reinterpret_cast<logger_t<dev_t>*>(arg);
@@ -144,28 +121,39 @@ private:
 #if defined(TARGET_NRF52DK) || defined(TARGET_NRF5340DK_APP)
 			auto item = lp->queue_receive();
 			// nrf can do DMA from RAM only
-			if (is_ram(item)) {
-				dev_t::start(strlen(item), reinterpret_cast<const uint8_t*>(item));
-				wait();
-				dev_t::stop();
-			} else {
-				// not RAM, copy to RAM and do DMA from copy (in chunks)
-				for (;;) {
-					size_t chunk_size = 0;
-					while (chunk_size < lp->dma_copy_.size() && *item) {
-						lp->dma_copy_[chunk_size] = *item;
-						++chunk_size;
-						static_assert(sizeof(*item) == 1);
-						++item;
-					}
-					if (chunk_size == 0) {
-						break;
-					}
-					dev_t::start(chunk_size, lp->dma_copy_.data());
-					//vTaskDelay(configTICK_RATE_HZ/2);
+			if (nrf5_lib::can_dma(item)) {
+				auto const len = strlen(item);
+				if (len <= max_dma_size) {
+					dev_t::start(len, reinterpret_cast<const uint8_t*>(item));
 					wait();
 					dev_t::stop();
+					continue;
 				}
+			}
+
+			// not RAM, copy to RAM and do DMA from copy (in chunks)
+			for (;;) {
+				auto const chunk_size = nrf5_lib::chunk0(
+					lp->dma_copy_.data(),
+					item,
+					lp->dma_copy_.size()
+				);
+				if (chunk_size == 0) {
+					break;
+				}
+
+				dev_t::start(chunk_size, lp->dma_copy_.data());
+
+				static_assert(sizeof(*item) == 1);
+				item += chunk_size;
+
+				//vTaskDelay(configTICK_RATE_HZ);
+				wait();
+
+				// FIXME hack to wait until TX is "fully" completed before starting new transfer
+				vTaskDelay(1);
+
+				dev_t::stop();
 			}
 #else
 			// stm32 can DMA from any type of memory

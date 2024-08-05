@@ -3,7 +3,7 @@
 
 #define configUSE_PREEMPTION				1
 #define configUSE_PORT_OPTIMISED_TASK_SELECTION		1
-#define configUSE_TICKLESS_IDLE				1
+#define configUSE_TICKLESS_IDLE				0
 
 #if defined TARGET_NRF52DK
 	#define configCPU_CLOCK_HZ			32000000

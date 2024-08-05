@@ -5,25 +5,58 @@
 
 #if defined(TARGET_NRF52DK)
 #include "nrf52_bitfields.h"
+#include "nrf52832_xxaa_memory.h"
 #elif defined(TARGET_NRF5340DK_APP)
 #include "nrf5340_application_bitfields.h"
+#include "nrf5340_xxaa_application_memory.h"
 #endif
+
 
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 
 
-namespace {
-	constexpr uint32_t mask1(int n) { return 1 << (n); }
-	constexpr uint32_t mask2(int n) { return 0b11 << ((n) * 2); }
-	constexpr uint32_t mask4(int n) { return 0b1111 << ((n) * 4); }
+namespace nrf5_lib {
+
+
+#if defined(TARGET_NRF52DK)
+inline
+bool can_dma(const void* ptr)
+{
+	auto const addr = reinterpret_cast<uint32_t>(ptr);
+	return (addr >= NRF_MEMORY_RAM_BASE) && (addr < (NRF_MEMORY_RAM_BASE + NRF_MEMORY_RAM_SIZE));
+}
+#endif
+#if defined(TARGET_NRF5340DK_APP)
+inline
+bool can_dma(const void* ptr)
+{
+	auto const addr = reinterpret_cast<uint32_t>(ptr);
+	return (addr >= NRF_MEMORY_RAM0_BASE) && (addr < (NRF_MEMORY_RAM0_BASE + NRF_MEMORY_RAM0_SIZE));
+}
+#endif
+
+
+size_t chunk0(void* dst0, const void* src0, size_t max_size)
+{
+	auto const dst = reinterpret_cast<char*>(dst0);
+	auto const src = reinterpret_cast<const char*>(src0);
+	size_t size = 0;
+	while (size < max_size) {
+		auto const c = src[size];
+		if (c == 0) {
+			break;
+		}
+		dst[size] = c;
+		++size;
+	}
+	return size;
 }
 
 
-namespace nrf5_lib {
-
 namespace gpio {
+
 
 enum class dir_t {
 	input = 0,
@@ -68,7 +101,7 @@ struct pin_impl_t {
 	void set(dir_t d, Targs... args) const
 	{
 		auto const p = ((d == dir_t::input) ? &gpio()->DIRCLR : &gpio()-> DIRSET);
-		*p = mask1(reg);
+		*p = 1 << reg;
 		set(args...);
 	}
 
@@ -122,6 +155,7 @@ using pin_inverted_t = pin_impl_t<true>;
 namespace uart {
 
 
+#if 0
 #ifdef TARGET_NRF52DK
 void uart_init(NRF_UART_Type* uart, uint8_t pin_reg)
 {
@@ -162,27 +196,55 @@ void uart_deinit(NRF_UART_Type* uart)
 	uart->ENABLE = 0;
 }
 #endif
+#endif
 
 
-void uarte_init(NRF_UARTE_Type* uarte, uint8_t pin_reg)
+template <typename Pin>
+void uarte_init(NRF_UARTE_Type* uarte, const Pin& pin)
 {
 	uarte->ENABLE = 0;
 	uarte->CONFIG = 0;
 	uarte->BAUDRATE = UARTE_BAUDRATE_BAUDRATE_Baud115200;
-	uarte->PSEL.TXD = pin_reg;
+#ifdef TARGET_NRF52DK
+	uarte->PSEL.TXD = pin.reg;
+#else
+	uarte->PSEL.TXD = (((pin.gpio_base == NRF_P0_S_BASE) ? 0 : 1) << 5) | pin.reg; // FIXME
+#endif
 	uarte->PSEL.RXD = 0xFFFFFFFF;
 	uarte->PSEL.CTS = 0xFFFFFFFF;
 	uarte->PSEL.RTS = 0xFFFFFFFF;
 	uarte->ENABLE = 8;
 }
 
+namespace impl {
+	void uarte_send_start(NRF_UARTE_Type* uarte, const void* ptr, size_t size)
+	{
+		uarte->EVENTS_ENDTX = 0;
+		uarte->TXD.MAXCNT = size;
+		uarte->TXD.PTR = reinterpret_cast<uint32_t>(ptr);
+		uarte->TASKS_STARTTX = 1;
+	}
+
+	inline
+	void uarte_send_wait(NRF_UARTE_Type* uarte)
+	{
+		while (! (uarte->EVENTS_ENDTX)) {}
+	}
+}
+
 void uarte_send(NRF_UARTE_Type* uarte, const char* s)
 {
-	uarte->TXD.MAXCNT = strlen(s);
-	uarte->TXD.PTR = reinterpret_cast<uint32_t>(s);
-	uarte->EVENTS_ENDTX = 0;
-	uarte->TASKS_STARTTX = 1;
-	while (! (uarte->EVENTS_ENDTX)) {}
+	std::array<char, 8> buf;
+	for (;;) {
+		auto const chunk_size = nrf5_lib::chunk0(buf.data(), s, buf.size());
+		if (chunk_size == 0) {
+			break;
+		}
+
+		impl::uarte_send_start(uarte, buf.data(), chunk_size);
+		s += chunk_size;
+		impl::uarte_send_wait(uarte);
+	}
 }
 
 
