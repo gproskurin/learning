@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <optional>
 
 
 #define UART_ID uart0
@@ -13,7 +14,6 @@
 constexpr uint pin_led = 25;
 
 std::array<uint8_t, 220 * 1024> g_buffer_big;
-std::array<uint8_t, 256> g_buffer_small;
 constexpr size_t g_flash_page_size = 256;
 
 constexpr uint pin_uart_tx = 0;
@@ -23,6 +23,9 @@ constexpr uint pin_spi_rx = 4;
 constexpr uint pin_spi_cs = 5;
 constexpr uint pin_spi_sck = 6;
 constexpr uint pin_spi_tx = 7;
+
+constexpr uint pin_creset = 14;
+constexpr uint pin_cdone = 15;
 
 
 struct spi_cmd_t {
@@ -39,11 +42,12 @@ struct spi_cmd_t {
 
 struct proto_t {
 	static constexpr uint8_t cmd_ping = 0x10;
-	static constexpr uint8_t cmd_checksum_only = 0x20;
+	static constexpr uint8_t cmd_checksum = 0x20;
 	static constexpr uint8_t cmd_read_all = 0x30;
 	static constexpr uint8_t cmd_erase_all = 0x40;
 	static constexpr uint8_t cmd_write = 0x50;
 	static constexpr uint8_t cmd_checksum_flash = 0x60;
+	static constexpr uint8_t cmd_program_fpga_flash = 0x70;
 
 	static constexpr uint8_t resp_error = 0xFD;
 	static constexpr uint8_t resp_unknown_command = 0xFE;
@@ -51,6 +55,38 @@ struct proto_t {
 	static uint8_t resp(uint8_t cmd) { return cmd + 0x80; }
 };
 
+
+struct data_descr_t {
+	const uint8_t* const data;
+	size_t const size;
+	uint32_t const crc;
+};
+
+
+class pinctl_t {
+	uint const pin;
+public:
+	explicit pinctl_t(uint p) : pin(p)
+	{
+		gpio_init(pin);
+		gpio_set_dir(pin, GPIO_IN);
+		gpio_disable_pulls(pin);
+	}
+
+	void highz()
+	{
+		gpio_set_dir(pin, GPIO_IN);
+	}
+
+	void set_0()
+	{
+		gpio_put(pin, 0);
+		gpio_set_dir(pin, GPIO_OUT);
+	}
+};
+
+
+pinctl_t g_pinctl_creset(pin_creset);
 
 namespace my_uart {
 	void init()
@@ -245,29 +281,95 @@ public:
 namespace impl {
 	uint32_t read_flash_and_maybe_send(size_t size_total, bool send_uart)
 	{
+		std::array<uint8_t, 8> buf;
+
 		constexpr std::array<uint8_t, 5> tx_cmd{
 			spi_cmd_t::fast_read,
 			0, 0, 0, // 24bit addr
 			0 // dummy byte
 		};
 
-		crc32_t crc;
-
 		my_spi::nss_0();
 		spi_write_blocking(SPI_ID, tx_cmd.data(), tx_cmd.size());
+		crc32_t crc;
 		size_t size_done = 0;
 		while (size_done < size_total) {
-			auto const chunk_size = std::min(size_total - size_done, g_buffer_small.size());
-			spi_read_blocking(SPI_ID, 0, g_buffer_small.data(), chunk_size);
-			crc.update(g_buffer_small.data(), chunk_size);
+			std::array<uint8_t, 8> buf;
+			auto const chunk_size = std::min(size_total - size_done, buf.size());
+			spi_read_blocking(SPI_ID, 0, buf.data(), chunk_size);
+			crc.update(buf.data(), chunk_size);
 			if (send_uart) {
-				my_uart::tx_n(g_buffer_small.data(), chunk_size);
+				my_uart::tx_n(buf.data(), chunk_size);
 			}
 			size_done += chunk_size;
 		}
 		my_spi::nss_1();
 
 		return crc.get();
+	}
+
+	std::optional<data_descr_t> read_uart_data_and_check_crc()
+	{
+		auto const size_total = my_uart::rx_4();
+
+		if (size_total > g_buffer_big.size()) {
+			return std::nullopt;
+		}
+
+		my_uart::rx_n(g_buffer_big.data(), size_total);
+
+		auto const crc_remote = my_uart::rx_4();
+		{
+			crc32_t crc;
+			crc.update(g_buffer_big.data(), size_total);
+			auto const crc_local = crc.get();
+			if (crc_local != crc_remote) {
+				return std::nullopt;
+			}
+		}
+		return data_descr_t{
+			.data = g_buffer_big.data(),
+			.size = size_total,
+			.crc = crc_remote
+		};
+	}
+
+	void do_write(const data_descr_t& data_descr)
+	{
+		size_t size_done = 0;
+		while (size_done < data_descr.size) {
+			auto const chunk_size = std::min<size_t>(g_flash_page_size, data_descr.size - size_done);
+			const std::array<uint8_t, 4> tx_cmd{
+				spi_cmd_t::page_program,
+				// 24bit addr
+				uint8_t(size_done >> 16),
+				uint8_t((size_done >> 8) & 0xff),
+				uint8_t(size_done & 0xff)
+			};
+
+			my_spi::spi_write_enable();
+			my_spi::spi_wait_not_busy();
+
+			my_spi::nss_0();
+
+			spi_write_blocking(SPI_ID, tx_cmd.data(), tx_cmd.size());
+			spi_write_blocking(SPI_ID, data_descr.data+size_done, chunk_size);
+
+			my_spi::nss_1();
+
+			size_done += chunk_size;
+		}
+	}
+
+	void do_erase_all()
+	{
+		my_spi::spi_write_enable();
+
+		my_spi::nss_0();
+		spi_write_blocking(SPI_ID, &spi_cmd_t::erase_all, 1);
+		my_spi::nss_1();
+
+		my_spi::spi_wait_not_busy();
 	}
 }
 
@@ -278,21 +380,23 @@ void process_ping()
 }
 
 
-void process_checksum_only()
+void process_checksum()
 {
+	std::array<uint8_t, 8> buf;
+
 	auto const size_total = my_uart::rx_4();
 
 	crc32_t crc;
 	size_t size_done = 0;
 	while (size_done < size_total) {
-		auto const chunk_size = std::min<size_t>(g_buffer_small.size(), size_total - size_done);
-		my_uart::rx_n(g_buffer_small.data(), chunk_size);
-		crc.update(g_buffer_small.data(), chunk_size);
+		auto const chunk_size = std::min<size_t>(buf.size(), size_total - size_done);
+		my_uart::rx_n(buf.data(), chunk_size);
+		crc.update(buf.data(), chunk_size);
 		size_done += chunk_size;
 	}
 	auto const crc_calculated = crc.get();
 
-	my_uart::tx_1(proto_t::resp(proto_t::cmd_checksum_only));
+	my_uart::tx_1(proto_t::resp(proto_t::cmd_checksum));
 	my_uart::tx_4(crc_calculated);
 }
 
@@ -311,66 +415,20 @@ void process_read_all()
 
 void process_erase_all()
 {
-	my_spi::spi_write_enable();
-
-	my_spi::nss_0();
-	spi_write_blocking(SPI_ID, &spi_cmd_t::erase_all, 1);
-	my_spi::nss_1();
-
-	my_spi::spi_wait_not_busy();
-
+	impl::do_erase_all();
 	my_uart::tx_1(proto_t::resp(proto_t::cmd_erase_all));
 }
 
 void process_write()
 {
-	// read all data via uart, checksum, write
-	static_assert(g_buffer_big.size() >= g_flash_page_size);
-
-	auto const size_total = my_uart::rx_4();
-
-	if (size_total > g_buffer_big.size()) {
+	auto const data_descr = impl::read_uart_data_and_check_crc();
+	if (!data_descr) {
 		my_uart::tx_1(proto_t::resp_error);
 		return;
 	}
+	my_uart::tx_1(proto_t::resp(proto_t::cmd_checksum));
 
-	my_uart::rx_n(g_buffer_big.data(), size_total);
-
-	auto const crc_remote = my_uart::rx_4();
-	{
-		crc32_t crc;
-		crc.update(g_buffer_big.data(), size_total);
-		auto const crc_local = crc.get();
-		if (crc_local != crc_remote) {
-			my_uart::tx_1(proto_t::resp_error);
-			return;
-		}
-	}
-	my_uart::tx_1(proto_t::resp(proto_t::cmd_write));
-
-	size_t size_done = 0;
-	while (size_done < size_total) {
-		auto const chunk_size = std::min<size_t>(g_flash_page_size, size_total - size_done);
-		const std::array<uint8_t, 4> tx_cmd{
-			spi_cmd_t::page_program,
-			// 24bit addr
-			uint8_t(size_done >> 16),
-			uint8_t((size_done >> 8) & 0xff),
-			uint8_t(size_done & 0xff)
-		};
-
-		my_spi::spi_write_enable();
-		my_spi::spi_wait_not_busy();
-
-		my_spi::nss_0();
-
-		spi_write_blocking(SPI_ID, tx_cmd.data(), tx_cmd.size());
-		spi_write_blocking(SPI_ID, g_buffer_big.data()+size_done, chunk_size);
-
-		my_spi::nss_1();
-
-		size_done += chunk_size;
-	}
+	impl::do_write(*data_descr);
 	my_uart::tx_1(proto_t::resp(proto_t::cmd_write));
 }
 
@@ -382,13 +440,50 @@ void process_checksum_flash()
 	my_uart::tx_4(crc);
 }
 
+void process_program_fpga_flash()
+{
+	auto const data_descr = impl::read_uart_data_and_check_crc();
+	if (!data_descr) {
+		my_uart::tx_1(proto_t::resp_error);
+		return;
+	}
+	my_uart::tx_1(proto_t::resp(proto_t::cmd_checksum));
+
+	// reset FPGA - pull CRESET down
+	g_pinctl_creset.set_0();
+	sleep_ms(100);
+	// TODO reset flash?
+
+	impl::do_erase_all();
+	my_uart::tx_1(proto_t::resp(proto_t::cmd_erase_all));
+
+	impl::do_write(*data_descr);
+	my_uart::tx_1(proto_t::resp(proto_t::cmd_write));
+
+	auto const crc_flash = impl::read_flash_and_maybe_send(data_descr->size, false);
+	my_uart::tx_1(proto_t::resp(proto_t::cmd_checksum_flash));
+
+	while (!gpio_get(pin_cdone)) {}
+	sleep_ms(100);
+
+	// unreset FPGA
+	g_pinctl_creset.highz();
+
+	my_uart::tx_1(proto_t::resp(proto_t::cmd_program_fpga_flash));
+}
+
 
 int main()
 {
+	// CDONE - input
+	gpio_init(pin_cdone);
+	gpio_disable_pulls(pin_cdone);
+	gpio_set_dir(pin_cdone, GPIO_IN);
+
 	// init LED
 	gpio_init(pin_led);
-	gpio_set_dir(pin_led, GPIO_OUT);
 	gpio_put(pin_led, 1);
+	gpio_set_dir(pin_led, GPIO_OUT);
 	sleep_ms(500);
 	gpio_put(pin_led, 0);
 	sleep_ms(1000);
@@ -405,8 +500,8 @@ int main()
 			case proto_t::cmd_ping:
 				process_ping();
 				break;
-			case proto_t::cmd_checksum_only: {
-				process_checksum_only();
+			case proto_t::cmd_checksum: {
+				process_checksum();
 				break;
 			}
 			case proto_t::cmd_read_all: {
@@ -422,6 +517,10 @@ int main()
 			}
 			case proto_t::cmd_checksum_flash: {
 				process_checksum_flash();
+				break;
+			}
+			case proto_t::cmd_program_fpga_flash: {
+				process_program_fpga_flash();
 				break;
 			}
 			default:

@@ -53,11 +53,12 @@ class MySerial:
 
 
 cmd_ping = 0x10
-cmd_checksum_only = 0x20
+cmd_checksum = 0x20
 cmd_read_all = 0x30
 cmd_erase_all = 0x40
 cmd_write = 0x50
 cmd_checksum_flash = 0x60
+cmd_program_fpga_flash = 0x70
 
 
 def run_ping(my_ser):
@@ -65,18 +66,18 @@ def run_ping(my_ser):
 	my_ser.read_resp(cmd_ping)
 
 
-def run_checksum_only(my_ser, file):
+def run_checksum(my_ser, file):
 	with open(file, 'rb') as f:
 		data = f.read()
 	data_len = len(data)
 	print(f"Len: {data_len}")
 
-	my_ser.write_cmd(cmd_checksum_only)
+	my_ser.write_cmd(cmd_checksum)
 	my_ser.write_4(data_len)
 	time.sleep(0.1)
 	my_ser.write(data)
 
-	my_ser.read_resp(cmd_checksum_only)
+	my_ser.read_resp(cmd_checksum)
 	(crc_remote,) = struct.unpack('>I', my_ser.read_n(4))
 	crc_local = crc(data)
 	if crc_local == crc_remote:
@@ -108,20 +109,6 @@ def run_erase_all(my_ser):
 	my_ser.read_resp(cmd_erase_all)
 
 
-def run_write(my_ser, data):
-	my_ser.write_cmd(cmd_write)
-	b = ser.read(1)
-	if not b:
-		print("resp read timeout")
-		exit(1)
-	print(f"B: {b}")
-	(resp,) = struct.unpack('>B', b)
-	if resp != resp_erase_all:
-		print(f"RESP unknown: {resp}")
-		exit(1)
-	print("RESP: erase_all")
-
-
 def run_write(my_ser, file):
 	with open(file, 'rb') as f:
 		data = f.read()
@@ -137,8 +124,7 @@ def run_write(my_ser, file):
 	my_ser.write(data)
 	my_ser.write_4(crc_local)
 
-	my_ser.read_resp(cmd_write)
-	print("REMOTE_STARTED_WRITING")
+	my_ser.read_resp(cmd_checksum)
 	my_ser.read_resp(cmd_write)
 	print(f"RESULT_OK")
 
@@ -162,6 +148,28 @@ def run_checksum_flash(my_ser, file):
 		print(f"CRC_ERROR: crc_remote={hex(crc_remote)}")
 
 
+def run_program_fpga_flash(my_ser, file):
+	with open(file, 'rb') as f:
+		data = f.read()
+	data_len = len(data)
+	crc_local = crc(data)
+	print(f"Len: {data_len}")
+	print(f"CRC local: {hex(crc_local)}")
+
+	my_ser.write_cmd(cmd_program_fpga_flash)
+	my_ser.write_4(data_len)
+	time.sleep(0.1)
+	my_ser.write(data)
+	my_ser.write_4(crc_local)
+
+	my_ser.read_resp(cmd_checksum)
+	my_ser.read_resp(cmd_erase_all)
+	my_ser.read_resp(cmd_write)
+	my_ser.read_resp(cmd_checksum_flash)
+	my_ser.read_resp(cmd_program_fpga_flash)
+
+	print("RESULT_OK")
+
 parser = argparse.ArgumentParser()
 parser.add_argument("-d", "--device", metavar="UART_DEVICE")
 parser.add_argument("command", metavar="CMD", type=str)
@@ -172,8 +180,8 @@ if __name__ == "__main__":
 	my_ser = MySerial(args.device)
 	if args.command == 'ping':
 		run_ping(my_ser)
-	elif args.command == 'checksum_only':
-		run_checksum_only(my_ser, args.file)
+	elif args.command == 'checksum':
+		run_checksum(my_ser, args.file)
 	elif args.command == 'read_all':
 		run_read_all(my_ser, args.file)
 	elif args.command == 'erase_all':
@@ -182,6 +190,8 @@ if __name__ == "__main__":
 		run_write(my_ser, args.file)
 	elif args.command == 'checksum_flash':
 		run_checksum_flash(my_ser, args.file)
+	elif args.command == 'program_fpga_flash':
+		run_program_fpga_flash(my_ser, args.file)
 	else:
 		parser.print_help()
 
