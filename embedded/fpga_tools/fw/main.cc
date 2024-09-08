@@ -24,8 +24,26 @@ constexpr uint pin_spi_cs = 5;
 constexpr uint pin_spi_sck = 6;
 constexpr uint pin_spi_tx = 7;
 
-constexpr uint pin_creset = 14;
-constexpr uint pin_cdone = 15;
+constexpr uint pin_creset = 15;
+
+
+void pinctl_highz(uint pin)
+{
+	gpio_set_dir(pin, GPIO_IN);
+}
+
+void pinctl_init_highz(uint pin)
+{
+	gpio_init(pin);
+	gpio_disable_pulls(pin);
+	pinctl_highz(pin);
+}
+
+void pinctl_set_0(uint pin)
+{
+	gpio_put(pin, 0);
+	gpio_set_dir(pin, GPIO_OUT);
+}
 
 
 struct spi_cmd_t {
@@ -33,6 +51,7 @@ struct spi_cmd_t {
 	static constexpr uint8_t read_status_1 = 0x05;
 	static constexpr uint8_t write_enable = 0x06;
 	static constexpr uint8_t fast_read = 0x0B;
+	static constexpr uint8_t release_power_down = 0xAB;
 	//static constexpr uint8_t read_jedec = 0x9F;
 	static constexpr uint8_t erase_all = 0xC7;
 
@@ -62,31 +81,6 @@ struct data_descr_t {
 	uint32_t const crc;
 };
 
-
-class pinctl_t {
-	uint const pin;
-public:
-	explicit pinctl_t(uint p) : pin(p)
-	{
-		gpio_init(pin);
-		gpio_set_dir(pin, GPIO_IN);
-		gpio_disable_pulls(pin);
-	}
-
-	void highz()
-	{
-		gpio_set_dir(pin, GPIO_IN);
-	}
-
-	void set_0()
-	{
-		gpio_put(pin, 0);
-		gpio_set_dir(pin, GPIO_OUT);
-	}
-};
-
-
-pinctl_t g_pinctl_creset(pin_creset);
 
 namespace my_uart {
 	void init()
@@ -142,9 +136,13 @@ namespace my_uart {
 
 
 namespace my_spi {
+	void nss_0();
+	void nss_1();
+
 	void init()
 	{
-		spi_init(SPI_ID, 4*1000*1000);
+		spi_init(SPI_ID, 1*1000*1000);
+		spi_set_format(SPI_ID, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
 
 		gpio_init(pin_spi_cs);
 		gpio_put(pin_spi_cs, 1);
@@ -160,6 +158,20 @@ namespace my_spi {
 		sleep_ms(10);
 		gpio_put(pin_spi_cs, 1);
 		sleep_ms(10);
+
+		// wakeup from power down mode
+		my_spi::nss_0();
+		spi_write_blocking(SPI_ID, &spi_cmd_t::release_power_down, 1);
+		my_spi::nss_1();
+		sleep_ms(1);
+	}
+
+	void deinit()
+	{
+		pinctl_highz(pin_spi_rx);
+		pinctl_highz(pin_spi_cs);
+		pinctl_highz(pin_spi_sck);
+		pinctl_highz(pin_spi_tx);
 	}
 
 	void nss_0()
@@ -234,17 +246,43 @@ namespace my_spi {
 }
 
 
+struct scoped_fpga_reset_t {
+	explicit scoped_fpga_reset_t()
+	{
+		pinctl_set_0(pin_creset); // disconnect (reset) FPGA
+		sleep_ms(100);
+		my_spi::init();
+		sleep_ms(100);
+		my_spi::spi_reset();
+		sleep_ms(100);
+	}
+
+	~scoped_fpga_reset_t()
+	{
+		my_spi::deinit();
+		sleep_ms(100);
+		pinctl_highz(pin_creset); // unreset FPGA
+	}
+};
+
+
 static
-void blink_n(int n)
+void blink_n_pin(int n, uint pin)
 {
 	sleep_ms(500);
 	for (int i=0; i<n; ++i) {
-		gpio_put(pin_led, 1);
-		sleep_ms(100);
-		gpio_put(pin_led, 0);
-		sleep_ms(300);
+		gpio_put(pin, 1);
+		sleep_ms(10000);
+		gpio_put(pin, 0);
+		sleep_ms(3000);
 	}
 	sleep_ms(500);
+}
+
+static
+void blink_n(int n)
+{
+	blink_n_pin(n, pin_led);
 }
 
 
@@ -409,13 +447,19 @@ void process_read_all()
 	my_uart::tx_4(size_total);
 	sleep_ms(100);
 
-	auto const crc = impl::read_flash_and_maybe_send(size_total, true);
-	my_uart::tx_4(crc);
+	{
+		scoped_fpga_reset_t r;
+		auto const crc = impl::read_flash_and_maybe_send(size_total, true);
+		my_uart::tx_4(crc);
+	}
 }
 
 void process_erase_all()
 {
-	impl::do_erase_all();
+	{
+		scoped_fpga_reset_t r;
+		impl::do_erase_all();
+	}
 	my_uart::tx_1(proto_t::resp(proto_t::cmd_erase_all));
 }
 
@@ -428,16 +472,25 @@ void process_write()
 	}
 	my_uart::tx_1(proto_t::resp(proto_t::cmd_checksum));
 
-	impl::do_write(*data_descr);
+	{
+		scoped_fpga_reset_t r;
+		impl::do_write(*data_descr);
+	}
+
 	my_uart::tx_1(proto_t::resp(proto_t::cmd_write));
 }
 
 void process_checksum_flash()
 {
 	auto const size_total = my_uart::rx_4();
-	my_uart::tx_1(proto_t::resp(proto_t::cmd_checksum_flash));
-	auto const crc = impl::read_flash_and_maybe_send(size_total, false);
-	my_uart::tx_4(crc);
+
+	{
+		scoped_fpga_reset_t r;
+		my_uart::tx_1(proto_t::resp(proto_t::cmd_checksum_flash));
+		auto const crc = impl::read_flash_and_maybe_send(size_total, false);
+
+		my_uart::tx_4(crc);
+	}
 }
 
 void process_program_fpga_flash()
@@ -449,25 +502,18 @@ void process_program_fpga_flash()
 	}
 	my_uart::tx_1(proto_t::resp(proto_t::cmd_checksum));
 
-	// reset FPGA - pull CRESET down
-	g_pinctl_creset.set_0();
-	sleep_ms(100);
-	// TODO reset flash?
+	{
+		scoped_fpga_reset_t r;
 
-	impl::do_erase_all();
-	my_uart::tx_1(proto_t::resp(proto_t::cmd_erase_all));
+		impl::do_erase_all();
+		my_uart::tx_1(proto_t::resp(proto_t::cmd_erase_all));
 
-	impl::do_write(*data_descr);
-	my_uart::tx_1(proto_t::resp(proto_t::cmd_write));
+		impl::do_write(*data_descr);
+		my_uart::tx_1(proto_t::resp(proto_t::cmd_write));
 
-	auto const crc_flash = impl::read_flash_and_maybe_send(data_descr->size, false);
-	my_uart::tx_1(proto_t::resp(proto_t::cmd_checksum_flash));
-
-	while (!gpio_get(pin_cdone)) {}
-	sleep_ms(100);
-
-	// unreset FPGA
-	g_pinctl_creset.highz();
+		auto const crc_flash = impl::read_flash_and_maybe_send(data_descr->size, false);
+		my_uart::tx_1(proto_t::resp(proto_t::cmd_checksum_flash));
+	}
 
 	my_uart::tx_1(proto_t::resp(proto_t::cmd_program_fpga_flash));
 }
@@ -475,10 +521,7 @@ void process_program_fpga_flash()
 
 int main()
 {
-	// CDONE - input
-	gpio_init(pin_cdone);
-	gpio_disable_pulls(pin_cdone);
-	gpio_set_dir(pin_cdone, GPIO_IN);
+	pinctl_init_highz(pin_creset);
 
 	// init LED
 	gpio_init(pin_led);
@@ -489,7 +532,6 @@ int main()
 	sleep_ms(1000);
 
 	my_uart::init();
-	my_spi::init();
 	
 	for(;;) {
 		gpio_put(pin_led, 1);
