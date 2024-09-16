@@ -1,3 +1,5 @@
+`default_nettype none
+
 module top(
 	input wire clk,
 	output wire led1,

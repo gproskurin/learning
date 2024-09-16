@@ -1,3 +1,5 @@
+`default_nettype none
+
 module my_pwm
 (
 	input wire pwm_clk,
