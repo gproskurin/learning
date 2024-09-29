@@ -141,7 +141,7 @@ namespace my_spi {
 
 	void init()
 	{
-		spi_init(SPI_ID, 1*1000*1000);
+		spi_init(SPI_ID, 4*1000*1000);
 		spi_set_format(SPI_ID, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
 
 		gpio_init(pin_spi_cs);
@@ -513,6 +513,7 @@ void process_program_fpga_flash()
 
 		auto const crc_flash = impl::read_flash_and_maybe_send(data_descr->size, false);
 		my_uart::tx_1(proto_t::resp(proto_t::cmd_checksum_flash));
+		my_uart::tx_4(crc_flash);
 	}
 
 	my_uart::tx_1(proto_t::resp(proto_t::cmd_program_fpga_flash));

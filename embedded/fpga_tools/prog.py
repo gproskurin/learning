@@ -166,9 +166,14 @@ def run_program_fpga_flash(my_ser, file):
 	my_ser.read_resp(cmd_erase_all)
 	my_ser.read_resp(cmd_write)
 	my_ser.read_resp(cmd_checksum_flash)
+	crc_remote = my_ser.read_4()
 	my_ser.read_resp(cmd_program_fpga_flash)
+	if crc_local == crc_remote:
+		print("RESULT_OK")
+	else:
+		print(f"RESULT_FAIL: crc_remote={hex(crc_remote)}")
+		exit(1)
 
-	print("RESULT_OK")
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-d", "--device", metavar="UART_DEVICE")
