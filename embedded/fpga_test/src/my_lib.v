@@ -77,40 +77,6 @@ module my_seg7_1
 endmodule
 
 
-module my_seg7_2(
-	input wire clk,
-	input wire en,
-	input wire [7:0] num,
-	output wire [6:0] seg,
-	output wire [1:0] seg_gnd
-);
-	reg [1:0] r_seg_gnd;
-	assign seg_gnd = r_seg_gnd;
-	reg r_select;
-	reg [3:0] r_num;
-
-	my_seg7_1 my_seg71(clk, en, r_num, seg);
-	always @ (posedge clk)
-	begin
-		if (!en) begin
-			r_seg_gnd = {1'b1, 1'b1};
-		end else begin
-			if (!r_select) begin
-				// segment 0
-				r_seg_gnd = 2'b10;
-				r_num <= num[3:0];
-			end else begin
-				// segment 1
-				r_seg_gnd = 2'b01;
-				r_num <= num[7:4];
-			end
-			r_select <= ~r_select;
-		end
-	end
-
-endmodule
-
-
 module my_seg7_n #(parameter N = 1)
 (
 	input wire clk,
