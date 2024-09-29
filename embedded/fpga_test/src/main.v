@@ -62,14 +62,65 @@ begin
 	pwm1_width <= dec ? pwm1_width - 1 : pwm1_width + 1;
 end
 
-// 7seg2
-reg [7:0] r_seg72_num;
-reg r_seg72_en = 1;
-always@(posedge cnt_128hz[4])
+
+
+reg [15:0] r_rdata;
+reg [7:0] r_raddr;
+
+reg [7:0] r_waddr;
+reg [15:0] r_wdata;
+reg [15:0] wmask = 0;
+
+
+// memory
+SB_RAM40_4K
+	#(
+		.INIT_0(256'H7127678656750404303022221111000020232022202120201013101210111010),
+		.INIT_1(256'h000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f),
+		.INIT_2(256'h000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f),
+		.INIT_3(256'h000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f),
+		.INIT_4(256'h000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f),
+		.INIT_5(256'h000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f),
+		.INIT_6(256'h000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f),
+		.INIT_7(256'h000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f),
+		.INIT_8(256'h000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f),
+		.INIT_9(256'h000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f),
+		.INIT_A(256'h000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f),
+		.INIT_B(256'h000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f),
+		.INIT_C(256'h000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f),
+		.INIT_D(256'h000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f),
+		.INIT_E(256'h000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f),
+		.INIT_F(256'h000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f)
+	)
+	mem(
+		.RDATA(r_rdata),
+		.RADDR(r_raddr),
+		.RCLK(clk),
+		.RCLKE(1),
+		.RE(1),
+		.WADDR(r_waddr),
+		.WCLK(0),
+		.WCLKE(0),
+		.WDATA(r_wdata),
+		.WE(0),
+		.MASK(0)
+	);
+
+localparam RAM_CNT = 100000000/2 - 1;
+reg [31:0] clk_cnt;
+always@(posedge clk)
 begin
-	r_seg72_num <= r_seg72_num + 1;
+	if (clk_cnt == RAM_CNT) begin
+		clk_cnt <= 0;
+		r_raddr <= r_raddr + 1;
+	end else begin
+		clk_cnt <= clk_cnt + 1;
+	end
 end
 
+
+// 7seg2
+reg r_seg72_en = 1;
 wire clk_s72;
 my_clk_div #(.W($clog2(CONST_CLK/20000))) clks72(clk, CONST_CLK/20000, clk_s72);
 
@@ -78,23 +129,17 @@ my_pwm pwm_s72_en(clk, 5'd31, 5'd28, r_s72_en);
 my_seg7_2 s720(
 	clk_s72,
 	r_s72_en,
-	r_seg72_num,
+	r_raddr,
 	{seg72_a, seg72_b, seg72_c, seg72_d, seg72_e, seg72_f, seg72_g},
 	{seg72_gnd0, seg72_gnd1}
 );
 
 
 // 7seg-4
-reg [15:0] r_num74 = 0;
-always@(posedge cnt_128hz[0])
-begin
-	r_num74 <= r_num74 + 1;
-end
-
 my_seg7_n #(.N(4)) s74(
 	clk,
 	1'b1,
-	r_num74,
+	r_rdata,
 	{seg74_a, seg74_b, seg74_c, seg74_d, seg74_e, seg74_f, seg74_g},
 	{seg74_gnd3, seg74_gnd2, seg74_gnd1, seg74_gnd0}
 );
