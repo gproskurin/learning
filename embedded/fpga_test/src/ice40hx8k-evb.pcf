@@ -25,3 +25,15 @@ set_io seg72_dp H3
 set_io seg72_gnd0 J5
 set_io seg72_gnd1 H2
 
+set_io seg74_a G3
+set_io seg74_b H5
+set_io seg74_c D1
+set_io seg74_d G4
+set_io seg74_e E3
+set_io seg74_f E2
+set_io seg74_g G5
+set_io seg74_gnd0 C1
+set_io seg74_gnd1 C2
+set_io seg74_gnd2 F4
+set_io seg74_gnd3 D2
+

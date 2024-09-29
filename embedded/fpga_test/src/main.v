@@ -5,13 +5,17 @@ module top(
 	output wire led1,
 	output wire led2,
 
-	output wire seg7_a,
-	output wire seg7_b,
-	output wire seg7_c,
-	output wire seg7_d,
-	output wire seg7_e,
-	output wire seg7_f,
-	output wire seg7_g,
+	output wire seg74_a,
+	output wire seg74_b,
+	output wire seg74_c,
+	output wire seg74_d,
+	output wire seg74_e,
+	output wire seg74_f,
+	output wire seg74_g,
+	output wire seg74_gnd0,
+	output wire seg74_gnd1,
+	output wire seg74_gnd2,
+	output wire seg74_gnd3,
 
 	output wire seg72_a,
 	output wire seg72_b,
@@ -48,7 +52,7 @@ assign led2 = clk_1hz;
 reg [3:0] pwm1_width = 0;
 reg dec = 0;
 my_pwm pwm1(clk, 15, pwm1_width, led1);
-always @ (posedge cnt_128hz[4])
+always @ (posedge cnt_128hz[5])
 begin
 	if (pwm1_width == 14) begin
 		dec <= 1;
@@ -57,18 +61,6 @@ begin
 	end
 	pwm1_width <= dec ? pwm1_width - 1 : pwm1_width + 1;
 end
-
-// 7seg-1
-reg r_seg7en;
-wire seg7en = r_seg7en;
-my_seg7_1 my7_1(
-	clk,
-	r_seg7en,
-	pwm1_width,
-	{seg7_a, seg7_b, seg7_c, seg7_d, seg7_e, seg7_f, seg7_g}
-);
-
-my_pwm pwm7seg1(clk, 15, 3, r_seg7en);
 
 // 7seg2
 reg [7:0] r_seg72_num;
@@ -79,16 +71,32 @@ begin
 end
 
 wire clk_s72;
-my_clk_div #(.W($clog2(CONST_CLK/10000))) clks72(clk, CONST_CLK/10000, clk_s72);
+my_clk_div #(.W($clog2(CONST_CLK/20000))) clks72(clk, CONST_CLK/20000, clk_s72);
 
 reg r_s72_en;
-my_pwm pwm_s72_en(clk, 31, 28, r_s72_en);
+my_pwm pwm_s72_en(clk, 5'd31, 5'd28, r_s72_en);
 my_seg7_2 s720(
 	clk_s72,
 	r_s72_en,
 	r_seg72_num,
 	{seg72_a, seg72_b, seg72_c, seg72_d, seg72_e, seg72_f, seg72_g},
 	{seg72_gnd0, seg72_gnd1}
+);
+
+
+// 7seg-4
+reg [15:0] r_num74 = 0;
+always@(posedge cnt_128hz[0])
+begin
+	r_num74 <= r_num74 + 1;
+end
+
+my_seg7_n #(.N(4)) s74(
+	clk,
+	1'b1,
+	r_num74,
+	{seg74_a, seg74_b, seg74_c, seg74_d, seg74_e, seg74_f, seg74_g},
+	{seg74_gnd3, seg74_gnd2, seg74_gnd1, seg74_gnd0}
 );
 
 
