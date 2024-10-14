@@ -173,25 +173,6 @@ begin
 end
 
 
-// SRAM
-reg r_sram_oe;
-assign sram_oe = r_sram_oe;
-
-reg r_sram_we;
-assign sram_we = r_sram_we;
-
-reg r_sram_cs;
-assign sram_cs = r_sram_cs;
-
-wire [15:0] sram_data = {
-	sram_d15, sram_d14, sram_d13, sram_d12,
-	sram_d11, sram_d10, sram_d9, sram_d8,
-	sram_d7, sram_d6, sram_d5, sram_d4,
-	sram_d3, sram_d2, sram_d1, sram_d0
-};
-reg [15:0] r_sram_data_out;
-assign sram_data = r_sram_oe ? r_sram_data_out : 16'bZ;
-
 wire [17:0] sram_addr = {
 	sram_a17, sram_a16,
 	sram_a15, sram_a14,
@@ -203,83 +184,36 @@ wire [17:0] sram_addr = {
 	sram_a3, sram_a2,
 	sram_a1, sram_a0
 };
-reg [17:0] r_sram_addr;
-assign sram_addr = r_sram_addr;
+wire [15:0] sram_data = {
+	sram_d15, sram_d14, sram_d13, sram_d12,
+	sram_d11, sram_d10, sram_d9, sram_d8,
+	sram_d7, sram_d6, sram_d5, sram_d4,
+	sram_d3, sram_d2, sram_d1, sram_d0
+};
 
-
-reg r_write_done = 0;
-localparam addr1 = 18'b000101010001011101;
-localparam addr2 = 18'b111010110010110100;
-
-reg [31:0] r_cnt_sram;
-localparam CNT_READ1 = 100000000*3;
-localparam CNT_READ2 = 100000000*6;
-reg [15:0] r_sram_read_data;
-always@(posedge clk)
+reg [15:0] dbg_sram_data;
+wire sram_test_err;
+reg [7:0] r_sram_test_err_cnt;
+sram_test st(
+	.clk(clk),
+	.sram_addr(sram_addr),
+	.sram_data(sram_data),
+	.sram_cs(sram_cs),
+	.sram_oe(sram_oe),
+	.sram_we(sram_we),
+	.dbgout_sram_data(dbg_sram_data),
+	.out_err(sram_test_err)
+);
+always@(posedge sram_test_err)
 begin
-	if (r_write_done == 0) begin
-		case (r_cnt_sram)
-			0: begin
-				r_sram_cs <= 1;
-				r_sram_oe <= 1;
-				r_sram_we <= 1;
-			end
-			1: r_sram_cs <= 0;
-
-			// write1
-			2: begin
-				r_sram_addr <= addr1;
-				r_sram_data_out <= 16'Hdead;
-			end
-			3: r_sram_we <= 0;
-			4: r_sram_we <= 1;
-
-			// write2
-			5: begin
-				r_sram_addr <= addr2;
-				r_sram_data_out <= 16'Hbeef;
-			end
-			6: r_sram_we <= 0;
-			7: r_sram_we <= 1;
-
-			100: begin
-				r_sram_addr <= 0;
-				r_sram_data_out <= 0;
-				r_sram_read_data <= 0;
-				r_write_done <= 1;
-			end
-		endcase
-	end else begin
-		case (r_cnt_sram)
-			CNT_READ1: begin
-				r_sram_cs <= 1;
-				r_sram_oe <= 1;
-				r_sram_we <= 1;
-			end
-			CNT_READ1+1: r_sram_cs <= 0;
-
-			// read1
-			CNT_READ1+2: r_sram_addr <= addr1;
-			CNT_READ1+3: r_sram_oe <= 0;
-			CNT_READ1+4: r_sram_read_data <= sram_data;
-			CNT_READ1+5: r_sram_oe <= 1;
-
-			// read2
-			CNT_READ2+2: r_sram_addr <= addr2;
-			CNT_READ2+3: r_sram_oe <= 0;
-			CNT_READ2+4: r_sram_read_data <= sram_data;
-			CNT_READ2+5: r_sram_oe <= 1;
-		endcase
-	end
-	r_cnt_sram <= (r_cnt_sram > CNT_READ2+1000) ? 0 : r_cnt_sram + 1;
+	r_sram_test_err_cnt <= r_sram_test_err_cnt + 1;
 end
-
 
 // 7seg2
 my_seg7_n #(.N(2)) s720(
 	clk,
 	1'b1,
-	r_sram_addr[7:0],
+	sram_addr[7:0],
 	{seg72_a, seg72_b, seg72_c, seg72_d, seg72_e, seg72_f, seg72_g},
 	{seg72_gnd1, seg72_gnd0}
 );
@@ -289,11 +223,21 @@ my_seg7_n #(.N(2)) s720(
 my_seg7_n #(.N(4)) s74(
 	clk,
 	1'b1,
-	r_sram_read_data,
+	dbg_sram_data,
 	{seg74_a, seg74_b, seg74_c, seg74_d, seg74_e, seg74_f, seg74_g},
 	{seg74_gnd3, seg74_gnd2, seg74_gnd1, seg74_gnd0}
 );
 
+
+
+my_keypad_led kpl0(r_sram_test_err_cnt[0], keypad_led_d8);
+my_keypad_led kpl1(r_sram_test_err_cnt[1], keypad_led_d7);
+my_keypad_led kpl2(r_sram_test_err_cnt[2], keypad_led_d6);
+my_keypad_led kpl3(r_sram_test_err_cnt[3], keypad_led_d5);
+my_keypad_led kpl4(r_sram_test_err_cnt[4], keypad_led_d4);
+my_keypad_led kpl5(r_sram_test_err_cnt[5], keypad_led_d3);
+my_keypad_led kpl6(r_sram_test_err_cnt[6], keypad_led_d2);
+my_keypad_led kpl7(r_sram_test_err_cnt[7], keypad_led_d1);
 
 //my_keypad_led kp6_1(~keypad6_1, keypad_led_d1);
 
