@@ -64,7 +64,23 @@ module top(
 	inout wire sram_d15,
 	output wire sram_cs,
 	output wire sram_oe,
-	output wire sram_we
+	output wire sram_we,
+
+	output wire keypad_led_d1,
+	output wire keypad_led_d2,
+	output wire keypad_led_d3,
+	output wire keypad_led_d4,
+	output wire keypad_led_d5,
+	output wire keypad_led_d6,
+	output wire keypad_led_d7,
+	output wire keypad_led_d8,
+
+	input wire keypad6_1,
+	input wire keypad6_2,
+	input wire keypad6_3,
+	input wire keypad6_4,
+	input wire keypad6_5,
+	input wire keypad6_6
 );
 
 localparam CONST_CLK = 100000000;
@@ -277,6 +293,24 @@ my_seg7_n #(.N(4)) s74(
 	{seg74_a, seg74_b, seg74_c, seg74_d, seg74_e, seg74_f, seg74_g},
 	{seg74_gnd3, seg74_gnd2, seg74_gnd1, seg74_gnd0}
 );
+
+
+//my_keypad_led kp6_1(~keypad6_1, keypad_led_d1);
+
+//always@(posedge cnt_128hz[5])
+//begin
+//	keypad_leds <= keypad_leds + 1;
+//end
+
+wire btn1 = ~keypad6_1;
+
+wire btn1_debounced;
+my_debounce #(.DELAY(100000000/12)) k6_1(.clk(clk), .in(btn1), .out(btn1_debounced));
+
+
+//always@(posedge btn1) keypad_leds_right <= keypad_leds_right + 1;
+
+//always@(posedge btn1_debounced) keypad_leds_left <= keypad_leds_left + 1;
 
 
 endmodule

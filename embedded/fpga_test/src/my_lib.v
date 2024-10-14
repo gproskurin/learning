@@ -135,3 +135,38 @@ module my_seg7_n #(parameter N = 1)
 
 endmodule
 
+
+module my_keypad_led(input wire in, output wire out);
+	assign out = (in == 1) ? 1'b0 : 1'bZ;
+endmodule
+
+
+module my_debounce #(parameter DELAY = 100000000/12)
+	(input wire clk, input wire in, output wire out);
+
+reg [$clog2(DELAY)-1:0] cnt;
+reg r_out;
+assign out = r_out;
+
+always@(posedge clk) begin
+	case (cnt)
+		0: begin
+			if (in != r_out) begin
+				// input changed
+				// copy input to output and start counting
+				r_out <= in;
+				cnt <= 1;
+			end
+		end
+		DELAY: begin
+			// end of delay
+			// copy input to output and reset counter
+			r_out <= in;
+			cnt <= 0;
+		end
+		default: cnt <= cnt + 1;
+	endcase
+end
+
+endmodule
+

@@ -80,3 +80,23 @@ set_io sram_cs T6
 set_io sram_oe L9
 set_io sram_we T7
 
+
+# KEYPAD (btn16 + btn4 + led8)
+
+set_io keypad_led_d1 G16
+set_io keypad_led_d2 H14
+set_io keypad_led_d3 H16
+set_io keypad_led_d4 H11
+set_io keypad_led_d5 H13
+set_io keypad_led_d6 J16
+set_io keypad_led_d7 J13
+set_io keypad_led_d8 J12
+
+# KEYPAD (btn6)
+set_io -pullup yes keypad6_1 J14
+set_io -pullup yes keypad6_2 K16
+set_io -pullup yes keypad6_3 K15
+set_io -pullup yes keypad6_4 J15
+set_io -pullup yes keypad6_5 K14
+set_io -pullup yes keypad6_6 K13
+
