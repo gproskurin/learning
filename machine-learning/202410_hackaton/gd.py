@@ -95,8 +95,9 @@ def compute_gradient(X, y, w, b):
     for i_sample in range(m_samples):
         err = compute_model_output(X[i_sample], w, b) - y[i_sample]
 
-        for j_feature in range(n_features):
-            dj_dw[j_feature] += err * X[i_sample][j_feature]
+        #for j_feature in range(n_features):
+        #    dj_dw[j_feature] += err * X[i_sample][j_feature]
+        dj_dw += err * X[i_sample]
 
         dj_db += err
 
