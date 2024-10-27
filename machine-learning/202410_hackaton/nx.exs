@@ -11,46 +11,25 @@ defmodule NxTest do
 
 
 defp compute_model_output(x, w, b) do
-	Nx.add(Nx.multiply(x, w), b)
+	Nx.multiply(x, w) |> Nx.add(b)
 end
 
 
 defp compute_cost(x, y, w, b) do
-	f_wb = compute_model_output(x, w, b)
-	Nx.divide(
-		Nx.sum(
-			Nx.pow(
-				Nx.subtract(f_wb, y),
-				2
-			)
-		),
-		2 * Nx.size(x)
-	)
+	compute_model_output(x, w, b) |> Nx.subtract(y) |> Nx.pow(2) |> Nx.sum |> Nx.divide(2 * Nx.size(x))
 end
 
 
 defp compute_gradient(x, y, w, b) do
-	f_wb = compute_model_output(x, w, b)
-	dj_db = Nx.divide(
-		Nx.subtract(f_wb, y),
-		Nx.size(x)
-	)
+	dj_db = compute_model_output(x, w, b) |> Nx.subtract(y) |> Nx.divide(Nx.size(x))
 	dj_dw = Nx.multiply(dj_db, x)
-	{
-		Nx.sum(dj_dw),
-		Nx.sum(dj_db)
-	}
+	{Nx.sum(dj_dw), Nx.sum(dj_db)}
 end
 
 
 @eps Nx.tensor(0.000001, type: :f64)
 defp is_small(t) do
-	r = Nx.all(
-		Nx.less(
-			Nx.abs(t),
-			@eps
-		)
-	)
+	r = Nx.less(Nx.abs(t), @eps) |> Nx.all
 	case Nx.to_number(r) do
 		0 -> :false
 		1 -> :true
