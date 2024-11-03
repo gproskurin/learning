@@ -22,13 +22,19 @@ X_train1 = np.array([
     #[5, 1200],
 ], dtype=np.float64)
 
-X_train = np.array(data.X_train_lab)
+#X_train = np.array(data.X_train_lab)
+
+X_train = np.array([[0.5, 1.5], [1,1], [1.5, 0.5], [3, 0.5], [2, 2], [1, 2.5]])
+y_train = np.array([0, 0, 0, 1, 1, 1])
+
+
 N_FEATURES = X_train.shape[1]
 w_init = np.zeros(N_FEATURES)
 b_init = 0
+print(f"w_init={w_init} b_init={b_init}")
 
 #y_train = np.array([460, 232, 178])
-y_train = np.array(data.y_train_lab)
+#y_train = np.array(data.y_train_lab)
 print(f'X_train={X_train}')
 print(f'X_train_shape={X_train.shape}')
 print(f'y_train={y_train}')
@@ -41,8 +47,12 @@ def zscore_normalize_features(X):
     return (X-mu)/sigma, mu, sigma
 
 
+def sigmoid(z):
+    return 1.0 / (1.0 + np.exp(-z))
+
+
 def compute_model_output(x, w, b):
-    return np.dot(w, x) + b
+    return sigmoid(np.dot(w, x) + b)
     #m = x.shape[0]
     #f_wb = np.zeros(m)
     #for i in range(m):
@@ -128,8 +138,8 @@ def gradient_descent(X, y, w_in, b_in, alpha, num_iters, cost_function, gradient
         if True or i<1000000:
             j_hist.append(cost_function(X, y, w, b))
             p_hist.append([w,b])
-        #if False or i<100 or i%10 == 0:
-        #    print(f"GRAD_DESCENT_PROGRESS: i={i} cost={j_hist[-1]} dj_dw={dj_dw} dj_db={dj_db} w={w} b={b}")
+        if False or i<100 or i%10 == 0:
+            print(f"GRAD_DESCENT_PROGRESS: i={i} cost={j_hist[-1]} dj_dw={dj_dw} dj_db={dj_db} w={w} b={b}")
         if is_small_array(dj_dw) and is_small(dj_db):
             print(f"GRAD_DESCENT_PROGRESS: i={i} cost={j_hist[-1]} dj_dw={dj_dw} dj_db={dj_db} w={w} b={b}")
             print("END_EPSILON")
@@ -138,17 +148,17 @@ def gradient_descent(X, y, w_in, b_in, alpha, num_iters, cost_function, gradient
 
 
 
-(X_train_scaled, mu, sigma) = zscore_normalize_features(X_train)
-print(f"SCALE: mu={mu} sigma={sigma}")
+#(X_train_scaled, mu, sigma) = zscore_normalize_features(X_train)
+#print(f"SCALE: mu={mu} sigma={sigma}")
 t1 = time.time()
 w, b = gradient_descent(
-    #X=X_train,
-    X=X_train_scaled,
+    X=X_train,
+    #X=X_train_scaled,
     y=y_train,
     w_in=w_init,
     b_in=b_init,
-    alpha=0.1,
-    num_iters=10000,
+    alpha=0.5,
+    num_iters=100000,
     cost_function=compute_cost,
     gradient_function=compute_gradient
 )
@@ -157,13 +167,13 @@ t2 = time.time()
 print(f'TIME={t2-t1}')
 print(f'END: w={w} b={b}')
 
-for i_sample in range(X_train_scaled.shape[0]):
-    p = compute_model_output(X_train_scaled[i_sample], w, b)
-    print(f'sample[{i_sample}]: prediction={p} value={y_train[i_sample]}')
+#for i_sample in range(X_train_scaled.shape[0]):
+#    p = compute_model_output(X_train_scaled[i_sample], w, b)
+#    print(f'sample[{i_sample}]: prediction={p} value={y_train[i_sample]}')
 
-x_house = np.array([1200, 3, 1, 40])
-x_house_scaled = (x_house - mu)/sigma
+#x_house = np.array([1200, 3, 1, 40])
+#x_house_scaled = (x_house - mu)/sigma
 
-p = compute_model_output(x_house_scaled, w, b)
-print(f'x_house: prediction={p}')
+#p = compute_model_output(x_house_scaled, w, b)
+#print(f'x_house: prediction={p}')
 
