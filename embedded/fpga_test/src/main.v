@@ -67,14 +67,21 @@ end
 wire clk_1hz;
 assign clk_1hz = ~cnt_128hz[6];
 
+// high speed counter
+reg [15:0] cnt_clk;
+always@(posedge clk)
+begin
+	cnt_clk <= cnt_clk + 1;
+end
+
 // led2
-assign led2 = clk_1hz;
+//assign led2 = clk_1hz;
 
 // led1
 reg [3:0] pwm1_width = 0;
 reg dec = 0;
 my_pwm pwm1(clk, 15, pwm1_width, led1);
-always @ (posedge cnt_128hz[5])
+always @ (posedge cnt_128hz[2])
 begin
 	if (pwm1_width == 14) begin
 		dec <= 1;
@@ -141,17 +148,23 @@ begin
 end
 
 
-reg [15:0] dbg_sram_data;
+reg [15:0] st_dbgout16;
+reg [7:0] st_dbgout8;
 wire sram_test_err;
 reg [7:0] r_sram_test_err_cnt;
 sram_test st(
+	//.clk(cnt_clk[9]),
+	//.clk(cnt_128hz[0]),
+	//.clk(clk_1hz),
 	.clk(clk),
 	.sram_addr(sram_a),
 	.sram_data(sram_d),
 	.sram_cs(sram_cs),
 	.sram_oe(sram_oe),
 	.sram_we(sram_we),
-	.dbgout_sram_data(dbg_sram_data),
+	.dbgout16(st_dbgout16),
+	.dbgout8(st_dbgout8),
+	.dbgout1(led2),
 	.out_err(sram_test_err)
 );
 always@(posedge sram_test_err)
@@ -163,7 +176,7 @@ end
 my_seg7_n #(.N(2)) s720(
 	clk,
 	1'b1,
-	sram_addr[7:0],
+	st_dbgout8,
 	{seg72_a, seg72_b, seg72_c, seg72_d, seg72_e, seg72_f, seg72_g},
 	{seg72_gnd1, seg72_gnd0}
 );
@@ -173,7 +186,7 @@ my_seg7_n #(.N(2)) s720(
 my_seg7_n #(.N(4)) s74(
 	clk,
 	1'b1,
-	dbg_sram_data,
+	st_dbgout16,
 	{seg74_a, seg74_b, seg74_c, seg74_d, seg74_e, seg74_f, seg74_g},
 	{seg74_gnd3, seg74_gnd2, seg74_gnd1, seg74_gnd0}
 );
