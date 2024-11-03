@@ -28,40 +28,8 @@ module top(
 	output wire seg72_gnd0,
 	output wire seg72_gnd1,
 
-	output wire sram_a0,
-	output wire sram_a1,
-	output wire sram_a2,
-	output wire sram_a3,
-	output wire sram_a4,
-	output wire sram_a5,
-	output wire sram_a6,
-	output wire sram_a7,
-	output wire sram_a8,
-	output wire sram_a9,
-	output wire sram_a10,
-	output wire sram_a11,
-	output wire sram_a12,
-	output wire sram_a13,
-	output wire sram_a14,
-	output wire sram_a15,
-	output wire sram_a16,
-	output wire sram_a17,
-	inout wire sram_d0,
-	inout wire sram_d1,
-	inout wire sram_d2,
-	inout wire sram_d3,
-	inout wire sram_d4,
-	inout wire sram_d5,
-	inout wire sram_d6,
-	inout wire sram_d7,
-	inout wire sram_d8,
-	inout wire sram_d9,
-	inout wire sram_d10,
-	inout wire sram_d11,
-	inout wire sram_d12,
-	inout wire sram_d13,
-	inout wire sram_d14,
-	inout wire sram_d15,
+	output wire [17:0] sram_a,
+	inout wire [15:0] sram_d,
 	output wire sram_cs,
 	output wire sram_oe,
 	output wire sram_we,
@@ -173,31 +141,13 @@ begin
 end
 
 
-wire [17:0] sram_addr = {
-	sram_a17, sram_a16,
-	sram_a15, sram_a14,
-	sram_a13, sram_a12,
-	sram_a11, sram_a10,
-	sram_a9, sram_a8,
-	sram_a7, sram_a6,
-	sram_a5, sram_a4,
-	sram_a3, sram_a2,
-	sram_a1, sram_a0
-};
-wire [15:0] sram_data = {
-	sram_d15, sram_d14, sram_d13, sram_d12,
-	sram_d11, sram_d10, sram_d9, sram_d8,
-	sram_d7, sram_d6, sram_d5, sram_d4,
-	sram_d3, sram_d2, sram_d1, sram_d0
-};
-
 reg [15:0] dbg_sram_data;
 wire sram_test_err;
 reg [7:0] r_sram_test_err_cnt;
 sram_test st(
 	.clk(clk),
-	.sram_addr(sram_addr),
-	.sram_data(sram_data),
+	.sram_addr(sram_a),
+	.sram_data(sram_d),
 	.sram_cs(sram_cs),
 	.sram_oe(sram_oe),
 	.sram_we(sram_we),
