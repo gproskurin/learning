@@ -1,12 +1,11 @@
-#include "hardware/regs/addressmap.h"
-#include "hardware/structs/iobank0.h"
+#include "hardware/regs/resets.h"
 #include "hardware/structs/resets.h"
 
 #include "lib_rp2040.h"
 #include "bsp.h"
 
 
-__attribute__((noreturn)) void my_main()
+__attribute__((naked, noreturn)) void my_main()
 {
 	// unreset io_bank0
 	resets_hw->reset = ~RESETS_RESET_IO_BANK0_BITS;
@@ -16,6 +15,7 @@ __attribute__((noreturn)) void my_main()
 		rp2040_lib::gpio::af_t(5), // function = sio
 		rp2040_lib::gpio::mode_t::output
 	);
+	bsp::pin_led.set_state(1);
 
 	for(;;) {
 		bsp::pin_led.set_state(1);
@@ -26,7 +26,7 @@ __attribute__((noreturn)) void my_main()
 	}
 }
 
-
+#if 0
 __attribute__((naked, noreturn)) void _reset()
 {
 	my_main();
@@ -39,4 +39,5 @@ __attribute__((section(".vectors"))) void (*tab[2])(void) =
 	_estack,
 	_reset,
 };
+#endif
 

@@ -18,7 +18,7 @@ set(T_C_CXX_ARCH_FLAGS -mcpu=cortex-m0plus -mthumb)
 #set(T_FREERTOS_PREFIX "RP2040_CPU1_")
 
 set(T_FIRMWARE_ELF ${PROJECT_NAME}) # pico-sdk spoils .elf suffix
-#set(T_FIRMWARE_BIN ${PROJECT_NAME}.bin)
+set(T_FIRMWARE_BIN ${PROJECT_NAME}.bin)
 set(T_FIRMWARE_UF2 ${PROJECT_NAME}.uf2)
 
 # PICO
@@ -84,7 +84,7 @@ target_link_libraries(${T_FIRMWARE_ELF}
 )
 
 set(link_options
-	-T${T_LINKER_SCRIPT} --entry 0x20040001
+	-T${T_LINKER_SCRIPT}
 	-nostartfiles
 	-ffreestanding
 	-nostdlib
@@ -105,11 +105,11 @@ set_target_properties(${T_FIRMWARE_ELF}
 set_target_properties(${T_FIRMWARE_ELF}
 	PROPERTIES LINK_DEPENDS ${T_LINKER_SCRIPT}
 )
-#add_custom_target(${T_FIRMWARE_BIN}
-#	ALL
-#	DEPENDS ${T_FIRMWARE_ELF}
-#	COMMAND ${OBJCOPY} -O binary ${CMAKE_CURRENT_BINARY_DIR}/${T_FIRMWARE_ELF}.elf ${CMAKE_CURRENT_BINARY_DIR}/${T_FIRMWARE_BIN}
-#)
+add_custom_target(${T_FIRMWARE_BIN}
+	ALL
+	DEPENDS ${T_FIRMWARE_ELF}
+	COMMAND ${OBJCOPY} -O binary ${CMAKE_CURRENT_BINARY_DIR}/${T_FIRMWARE_ELF}.elf ${CMAKE_CURRENT_BINARY_DIR}/${T_FIRMWARE_BIN}
+)
 
 add_custom_target(${T_FIRMWARE_UF2}
 	ALL
