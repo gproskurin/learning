@@ -10,10 +10,10 @@ def dds_notes_incs():
     LEN = 12*9
     freqs = [440/(M**x) for x in range(57,0,-1)] + [440] + [440*(M**x) for x in range(1,51)]
     r = [round(2**32 * f / DDS_FREQ) for f in freqs]
+    assert len(r) == LEN
     for x in r:
         assert x > 0
         assert x < 2**32 / 2
-        assert len(r) == LEN
     return r
 
 

@@ -11,9 +11,28 @@
 
 
 #define DDS_FREQ 40000 // keep in sync with python generator
-#define TIM_DAC TIM6
+
+#if defined TARGET_STM32L072
+	#define TIM_DAC TIM6
+	#define DMA_CHANNEL_DAC DMA1_Channel2
+	constexpr stm32_lib::gpio::gpio_pin_t pin_dac(GPIOA_BASE, 4);
+#elif defined TARGET_STM32WL55_CPU1
+	#define TIM_DAC TIM2
+	#define DMA_CHANNEL_DAC DMA1_Channel1
+	constexpr stm32_lib::gpio::gpio_pin_t pin_dac(GPIOA_BASE, 10);
+#endif
+
 constexpr uint16_t tim_dac_cr1 = 0;
 constexpr uint16_t tim_dac_cr1_en = TIM_CR1_CEN;
+
+constexpr uint32_t dac_cr_en =
+	(/*TIM6*/0b000 << DAC_CR_TSEL1_Pos)
+	| DAC_CR_TEN1
+	| DAC_CR_EN1
+	;
+
+constexpr uint32_t dac_cr_dmaen = dac_cr_en | DAC_CR_DMAEN1;
+
 constexpr uint32_t dma_ccr =
 	(0b10 << DMA_CCR_PL_Pos) // priority
 	| (0b01 << DMA_CCR_MSIZE_Pos) // 16bit
@@ -26,8 +45,6 @@ constexpr uint32_t dma_ccr =
 	| DMA_CCR_TEIE
 	;
 constexpr uint32_t dma_ccr_en = dma_ccr | DMA_CCR_EN;
-
-constexpr stm32_lib::gpio::gpio_pin_t pin_dac(GPIOA_BASE, 4);
 
 freertos_utils::pin_toggle_task_t pin_green("pin_toggle_green", bsp::pin_led_green, 1);
 freertos_utils::pin_toggle_task_t pin_blue("pin_toggle_blue", bsp::pin_led_blue, 1);
@@ -195,7 +212,7 @@ struct player_task_data_t {
 	QueueHandle_t queue_handle = nullptr;
 
 	uint32_t next_note_id = 1;
-	std::array<uint16_t, 1024> dma_buffer{0};
+	std::array<uint16_t, 128> dma_buffer{0};
 } player_task_data;
 
 
@@ -229,7 +246,6 @@ extern "C" __attribute__ ((interrupt)) void IntHandler_DMA1_Channel2_3()
 	if (events) {
 		DMA1->IFCR = clear;
 
-		// DMA events are higher priority, send them to the front of the queue
 		BaseType_t yield = pdFALSE;
 		queue_item_t const item = queue_item_encode(
 			notes::sym_t::sym_none,
@@ -237,7 +253,7 @@ extern "C" __attribute__ ((interrupt)) void IntHandler_DMA1_Channel2_3()
 			static_cast<notes::instrument_t>(0),
 			static_cast<queue_nf_t>(events)
 		);
-		xQueueSendToFrontFromISR(player_task_data.queue_handle, reinterpret_cast<const void*>(&item), &yield);
+		xQueueSendFromISR(player_task_data.queue_handle, reinterpret_cast<const void*>(&item), &yield);
 		portYIELD_FROM_ISR(yield);
 	}
 }
@@ -266,67 +282,89 @@ void dac_init()
 	//static_assert((uint64_t(arr) + 1) * uint64_t(DDS_FREQ) == uint64_t(CLOCK_SPEED));
 	//static_assert(uint64_t(psc_arr.second-1) * uint64_t(DDS_FREQ) * uint64_t(psc_arr.first+1) == uint64_t(CLOCK_SPEED));
 
+	DAC->CR = 0;
 	TIM_DAC->CR1 = 0;
+	DMA_CHANNEL_DAC->CCR = 0;
+
 	TIM_DAC->DIER = TIM_DIER_UDE;
 	TIM_DAC->CR2 = (0b010 << TIM_CR2_MMS_Pos);
 	TIM_DAC->PSC = psc_arr.first;
 	TIM_DAC->ARR = psc_arr.second;
 
+#if defined TARGET_STM32L072
 	NVIC_SetPriority(DMA1_Channel2_3_IRQn, 3);
 	NVIC_EnableIRQ(DMA1_Channel2_3_IRQn);
 
 	// TODO move to main
 	NVIC_SetPriority(DMA1_Channel4_5_6_7_IRQn, 4);
 	NVIC_EnableIRQ(DMA1_Channel4_5_6_7_IRQn);
+#elif defined TARGET_STM32WL55_CPU1
+#endif
 
 	stm32_lib::gpio::set_mode_output_analog(pin_dac);
 
-	DAC->CR = 0;
 	//DAC->MCR = (DAC->MCR & ~DAC_MCR_MODE1_Msk) | (0b000 << DAC_MCR_MODE1_Pos); // buffer
-	DAC->CR =
-		(/*TIM6*/0b000 << DAC_CR_TSEL1_Pos)
-		| DAC_CR_EN1
-		| DAC_CR_DMAEN1
-		;
 
+#if defined TARGET_STM32L072
 	// init DMA
-	DMA1_Channel2->CCR = 0;
-	DMA1_Channel2->CCR = dma_ccr;
 	DMA1_CSELR->CSELR =
 		(0b1001/*TIM6&DAC1*/ << DMA_CSELR_C2S_Pos)
 		| (0b0100/*USART2_TX*/ << DMA_CSELR_C4S_Pos) // TODO move to main
 		;
-	DMA1_Channel2->CPAR = reinterpret_cast<uint32_t>(&DAC1->DHR12L1);
-	DMA1_Channel2->CMAR = reinterpret_cast<uint32_t>(player_task_data.dma_buffer.data());
-	DMA1_Channel2->CNDTR = player_task_data.dma_buffer.size();
+	DMA_CHANNEL_DAC->CPAR = reinterpret_cast<uint32_t>(&DAC1->DHR12L1);
+#elif defined TARGET_STM32WL55_CPU1
+	// TODO init DMA
+	DMA_CHANNEL_DAC->CPAR = reinterpret_cast<uint32_t>(&DAC->DHR12L1);
+#endif
+	DMA_CHANNEL_DAC->CMAR = reinterpret_cast<uint32_t>(player_task_data.dma_buffer.data());
+	DMA_CHANNEL_DAC->CNDTR = player_task_data.dma_buffer.size();
 }
 
 
 void timer_start()
 {
 	// DMA
-	DMA1_Channel2->CCR = dma_ccr;
-	while (DMA1_Channel2->CCR & DMA_CCR_EN) {} // wait for DMA to be disabled
-	DMA1->IFCR = DMA_IFCR_CHTIF2 | DMA_IFCR_CTCIF2 | DMA_IFCR_CTEIF2;
-	DMA1_Channel2->CCR = dma_ccr_en;
+	DMA_CHANNEL_DAC->CCR = dma_ccr; // need this?
+	DMA_CHANNEL_DAC->CNDTR = player_task_data.dma_buffer.size();
+	DMA_CHANNEL_DAC->CCR = dma_ccr_en;
 
 	// DAC
-	DAC->CR |= DAC_CR_TEN1;
+	DAC->CR = dac_cr_en;
+	DAC->CR = dac_cr_dmaen;
 
 	// timer
+	TIM_DAC->CNT = 0;
 	TIM_DAC->CR1 = tim_dac_cr1_en;
 
 	pin_green.on();
+	logger.log_async(">>> timer_started\r\n");
 }
 
 void timer_stop()
 {
+	// disable DAC DMA
+	DAC->CR = dac_cr_en;
+
+	// stop timer
 	TIM_DAC->CR1 = tim_dac_cr1;
-	TIM_DAC->CNT = 0; // is it enough?
-	DAC->CR &= ~DAC_CR_TEN1;
-	DMA1_Channel2->CCR = dma_ccr;
+
+	// disable DMA channel
+	{
+		// disable interrupts
+		constexpr uint32_t ccr1 = dma_ccr_en & ~(DMA_CCR_HTIE | DMA_CCR_TCIE | DMA_CCR_TEIE);
+		DMA_CHANNEL_DAC->CCR = ccr1;
+
+		// disable channel
+		constexpr uint32_t ccr2 = ccr1 & ~DMA_CCR_EN;
+		DMA_CHANNEL_DAC->CCR = ccr2;
+		while (DMA_CHANNEL_DAC->CCR & DMA_CCR_EN) {}
+
+		// clear interrupt flags
+		DMA1->IFCR = DMA_IFCR_CHTIF2 | DMA_IFCR_CTCIF2 | DMA_IFCR_CTEIF2 | DMA_IFCR_CGIF2;
+	}
 
 	pin_green.off();
+	logger.log_async("<<< - timer_stopped\r\n");
 }
 
 
@@ -364,8 +402,17 @@ void player::create_task(const char* task_name, UBaseType_t prio)
 
 namespace dmafill_fsm {
 	enum state_t {
-		dma_empty, dma_full, dma_halfdone
+		dma_empty, dma_doing_1, dma_doing_2
 	};
+	const char* state_str(state_t s)
+	{
+		switch (s) {
+			case dma_empty: return "dma_empty\r\n";
+			case dma_doing_1: return "dma_doing_1\r\n";
+			case dma_doing_2: return "dma_doing_2\r\n";
+		}
+		return "dma_state_unknown\r\n";
+	}
 
 	bool fill_buffer_impl(size_t idx_begin, size_t idx_end)
 	{
@@ -437,6 +484,8 @@ void player_task_function(void*)
 			continue;
 		}
 
+		//logger.log_async("*** GOT msg\r\n");
+
 		notes::sym_t item_n;
 		notes::duration_t item_d;
 		notes::instrument_t item_i;
@@ -449,8 +498,10 @@ void player_task_function(void*)
 			play_note(item_n, item_d, item_i, player_task_data.next_note_id);
 			++player_task_data.next_note_id; // TODO handle wrap
 			pin_blue.pulse_once(configTICK_RATE_HZ/50);
+			//logger.log_async("*** YES_NOTE\r\n");
+		} else {
+			//logger.log_async("*** NO_NOTE\r\n");
 		}
-
 		if (item_nf & queue_nf_t::te) {
 			// TODO reset dma, disable/enable, ...
 			timer_stop();
@@ -461,59 +512,52 @@ void player_task_function(void*)
 
 		const bool ht = item_nf & queue_nf_t::ht;
 		const bool tc = item_nf & queue_nf_t::tc;
-		if (ht) {
-			if (tc) {
-				// ht=1 tc=1
-				// should not happen: missed ht-only, and received both later?
-				// do our best
+		//logger.log_async(ht ? "*** YES_HT\r\n" : "*** NO_HT\r\n");
+		//logger.log_async(tc ? "*** YES_TC\r\n" : "*** NO_TC\r\n");
+		if (!ht && !tc) {
+			//logger.log_async("*** CASE 10 - just note\r\n");
+			// no dma flags, probably just note added
+			if (state == dma_empty) {
+				//logger.log_async("*** CASE 10-1\r\n");
 				if (action_fill()) {
-					if (state == dma_empty) {
-						timer_start();
-					}
-					state = dma_full;
+					//logger.log_async("*** CASE 10 - starting timer\r\n");
+					timer_start();
+					state = dma_doing_1;
 				} else {
-					timer_stop();
-					state = dma_empty;
+					//logger.log_async("*** CASE 10-2\r\n");
 				}
-				logger.log_async("PLAYER error: ht=1 tc=1\r\n");
-				pin_red.pulse_once(configTICK_RATE_HZ/10);
 			} else {
-				// ht=1 tc=0
-				if (state == dma_full) {
-					state = dma_halfdone;
-					if (!action_fill_bottom_half()) {
-						timer_stop();
-						state = dma_empty;
-					}
-				} else {
-					logger.log_async("PLAYER error: ht=1 tc=0 state!=dma_full\r\n");
-					pin_red.pulse_once(configTICK_RATE_HZ/10);
-				}
+				logger.log_async("*** CASE 10-3\r\n");
+			}
+		} else if (state == dma_empty) {
+			// ignore
+			//logger.log_async("*** CASE 20 - dma_empty\r\n");
+		} else if (ht && !tc && state==dma_doing_1) {
+			//logger.log_async("*** CASE 30 = ht usual\r\n");
+			if (action_fill_bottom_half()) {
+				//logger.log_async("*** CASE 30-1 - continuing\r\n");
+				state = dma_doing_2;
+			} else {
+				//logger.log_async("*** CASE 30-2 stopping timer\r\n");
+				timer_stop();
+				state = dma_empty;
+			}
+		} else if (!ht && tc && state==dma_doing_2) {
+			//logger.log_async("*** CASE 40 - tc usual\r\n");
+			if (action_fill_top_half()) {
+				//logger.log_async("*** CASE 40-1 - tc continuing\r\n");
+				state = dma_doing_1;
+			} else {
+				//logger.log_async("*** CASE 40-2 - stopping timer\r\n");
+				timer_stop();
+				state = dma_empty;
 			}
 		} else {
-			if (tc) {
-				// ht=0 tc=1
-				if (state == dma_halfdone) {
-					if (action_fill_top_half()) {
-						state = dma_full;
-					} else {
-						timer_stop();
-						state = dma_empty;
-					}
-				} else {
-					logger.log_async("PLAYER error: ht=0 tc=1 state!=dma_halfdone\r\n");
-					pin_red.pulse_once(configTICK_RATE_HZ/10);
-				}
-			} else {
-				// ht=0 tc=0
-				// probably just note added
-				if (state == dma_empty) {
-					if (action_fill()) {
-						state = dma_full;
-						timer_start();
-					}
-				}
-			}
+			logger.log_async("PLAYER: unsuported flags combination\r\n");
+			logger.log_async(ht ? "PLAYER: ht\r\n" : "PLAYER: !ht\r\n");
+			logger.log_async(tc ? "PLAYER: tc\r\n" : "PLAYER: !tc\r\n");
+			logger.log_async(dmafill_fsm::state_str(state));
+			pin_red.pulse_once(configTICK_RATE_HZ/10);
 		}
 	}
 }

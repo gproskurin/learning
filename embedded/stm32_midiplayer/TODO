@@ -13,5 +13,5 @@
 + sin lookup tables: shrink size / 4
 - adjustable tempo
 - USB MIDI input
-- logger DMA, interrupts
++ logger DMA, interrupts
 

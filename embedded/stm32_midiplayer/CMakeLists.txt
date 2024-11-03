@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 include("${CMAKE_SOURCE_DIR}/../cmake/arm-none-eabi.cmake")
+include("${CMAKE_SOURCE_DIR}/../cmake/freertos.cmake")
 
 project(midiplayer C CXX)
 set(CMAKE_VERBOSE_MAKEFILE ON)
@@ -9,10 +10,17 @@ set(stm32l072_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/../ld/stm32l072.ld)
 set(stm32l072_DEFINITIONS "-DTARGET_STM32L072")
 set(stm32l072_C_CXX_ARCH_FLAGS -mcpu=cortex-m0plus -mthumb)
 set(stm32l072_FREERTOS_PORT "GCC_ARM_CM0")
+set(stm32l072_FREERTOS_PREFIX "STM32L072_")
+set(stm32l072_FIRMWARE_ELF ${PROJECT_NAME}_stm32l072.elf)
+set(stm32l072_FIRMWARE_BIN ${PROJECT_NAME}_stm32l072.bin)
 
-set(FIRMWARE_ELF ${PROJECT_NAME}.elf)
-set(FIRMWARE_BIN ${PROJECT_NAME}.bin)
-#set(FIRMWARE_IHEX ${PROJECT_NAME}.ihex)
+set(stm32wl55cpu1_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/../ld/stm32wl55_cpu1.ld)
+set(stm32wl55cpu1_DEFINITIONS -DTARGET_STM32WL55 -DTARGET_STM32WL55_CPU1)
+set(stm32wl55cpu1_C_CXX_ARCH_FLAGS -mcpu=cortex-m4 -mthumb)
+set(stm32wl55cpu1_FREERTOS_PORT "GCC_ARM_CM3")
+set(stm32wl55cpu1_FREERTOS_PREFIX "STM32WL55CPU1_")
+set(stm32wl55cpu1_FIRMWARE_ELF ${PROJECT_NAME}_stm32wl55cpu1.elf)
+set(stm32wl55cpu1_FIRMWARE_BIN ${PROJECT_NAME}_stm32wl55cpu1.bin)
 
 set(CMSIS_ROOT "${CMAKE_SOURCE_DIR}/../_deps")
 set(CMSIS_ARM_INCLUDE "${CMAKE_SOURCE_DIR}/../_deps/CMSIS_6/CMSIS/Core/Include")
@@ -29,10 +37,12 @@ add_custom_command(
 )
 
 function(generate_targets T)
-	set(T_FIRMWARE_ELF "${T}_${FIRMWARE_ELF}")
-	set(T_FIRMWARE_BIN "${T}_${FIRMWARE_BIN}")
 	set(T_LINKER_SCRIPT "${${T}_LINKER_SCRIPT}")
 	set(T_DEFINITIONS "${${T}_DEFINITIONS}")
+	set(T_FIRMWARE_ELF "${${T}_FIRMWARE_ELF}")
+	set(T_FIRMWARE_BIN "${${T}_FIRMWARE_BIN}")
+	set(T_FREERTOS_PORT "${${T}_FREERTOS_PORT}")
+	set(T_FREERTOS_PREFIX "${${T}_FREERTOS_PREFIX}")
 
 	set(T_C_CXX_FLAGS
 		${${T}_C_CXX_ARCH_FLAGS}
@@ -52,15 +62,13 @@ function(generate_targets T)
 	set(T_C_FLAGS ${CMAKE_C_FLAGS} ${T_C_CXX_FLAGS})
 
 	# FreeRTOS
-	add_library(freertos_config INTERFACE)
-	target_include_directories(freertos_config SYSTEM
-		INTERFACE "${CMAKE_SOURCE_DIR}/src"
+	generate_freertos_targets("${T_FREERTOS_PREFIX}" "${T_FREERTOS_PORT}")
+	set_target_properties(${T_FREERTOS_PREFIX}freertos_config
+		PROPERTIES
+		INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/src"
+		INTERFACE_COMPILE_OPTIONS "${T_C_FLAGS}"
+		INTERFACE_COMPILE_DEFINITIONS "${T_DEFINITIONS}"
 	)
-	target_compile_options(freertos_config
-		INTERFACE ${T_C_FLAGS}
-	)
-	set(FREERTOS_PORT ${${T}_FREERTOS_PORT})
-	add_subdirectory("${CMAKE_SOURCE_DIR}/../_deps/FreeRTOS-Kernel" "${T}_FreeRTOS")
 	###
 
 	add_executable(${T_FIRMWARE_ELF}
@@ -76,7 +84,7 @@ function(generate_targets T)
 	)
 
 	target_link_libraries(${T_FIRMWARE_ELF}
-		freertos_kernel
+		"${T_FREERTOS_PREFIX}freertos_kernel"
 		c
 	)
 
@@ -102,15 +110,10 @@ function(generate_targets T)
 		COMMAND ${OBJCOPY} -O binary ${CMAKE_CURRENT_BINARY_DIR}/${T_FIRMWARE_ELF} ${CMAKE_CURRENT_BINARY_DIR}/${T_FIRMWARE_BIN}
 	)
 
-	#add_custom_target(${FIRMWARE_IHEX}
-	#	ALL
-	#	DEPENDS ${FIRMWARE_ELF}
-	#	COMMAND ${OBJCOPY} -O ihex ${CMAKE_CURRENT_BINARY_DIR}/${FIRMWARE_ELF} ${CMAKE_CURRENT_BINARY_DIR}/${FIRMWARE_IHEX}
-	#)
-
 endfunction()
 
 
 generate_targets("stm32l072")
+#generate_targets("stm32wl55cpu1")
 
 ###
