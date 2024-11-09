@@ -25,6 +25,7 @@ assign sram_cs = r_sram_cs;
 
 reg [15:0] r_sram_data;
 assign sram_data = r_sram_oe ? r_sram_data : 16'bZ;
+reg [15:0] r_sram_data_copy;
 
 reg [17:0] r_sram_addr;
 assign sram_addr = r_sram_addr;
@@ -32,7 +33,7 @@ assign sram_addr = r_sram_addr;
 reg [15:0] r_data0 = 0;
 reg [15:0] r_data;
 
-reg r_state = 0;
+reg [1:0] r_state = 0;
 reg r_mode_read = 0;
 reg r_init_done = 0;
 assign dbgout8 = r_data0[7:0];
@@ -63,22 +64,24 @@ begin
 			case (r_state)
 				// pulse WE
 				0: begin
-					r_sram_we <= 0;
+					r_sram_we <= 0; // WE down
 					r_state <= 1;
 				end
 				1: begin
-					// rely on sram chip timing: WE should go up fast enough and disable writes before
-					r_sram_we <= 1;
-					r_state <= 0;
+					r_sram_we <= 1; // WE up
+					r_state <= 2;
+				end
+				2: begin
 					// update data and addr
-					if (&r_sram_addr) begin
-						// switch to read
+					if (& r_sram_addr) begin
+						// end of address space, switch to read
 						r_mode_read <= 1;
 						r_init_done <= 0;
 					end else begin
 						r_sram_data <= r_sram_data + 1;
 						r_sram_addr <= r_sram_addr + 1;
 					end
+					r_state <= 0;
 				end
 			endcase
 		end
@@ -92,12 +95,12 @@ begin
 		end else begin
 			// read
 			// data propagation / timing: after we change address register, skip (delay) one cycle before reading
-			// - cycle0: update address register (do the same as in cycle2)
-			// - cycle1: address register update propagated to sram address lines, sram chip starts fetching data
-			// - cycle2: do multiple things simultaneously:
-			//     (a) sram chip data lines contain valid data, read it and act on it
-			//     (b) update address register, rely on data hold time for sram chip (tOH >= 3ns), data is
-			//         still valid while we are doing (a). TODO: is it reliable?
+			// - cycle -1 (the same as cycle 2): update address register
+			// - cycle 0: address register update propagated to SRAM address lines, SRAM chip starts fetching data
+			// - cycle 1: latch data from SRAM data lines
+			// - cycle 2 (the same as cycle -1): do multiple things simultaneously:
+			//     (a) update address register to next value
+			//     (b) work with data latched in previous cycle
 			case (r_state)
 				0: begin
 					// delay, some init
@@ -105,8 +108,13 @@ begin
 					r_state <= 1;
 				end
 				1: begin
-					// read data
-					if (sram_data != r_data)
+					// latch data from SRAM data lines
+					r_sram_data_copy <= sram_data;
+					r_state <= 2;
+				end
+				2: begin
+					// check data
+					if (r_sram_data_copy != r_data)
 						out_err <= 1;
 					// increment address
 					if (&r_sram_addr) begin
