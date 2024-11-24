@@ -181,3 +181,144 @@ end
 
 endmodule
 
+
+module my_ws2812 #(parameter CLK_SCALE = 1)
+(
+	input wire clk,
+	input wire clk_ws,
+	output wire ctrl,
+	output wire [5:0] leddata_addr,
+	output wire leddata_start,
+	//input wire led_data_done,
+	input wire [23:0] leddata_color,
+	output wire [7:0] dbgout8,
+	output wire [15:0] dbgout16,
+	output wire dbg_start,
+	output wire dbg_done
+);
+	localparam CNT_DATA = 120 / CLK_SCALE;
+	localparam CNT_DATA_HI_0 = 30 / CLK_SCALE;
+	localparam CNT_DATA_HI_1 = 90 / CLK_SCALE;
+	localparam CNT_RST = 6000 / CLK_SCALE; // >= 5000
+	reg [$clog2(CNT_RST)-1:0] r_cnt;
+
+	// color: GRB
+	reg [23:0] r_color;
+	reg [23:0] r_color_init;
+	reg [4:0] r_cnt_bit24;
+	reg [5:0] r_cnt_led;
+	localparam CNT_LEDS = 64;
+	//assign led_data_addr = r_cnt_led;
+	assign dbgout8[7:6] = 0;
+	assign dbgout8[5:4] = r_state;
+	assign dbgout8[3:0] = r_cnt_led;
+	assign dbgout16[15:8] = r_cnt;
+	assign dbgout16[7:5] = 0;
+	assign dbgout16[4:0] = r_cnt_bit24;
+
+	//assign dbgout8[5:0] = r_cnt_led;
+	//assign dbgout8[7:6] = 0;
+
+	localparam S_RST = 0;
+	localparam S_H = 1;
+	localparam S_L = 2;
+	reg [1:0] r_state = S_RST;
+	//assign ctrl = (r_state == S_H);
+	//assign dbgout8[4:0] = r_cnt_led;
+	//assign dbgout8[7:5] = 0;
+
+	//assign dbgout8[5:0] = r_cnt_led;
+	//assign dbgout8[7:6] = 0;
+	//assign dbgout8[7:4] = r_cnt[3:0];
+	//assign dbgout8[3:0] = r_cnt_led[3:0];
+	//assign dbgout16 = r_color[15:0];
+	//assign dbgout16 = led_data_color[15:0];
+
+	reg r_leddata_start;
+	assign leddata_start = r_leddata_start;
+	assign leddata_addr = r_cnt_led;
+	//assign leddata_start = r_state==S_H && r_cnt_bit24==0 && r_cnt==0;
+	assign dbg_start = ~r_leddata_start;
+
+	/*
+	always@(posedge r_leddata_start)
+	begin
+		case (r_cnt_led)
+			0: r_color_init <= 24'h0F0101;
+			9: r_color_init <= 24'h010F01;
+			18: r_color_init <= 24'h01010F;
+			27: r_color_init <= 24'h0F0101;
+			36: r_color_init <= 24'h0F0101;
+			45: r_color_init <= 24'h010F01;
+			54: r_color_init <= 24'h01010F;
+			63: r_color_init <= 24'h0F000F;
+			default: r_color_init <= 24'h010101;
+		endcase
+	end
+	*/
+
+	always@(posedge clk)
+	begin
+		case (r_state)
+			S_RST: begin
+				ctrl <= 0;
+				r_cnt_led <= 0; // init
+				r_cnt_bit24 <= 0; // init
+				if (r_cnt == CNT_RST - 1) begin
+					r_cnt <= 0;
+					r_state <= S_H;
+				end else begin
+					r_cnt <= r_cnt + 1;
+				end
+			end
+			S_H: begin
+				ctrl <= 1;
+				if (r_cnt_bit24 == 0) begin
+					// starting new led, fetch its color
+					if (r_cnt == 0) begin
+						// start fetching
+						r_leddata_start <= 1;
+					end else if (r_cnt == CNT_DATA_HI_0 - 2) begin
+						// fetched
+						r_color <= leddata_color;
+						r_leddata_start <= 0;
+					end
+				end
+				if (r_cnt == (r_color[23] ? CNT_DATA_HI_1 - 1 : CNT_DATA_HI_0 - 1)) begin
+					r_state = S_L;
+				end
+				r_cnt <= r_cnt + 1;
+			end
+			S_L: begin
+				ctrl <= 0;
+				if (r_cnt == CNT_DATA - 1) begin
+					// end of bit, either switch to the next bit, or to the next led/reset
+					r_cnt <= 0;
+					if (r_cnt_bit24 == 23) begin
+						// processed all 24 bits, current led complete
+						// either switch to the next led, or to "reset" state if it was the last led
+						if (r_cnt_led == CNT_LEDS-1) begin
+							// it was the last led, switch to "reset" state
+							r_state <= S_RST;
+						end else begin
+							// switch to the next led
+							r_cnt_bit24 <= 0;
+							r_cnt_led <= r_cnt_led + 1;
+							r_state <= S_H;
+						end
+					end else begin
+						// switch to the next bit of current led
+						r_cnt_bit24 <= r_cnt_bit24 + 1;
+						r_color <= {r_color[22:0], r_color[23]}; // rotate
+						r_state <= S_H;
+					end
+				end else begin
+					r_cnt <= r_cnt + 1;
+				end
+			end
+		endcase
+	end
+
+
+endmodule
+

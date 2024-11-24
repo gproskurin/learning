@@ -6,13 +6,13 @@ set_io clk J3
 set_io led1 M12
 set_io led2 R16
 
-set_io seg7_a E2
-set_io seg7_b G3
-set_io seg7_c G4
-set_io seg7_d D1
-set_io seg7_e G5
-set_io seg7_f H5
-set_io seg7_g E3
+#set_io seg7_a E2
+#set_io seg7_b G3
+#set_io seg7_c G4
+#set_io seg7_d D1
+#set_io seg7_e G5
+#set_io seg7_f H5
+#set_io seg7_g E3
 
 set_io seg72_a H4
 set_io seg72_b G2
@@ -99,4 +99,10 @@ set_io -pullup yes keypad6_3 K15
 set_io -pullup yes keypad6_4 J15
 set_io -pullup yes keypad6_5 K14
 set_io -pullup yes keypad6_6 K13
+
+
+# WS2812
+#set_io ws2812_ctrl C16
+#set_io ws2812_ctrl T13
+set_io ws2812_ctrl E4
 

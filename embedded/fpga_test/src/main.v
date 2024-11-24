@@ -1,5 +1,88 @@
 `default_nettype none
 
+module ws2812_data #(parameter W_ADDR = 6, W_DATA = 24) (
+	input wire clk,
+	input wire start,
+	output wire done,
+	input wire [W_ADDR-1:0] iaddr,
+	output wire [W_DATA-1:0] odata
+);
+reg start_old;
+reg done_next;
+reg [W_DATA-1:0] r_odata;
+wire [2:0] row, col;
+assign row = iaddr[W_ADDR-1:3];
+assign col = iaddr[2:0];
+wire [3:0] row1, col1;
+wire [3:0] sum;
+assign sum = row1 ^ col1;
+assign row1 = {1'b0, row};
+assign col1 = {1'b0, col};
+reg prepared;
+assign odata = r_odata;
+
+localparam PERIOD = 30000000;
+reg [$clog2(PERIOD)-1:0] r_cnt;
+
+localparam C_WHITE = 24'h0F0F0F;
+localparam C_BLACK = 24'h010101;
+localparam C_RED = 24'h010F01;
+localparam C_ORANGE = 24'h0F1F01;
+localparam C_YELLOW = 24'h0F0F01;
+localparam C_GREEN = 24'h0F0101;
+localparam C_LIGHTBLUE = 24'h01010F;
+localparam C_BLUE = 24'h01012F;
+localparam C_MAGENTA = 24'h01803F;
+
+reg [23:0] c1 = C_RED;
+reg [23:0] c2 = C_ORANGE;
+reg [23:0] c3 = C_YELLOW;
+reg [23:0] c4 = C_GREEN;
+reg [23:0] c5 = C_LIGHTBLUE;
+reg [23:0] c6 = C_BLUE;
+reg [23:0] c7 = C_MAGENTA;
+reg [23:0] c8 = C_WHITE;
+always@(posedge clk)
+begin
+	if (r_cnt == PERIOD-1) begin
+		r_cnt <= 0;
+		c1 <= c2;
+		c2 <= c3;
+		c3 <= c4;
+		c4 <= c5;
+		c5 <= c6;
+		c6 <= c7;
+		c7 <= c8;
+		c8 <= c1;
+	end else begin
+		r_cnt <= r_cnt + 1;
+	end
+	done <= done_next;
+	if (start && !start_old) begin
+		if (!prepared) begin
+			prepared <= 1;
+		end
+		case (sum[2:0])
+			0: r_odata <= c8;
+			1: r_odata <= c1;
+			2: r_odata <= c2;
+			3: r_odata <= c3;
+			4: r_odata <= c4;
+			5: r_odata <= c5;
+			6: r_odata <= c6;
+			7: r_odata <= c7;
+		endcase
+		done_next <= 1;
+	end else begin
+		done_next <= 0;
+		prepared <= 0;
+	end
+	start_old <= start;
+end
+
+endmodule
+
+
 module top(
 	input wire clk,
 	output wire led1,
@@ -48,7 +131,9 @@ module top(
 	input wire keypad6_3,
 	input wire keypad6_4,
 	input wire keypad6_5,
-	input wire keypad6_6
+	input wire keypad6_6,
+
+	output wire ws2812_ctrl
 );
 
 localparam CONST_CLK = 100000000;
@@ -80,7 +165,7 @@ end
 // led1
 reg [3:0] pwm1_width = 0;
 reg dec = 0;
-my_pwm pwm1(clk, 15, pwm1_width, led1);
+//my_pwm pwm1(clk, 15, pwm1_width, led1);
 always @ (posedge cnt_128hz[2])
 begin
 	if (pwm1_width == 14) begin
@@ -152,6 +237,7 @@ reg [15:0] st_dbgout16;
 reg [7:0] st_dbgout8;
 wire sram_test_err;
 reg [7:0] r_sram_test_err_cnt;
+wire tmp1;
 sram_test st(
 	//.clk(cnt_clk[9]),
 	//.clk(cnt_128hz[0]),
@@ -162,9 +248,10 @@ sram_test st(
 	.sram_cs(sram_cs),
 	.sram_oe(sram_oe),
 	.sram_we(sram_we),
-	.dbgout16(st_dbgout16),
-	.dbgout8(st_dbgout8),
-	.dbgout1(led2),
+	//.dbgout16(st_dbgout16),
+	//.dbgout8(st_dbgout8),
+	//.dbgout1(led2),
+	.dbgout1(tmp1),
 	.out_err(sram_test_err)
 );
 always@(posedge sram_test_err)
@@ -192,15 +279,14 @@ my_seg7_n #(.N(4)) s74(
 );
 
 
-
-my_keypad_led kpl0(r_sram_test_err_cnt[0], keypad_led_d8);
-my_keypad_led kpl1(r_sram_test_err_cnt[1], keypad_led_d7);
-my_keypad_led kpl2(r_sram_test_err_cnt[2], keypad_led_d6);
-my_keypad_led kpl3(r_sram_test_err_cnt[3], keypad_led_d5);
-my_keypad_led kpl4(r_sram_test_err_cnt[4], keypad_led_d4);
-my_keypad_led kpl5(r_sram_test_err_cnt[5], keypad_led_d3);
-my_keypad_led kpl6(r_sram_test_err_cnt[6], keypad_led_d2);
-my_keypad_led kpl7(r_sram_test_err_cnt[7], keypad_led_d1);
+//my_keypad_led kpl0(r_sram_test_err_cnt[0], keypad_led_d8);
+//my_keypad_led kpl1(r_sram_test_err_cnt[1], keypad_led_d7);
+//my_keypad_led kpl2(r_sram_test_err_cnt[2], keypad_led_d6);
+//my_keypad_led kpl3(r_sram_test_err_cnt[3], keypad_led_d5);
+//my_keypad_led kpl4(r_sram_test_err_cnt[4], keypad_led_d4);
+//my_keypad_led kpl5(r_sram_test_err_cnt[5], keypad_led_d3);
+//my_keypad_led kpl6(r_sram_test_err_cnt[6], keypad_led_d2);
+//my_keypad_led kpl7(r_sram_test_err_cnt[7], keypad_led_d1);
 
 //my_keypad_led kp6_1(~keypad6_1, keypad_led_d1);
 
@@ -219,6 +305,40 @@ my_debounce #(.DELAY(100000000/12)) k6_1(.clk(clk), .in(btn1), .out(btn1_debounc
 
 //always@(posedge btn1_debounced) keypad_leds_left <= keypad_leds_left + 1;
 
+
+// WS2812
+
+wire [23:0] ws_data_color;
+wire [5:0] ws_data_addr;
+wire ws_data_start;
+//wire ws_data_done;
+ws2812_data ws_data(.clk(clk), .start(ws_data_start), /*.done(ws_data_done),*/ .iaddr(ws_data_addr), .odata(ws_data_color));
+
+wire clk_ws;
+//assign clk_ws = cnt_128hz[4];
+//assign clk_ws = clk;
+my_clk_div #(.DIV(10)) clkws(clk, clk_ws);
+my_ws2812 #(.CLK_SCALE(10)) ws2812(
+	.clk(clk_ws),
+	//.clk_ws(clk),
+	.ctrl(ws2812_ctrl),
+	.leddata_addr(ws_data_addr),
+	.leddata_start(ws_data_start),
+	//.leddata_done(ws_data_done),
+	.leddata_color(ws_data_color),
+	.dbgout8(st_dbgout8),
+	.dbgout16(st_dbgout16),
+	.dbg_start(keypad_led_d4),
+	.dbg_done(keypad_led_d5)
+);
+//my_ws2812 ws2812(.clk_ws(clk_1hz), .ctrl(led2), .dbg({keypad_led_d4,keypad_led_d5,keypad_led_d6,keypad_led_d7,keypad_led_d8}));
+//assign led2 = ws2812_ctrl;
+
+//assign keypad_led_d1 = ~ws_data_start;
+//assign keypad_led_d2 = ~ws_data_done;
+assign keypad_led_d8 = ~clk_ws;
+
+assign led2 = ws2812_ctrl;
 
 endmodule
 
