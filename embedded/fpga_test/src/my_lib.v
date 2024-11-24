@@ -18,21 +18,32 @@ module my_pwm
 endmodule
 
 
+function integer clk_div_width;
+	input integer x;
+	integer t;
+	begin
+		t = x - 1;
+		if ((t & ~t) == 0) begin
+			// x-1 is power of 2
+			clk_div_width = $clog2(x) - 1;
+		end else begin
+			clk_div_width = $clog2(x-1) - 1;
+		end
+	end
+endfunction
+
 module my_clk_div
-	#(parameter W = 27)
+	#(parameter DIV = 0)
 (
 	input wire clk,
-	input [W-1:0] div,
 	output wire out
 );
-	reg [W-1:0] r_cnt;
-	reg r_out;
-	assign out = r_out;
+	reg [clk_div_width(DIV):0] r_cnt;
+	assign out = (r_cnt < DIV/2) ? 1 : 0;
 
 	always @ (posedge clk)
 	begin
-		r_out = (r_cnt < div/2) ? 1 : 0;
-		r_cnt = (r_cnt < div-1) ? r_cnt + 1 : 0;
+		r_cnt <= (r_cnt == DIV-1) ? 0 : r_cnt + 1;
 	end
 
 endmodule

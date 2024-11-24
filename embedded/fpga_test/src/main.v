@@ -55,7 +55,7 @@ localparam CONST_CLK = 100000000;
 
 // 128Hz clock
 wire clk_128hz;
-my_clk_div #(.W($clog2(CONST_CLK/128))) clk2(clk, CONST_CLK/128, clk_128hz);
+my_clk_div #(.DIV(CONST_CLK/128)) clk2(clk, clk_128hz);
 
 reg [6:0] cnt_128hz;
 always @ (posedge clk_128hz)

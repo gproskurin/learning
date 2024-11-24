@@ -8,10 +8,10 @@ reg pwm;
 
 my_pwm mp(clk, 5, 0, pwm);
 
+wire clk_4;
+my_clk_div #(.DIV(4)) clkdiv(clk, clk_4);
+
 reg r_iter_out[2:0];
-
-my_iterate_n #(.N(3), .CLK_ON(3), .CLK_DEAD(2)) iter_n(clk, r_iter_out);
-
 
 initial begin
 	$dumpfile("dump.vcd");

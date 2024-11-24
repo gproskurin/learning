@@ -38,7 +38,7 @@ reg r_mode_read = 0;
 reg r_init_done = 0;
 assign dbgout8 = r_data0[7:0];
 assign dbgout16 = r_sram_addr[15:0];
-assign dbgout1 = r_mode_read;;
+assign dbgout1 = r_mode_read;
 
 always@(posedge clk)
 begin
