@@ -99,7 +99,7 @@ module my_seg7_n #(parameter N = 1)
 	reg [N-1:0] r_gnd;
 	assign seg_gnd = r_gnd;
 
-	reg [3:0] r_num_out;
+	reg [N*4-1:0] r_num;
 
 	reg [$clog2(N)-1:0] r_display = 0;
 
@@ -109,7 +109,7 @@ module my_seg7_n #(parameter N = 1)
 	my_seg7_1 s7(
 		clk,
 		en && (r_cnt != 0) && (r_cnt < CNT_ON),
-		r_num_out,
+		r_num[3:0], // low bits contain current digit
 		seg
 	);
 
@@ -118,26 +118,17 @@ module my_seg7_n #(parameter N = 1)
 	begin
 		if (r_cnt == 0) begin
 			if (r_display == 0) begin
-				r_gnd <= ~(N'd1);
-				r_num_out <= num[3:0];
+				r_gnd <= {{(N-1){1'b1}}, 1'b0};
+				r_num <= num;
 			end else begin
-				// shift
-				for (i=1; i<N; ++i)
-					r_gnd[i] <= r_gnd[i-1];
-				r_gnd[0] <= r_gnd[N-1];
+				// shift grounds left (1 bit)
+				// it will move active ground bit to left, hence we switch to ground of next segment
+				r_gnd <= {r_gnd[N-2:0], r_gnd[N-1]};
+
+				// shift number right (4 bits)
+				// it will move next 4 bits of number to lowest 4 bits, which are displayed
+				r_num <= {4'b0, r_num[N*4-1:4]};
 			end
-			// TODO: unhardcode, support N>4 (shift similar to gnd?)
-			case (r_display)
-				1: begin
-					r_num_out <= num[7:4];
-				end
-				2: begin
-					r_num_out <= num[11:8];
-				end
-				3: begin
-					r_num_out <= num[15:12];
-				end
-			endcase
 		end else if (r_cnt == CNT_ON) begin
 			r_display <= (r_display == N-1) ? 0 : r_display + 1;
 		end
