@@ -3,7 +3,8 @@
 module sram_test(
 	input clk,
 	output wire [17:0] sram_addr,
-	inout wire [15:0] sram_data,
+	input wire [15:0] sram_data_in,
+	output wire [15:0] sram_data_out,
 	output wire sram_cs,
 	output wire sram_oe,
 	output wire sram_we,
@@ -12,7 +13,6 @@ module sram_test(
 	output wire dbgout1,
 	output wire out_err
 );
-
 
 reg r_sram_oe = 1;
 assign sram_oe = r_sram_oe;
@@ -24,7 +24,7 @@ reg r_sram_cs = 0;
 assign sram_cs = r_sram_cs;
 
 reg [15:0] r_sram_data;
-assign sram_data = r_sram_oe ? r_sram_data : 16'bZ;
+assign sram_data_out = r_sram_oe ? r_sram_data : 16'bZ;
 reg [15:0] r_sram_data_copy;
 
 reg [17:0] r_sram_addr;
@@ -39,6 +39,9 @@ reg r_init_done = 0;
 assign dbgout8 = r_data0[7:0];
 assign dbgout16 = r_sram_addr[15:0];
 assign dbgout1 = r_mode_read;
+
+reg r_out_err;
+assign out_err = r_out_err;
 
 always@(posedge clk)
 begin
@@ -90,7 +93,7 @@ begin
 			r_init_done <= 1;
 			r_sram_addr <= 0;
 			r_sram_oe <= 0;
-			out_err <= 0;
+			r_out_err <= 0;
 			r_data <= r_data0;
 		end else begin
 			// read
@@ -104,18 +107,18 @@ begin
 			case (r_state)
 				0: begin
 					// delay, some init
-					out_err <= 0;
+					r_out_err <= 0;
 					r_state <= 1;
 				end
 				1: begin
 					// latch data from SRAM data lines
-					r_sram_data_copy <= sram_data;
+					r_sram_data_copy <= sram_data_in;
 					r_state <= 2;
 				end
 				2: begin
 					// check data
 					if (r_sram_data_copy != r_data)
-						out_err <= 1;
+						r_out_err <= 1;
 					// increment address
 					if (&r_sram_addr) begin
 						// end of address space, switch to write

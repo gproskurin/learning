@@ -8,7 +8,6 @@ module ws2812_data #(parameter W_ADDR = 6, W_DATA = 24) (
 	output wire [W_DATA-1:0] odata
 );
 reg start_old;
-reg done_next;
 reg [W_DATA-1:0] r_odata;
 wire [2:0] row, col;
 assign row = iaddr[W_ADDR-1:3];
@@ -18,7 +17,6 @@ wire [3:0] sum;
 assign sum = row1 ^ col1;
 assign row1 = {1'b0, row};
 assign col1 = {1'b0, col};
-reg prepared;
 assign odata = r_odata;
 
 localparam PERIOD = 30000000;
@@ -42,6 +40,11 @@ reg [23:0] c5 = C_LIGHTBLUE;
 reg [23:0] c6 = C_BLUE;
 reg [23:0] c7 = C_MAGENTA;
 reg [23:0] c8 = C_WHITE;
+
+reg r_done;
+reg r_done_next;
+assign done = r_done;
+
 always@(posedge clk)
 begin
 	if (r_cnt == PERIOD-1) begin
@@ -57,11 +60,8 @@ begin
 	end else begin
 		r_cnt <= r_cnt + 1;
 	end
-	done <= done_next;
+	r_done <= r_done_next;
 	if (start && !start_old) begin
-		if (!prepared) begin
-			prepared <= 1;
-		end
 		case (sum[2:0])
 			0: r_odata <= c8;
 			1: r_odata <= c1;
@@ -72,10 +72,9 @@ begin
 			6: r_odata <= c6;
 			7: r_odata <= c7;
 		endcase
-		done_next <= 1;
+		r_done_next <= 1;
 	end else begin
-		done_next <= 0;
-		prepared <= 0;
+		r_done_next <= 0;
 	end
 	start_old <= start;
 end
@@ -187,6 +186,7 @@ reg [15:0] wmask = 0;
 
 
 // memory
+/*
 SB_RAM40_4K
 	#(
 		.INIT_0(256'H7127678656750404303022221111000020232022202120201013101210111010),
@@ -219,6 +219,7 @@ SB_RAM40_4K
 		.WE(0),
 		.MASK(0)
 	);
+*/
 
 localparam RAM_CNT = 100000000/2 - 1;
 reg [31:0] clk_cnt;
@@ -244,7 +245,8 @@ sram_test st(
 	//.clk(clk_1hz),
 	.clk(clk),
 	.sram_addr(sram_a),
-	.sram_data(sram_d),
+	.sram_data_in(sram_d),
+	.sram_data_out(sram_d),
 	.sram_cs(sram_cs),
 	.sram_oe(sram_oe),
 	.sram_we(sram_we),
@@ -311,34 +313,19 @@ my_debounce #(.DELAY(100000000/12)) k6_1(.clk(clk), .in(btn1), .out(btn1_debounc
 wire [23:0] ws_data_color;
 wire [5:0] ws_data_addr;
 wire ws_data_start;
-//wire ws_data_done;
-ws2812_data ws_data(.clk(clk), .start(ws_data_start), /*.done(ws_data_done),*/ .iaddr(ws_data_addr), .odata(ws_data_color));
+ws2812_data ws_data(.clk(clk), .start(ws_data_start), .iaddr(ws_data_addr), .odata(ws_data_color));
 
 wire clk_ws;
-//assign clk_ws = cnt_128hz[4];
-//assign clk_ws = clk;
-my_clk_div #(.DIV(10)) clkws(clk, clk_ws);
-my_ws2812 #(.CLK_SCALE(10)) ws2812(
+localparam WS_CLK_DIV = 10;
+my_clk_div #(.DIV(WS_CLK_DIV)) clkws(clk, clk_ws);
+my_ws2812 #(.CLK_SCALE(WS_CLK_DIV)) ws2812(
 	.clk(clk_ws),
-	//.clk_ws(clk),
 	.ctrl(ws2812_ctrl),
 	.leddata_addr(ws_data_addr),
 	.leddata_start(ws_data_start),
-	//.leddata_done(ws_data_done),
-	.leddata_color(ws_data_color),
-	.dbgout8(st_dbgout8),
-	.dbgout16(st_dbgout16),
-	.dbg_start(keypad_led_d4),
-	.dbg_done(keypad_led_d5)
+	.leddata_color(ws_data_color)
 );
-//my_ws2812 ws2812(.clk_ws(clk_1hz), .ctrl(led2), .dbg({keypad_led_d4,keypad_led_d5,keypad_led_d6,keypad_led_d7,keypad_led_d8}));
-//assign led2 = ws2812_ctrl;
 
-//assign keypad_led_d1 = ~ws_data_start;
-//assign keypad_led_d2 = ~ws_data_done;
-assign keypad_led_d8 = ~clk_ws;
-
-assign led2 = ws2812_ctrl;
 
 endmodule
 
