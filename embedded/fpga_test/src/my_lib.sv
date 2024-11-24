@@ -49,6 +49,15 @@ module my_clk_div
 endmodule
 
 
+module my_bin2gray #(parameter W=8)
+(
+	input wire [W-1:0] bin,
+	output wire [W-1:0] gray
+);
+	assign gray = {bin[W-1], bin[W-2:0] ^ bin[W-1:1]};
+endmodule
+
+
 module my_seg7_1
 (
 	input wire clk,

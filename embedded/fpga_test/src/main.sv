@@ -327,5 +327,15 @@ my_ws2812 #(.CLK_SCALE(WS_CLK_DIV)) ws2812(
 );
 
 
+localparam G = 8;
+reg [G-1:0] gray_in;
+always@(posedge cnt_128hz[5]) gray_in <= gray_in + 1;
+
+wire [G-1:0] gray_out;
+
+my_bin2gray #(.W(G)) my_gr1(.bin(gray_in), .gray(gray_out));
+assign {keypad_led_d1, keypad_led_d2, keypad_led_d3, keypad_led_d4, keypad_led_d5, keypad_led_d6, keypad_led_d7, keypad_led_d8} = ~gray_out;
+
+
 endmodule
 
