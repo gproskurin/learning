@@ -122,7 +122,6 @@ module my_seg7_n #(parameter N = 1)
 		seg
 	);
 
-	integer i;
 	always@(posedge clk)
 	begin
 		if (r_cnt == 0) begin
@@ -182,13 +181,19 @@ end
 endmodule
 
 
+interface ws2812_color_if #(parameter W_ADDR = 6, W_DATA = 24) (input wire clk);
+	wire start;
+	wire done;
+	wire [W_ADDR-1:0] iaddr;
+	wire [W_DATA-1:0] odata;
+endinterface;
+
+
 module my_ws2812 #(parameter CLK_SCALE = 1)
 (
 	input wire clk,
 	output wire ctrl,
-	output wire [5:0] leddata_addr,
-	output wire leddata_start,
-	input wire [23:0] leddata_color
+	ws2812_color_if ColorsIf
 );
 	localparam CNT_DATA = 120 / CLK_SCALE;
 	localparam CNT_DATA_HI_0 = 30 / CLK_SCALE;
@@ -196,12 +201,8 @@ module my_ws2812 #(parameter CLK_SCALE = 1)
 	localparam CNT_RST = 6000 / CLK_SCALE; // >= 5000
 	reg [$clog2(CNT_RST)-1:0] r_cnt;
 
-	reg r_ctrl;
-	assign ctrl = r_ctrl;
-
 	// color: GRB
 	reg [23:0] r_color;
-	reg [23:0] r_color_init;
 	reg [4:0] r_cnt_bit24;
 	reg [5:0] r_cnt_led;
 	localparam CNT_LEDS = 64;
@@ -210,16 +211,16 @@ module my_ws2812 #(parameter CLK_SCALE = 1)
 	localparam S_H = 1;
 	localparam S_L = 2;
 	reg [1:0] r_state = S_RST;
+	assign ctrl = (r_state == S_H);
 
 	reg r_leddata_start;
-	assign leddata_start = r_leddata_start;
-	assign leddata_addr = r_cnt_led;
+	assign ColorsIf.start = r_leddata_start;
+	assign ColorsIf.iaddr = r_cnt_led;
 
 	always@(posedge clk)
 	begin
 		case (r_state)
 			S_RST: begin
-				r_ctrl <= 0;
 				r_cnt_led <= 0; // init
 				r_cnt_bit24 <= 0; // init
 				if (r_cnt == CNT_RST - 1) begin
@@ -230,7 +231,6 @@ module my_ws2812 #(parameter CLK_SCALE = 1)
 				end
 			end
 			S_H: begin
-				r_ctrl <= 1;
 				if (r_cnt_bit24 == 0) begin
 					// starting new led, fetch its color
 					if (r_cnt == 0) begin
@@ -238,7 +238,7 @@ module my_ws2812 #(parameter CLK_SCALE = 1)
 						r_leddata_start <= 1;
 					end else if (r_cnt == CNT_DATA_HI_0 - 2) begin
 						// fetched
-						r_color <= leddata_color;
+						r_color <= ColorsIf.odata;
 						r_leddata_start <= 0;
 					end
 				end
@@ -248,7 +248,6 @@ module my_ws2812 #(parameter CLK_SCALE = 1)
 				r_cnt <= r_cnt + 1;
 			end
 			S_L: begin
-				r_ctrl <= 0;
 				if (r_cnt == CNT_DATA - 1) begin
 					// end of bit, either switch to the next bit, or to the next led/reset
 					r_cnt <= 0;

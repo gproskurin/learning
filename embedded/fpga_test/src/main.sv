@@ -1,23 +1,20 @@
 `default_nettype none
 
-module ws2812_data #(parameter W_ADDR = 6, W_DATA = 24) (
+module ws2812_colors #(parameter W_ADDR = 6, W_DATA = 24) (
 	input wire clk,
-	input wire start,
-	output wire done,
-	input wire [W_ADDR-1:0] iaddr,
-	output wire [W_DATA-1:0] odata
+	ws2812_color_if ColorsIf
 );
 reg start_old;
 reg [W_DATA-1:0] r_odata;
 wire [2:0] row, col;
-assign row = iaddr[W_ADDR-1:3];
-assign col = iaddr[2:0];
+assign row = ColorsIf.iaddr[W_ADDR-1:3];
+assign col = ColorsIf.iaddr[2:0];
 wire [3:0] row1, col1;
 wire [3:0] sum;
 assign sum = row1 ^ col1;
 assign row1 = {1'b0, row};
 assign col1 = {1'b0, col};
-assign odata = r_odata;
+assign ColorsIf.odata = r_odata;
 
 localparam PERIOD = 30000000;
 reg [$clog2(PERIOD)-1:0] r_cnt;
@@ -43,7 +40,7 @@ reg [23:0] c8 = C_WHITE;
 
 reg r_done;
 reg r_done_next;
-assign done = r_done;
+assign ColorsIf.done = r_done;
 
 always@(posedge clk)
 begin
@@ -61,7 +58,7 @@ begin
 		r_cnt <= r_cnt + 1;
 	end
 	r_done <= r_done_next;
-	if (start && !start_old) begin
+	if (ColorsIf.start && !start_old) begin
 		case (sum[2:0])
 			0: r_odata <= c8;
 			1: r_odata <= c1;
@@ -76,7 +73,7 @@ begin
 	end else begin
 		r_done_next <= 0;
 	end
-	start_old <= start;
+	start_old <= ColorsIf.start;
 end
 
 endmodule
@@ -310,10 +307,8 @@ my_debounce #(.DELAY(100000000/12)) k6_1(.clk(clk), .in(btn1), .out(btn1_debounc
 
 // WS2812
 
-wire [23:0] ws_data_color;
-wire [5:0] ws_data_addr;
-wire ws_data_start;
-ws2812_data ws_data(.clk(clk), .start(ws_data_start), .iaddr(ws_data_addr), .odata(ws_data_color));
+ws2812_color_if #(.W_ADDR(6), .W_DATA(24)) ColorsIf(.clk(clk));
+ws2812_colors #(.W_ADDR(6), .W_DATA(24)) wsclr(.clk(clk), .ColorsIf(ColorsIf));
 
 wire clk_ws;
 localparam WS_CLK_DIV = 10;
@@ -321,9 +316,7 @@ my_clk_div #(.DIV(WS_CLK_DIV)) clkws(clk, clk_ws);
 my_ws2812 #(.CLK_SCALE(WS_CLK_DIV)) ws2812(
 	.clk(clk_ws),
 	.ctrl(ws2812_ctrl),
-	.leddata_addr(ws_data_addr),
-	.leddata_start(ws_data_start),
-	.leddata_color(ws_data_color)
+	.ColorsIf(ColorsIf)
 );
 
 
