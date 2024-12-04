@@ -4,6 +4,7 @@
 #include "bsp.h"
 #include "freertos_utils.h"
 #include "logging.h"
+#include "logger_fwd.h"
 
 #include "lora.h"
 
@@ -20,9 +21,6 @@
 #define PRIO_DISPLAY_1 2
 #define PRIO_LORA_EMB 6
 #define PRIO_LOGGER 8 // FIXME
-
-
-#define USART_CON_BAUDRATE 115200
 
 
 lora::task_data_t task_data_lora_emb;
@@ -42,20 +40,12 @@ const sx1276::hwconf_t hwc_emb = {
 };
 
 
-usart_logger_t logger(USART_STLINK, "logger", PRIO_LOGGER);
+logging::logger_t<log_dev_t> logger("logger", PRIO_LOGGER);
 
 
-void usart_init(USART_TypeDef* const usart)
+void log_sync(const char* s)
 {
-	usart->CR1 = 0; // ensure UE flag is reset
-
-	constexpr uint32_t cr1 = USART_CR1_TE;
-
-	stm32_lib::gpio::set_mode_af_lowspeed_pu(bsp::usart_stlink_pin_tx, USART_STLINK_PIN_TX_AF);
-	usart->BRR = configCPU_CLOCK_HZ / USART_CON_BAUDRATE;
-
-	usart->CR1 = cr1;
-	usart->CR1 = cr1 | USART_CR1_UE;
+	stm32_lib::usart::send(USART_STLINK, s);
 }
 
 
@@ -95,6 +85,19 @@ void bus_init()
 	RCC->APB2ENR |= RCC_APB2ENR_SPI1EN_Msk | RCC_APB2ENR_SYSCFGEN_Msk;
 	toggle_bits_10(&RCC->APB2RSTR, RCC_APB2RSTR_SPI1RST_Msk | RCC_APB2RSTR_SYSCFGRST_Msk);
 
+	// DMA
+	RCC->AHBENR |= RCC_AHBENR_DMAEN;
+	toggle_bits_10(&RCC->AHBRSTR, RCC_AHBRSTR_DMARST_Msk);
+
+	DMA1_CSELR->CSELR =
+		(0b0001 << DMA_CSELR_C2S_Pos) // SPI1_RX
+		| (0b0001 << DMA_CSELR_C3S_Pos) // SPI1_TX
+		| (0b0100 << DMA_CSELR_C4S_Pos); // USART2_TX
+	NVIC_SetPriority(DMA1_Channel4_5_6_7_IRQn, 0);
+	NVIC_EnableIRQ(DMA1_Channel4_5_6_7_IRQn);
+	NVIC_SetPriority(DMA1_Channel2_3_IRQn, 0);
+	NVIC_EnableIRQ(DMA1_Channel2_3_IRQn);
+
 #if 0
 	// PB2 interrupt TODO: do not hardcode PB2, use bit masks stuff
 	{
@@ -129,6 +132,27 @@ void perif_init_irq_dio0()
 }
 
 
+extern "C" __attribute__ ((interrupt)) void IntHandler_DMA1_Channel4_5_6_7()
+{
+	auto const isr = DMA1->ISR;
+
+	{
+		uint32_t ev_log = 0;
+		if (isr & DMA_ISR_TCIF4) {
+			DMA1->IFCR = DMA_IFCR_CTCIF4;
+			ev_log |= stm32_lib::dma::dma_result_t::tc;
+		}
+		if (isr & DMA_ISR_TEIF4) {
+			DMA1->IFCR = DMA_IFCR_CTEIF4;
+			ev_log |= stm32_lib::dma::dma_result_t::te;
+		}
+		if (ev_log) {
+			logger.notify_from_isr(ev_log);
+		}
+	}
+}
+
+
 #if 0
 //volatile bool blue_state = false;
 extern "C" __attribute__ ((interrupt)) void IntHandler_EXTI23()
@@ -148,6 +172,29 @@ extern "C" __attribute__ ((interrupt)) void IntHandler_EXTI4_15()
 		BaseType_t yield = pdFALSE;
 		xTaskNotifyFromISR(task_data_lora_emb.task_handle, 0, eSetBits, &yield);
 		portYIELD_FROM_ISR(yield);
+	}
+}
+
+
+extern "C" __attribute__ ((interrupt)) void IntHandler_DMA1_Channel2_3()
+{
+	uint32_t events = 0;
+	uint32_t ifcr_clear = 0;
+	auto const isr = DMA1->ISR;
+
+	// channel2 - RX
+	if (isr & DMA_ISR_TEIF2) {
+		events |= stm32_lib::dma::dma_result_t::te;
+		ifcr_clear |= DMA_IFCR_CTEIF2 | DMA_IFCR_CGIF2;
+	}
+	if (isr & DMA_ISR_TCIF2) {
+		events |= stm32_lib::dma::dma_result_t::tc;
+		ifcr_clear |= DMA_IFCR_CTCIF2 | DMA_IFCR_CGIF2;
+	}
+
+	if (events) {
+		DMA1->IFCR = ifcr_clear;
+		xTaskNotifyFromISR(task_data_lora_emb.task_handle, events, eSetBits, nullptr);
 	}
 }
 
@@ -449,8 +496,13 @@ __attribute__ ((noreturn)) void main()
 {
 	bus_init();
 
-	usart_init(USART_STLINK);
-	logger.log_sync("\r\nLogger initialized (sync)\r\n");
+	stm32_lib::usart::init_logger_uart<configCPU_CLOCK_HZ>(
+		USART_STLINK,
+		bsp::usart_stlink_pin_tx,
+		USART_STLINK_PIN_TX_AF
+	);
+
+	log_sync("\r\nLogger initialized (sync)\r\n");
 
 	g_pin_green.init_pin();
 	g_pin_green2.init_pin();
@@ -458,18 +510,19 @@ __attribute__ ((noreturn)) void main()
 	g_pin_blue.init_pin();
 	g_pin_red.init_pin();
 
-	logger.log_sync("Creating LORA_EMB task...\r\n");
+	log_sync("Creating LORA_EMB task...\r\n");
 	lora::create_task_emb("lora_emb", PRIO_LORA_EMB, task_data_lora_emb, &hwc_emb);
-	logger.log_sync("Created LORA_EMB task\r\n");
+	log_sync("Created LORA_EMB task\r\n");
 
 	//logger.log_sync("Creating DISPLAY-1 task...\r\n");
 	//create_task_display_1();
 	//logger.log_sync("Created DISPLAY-1 task\r\n");
 
-	logger.log_sync("Starting FreeRTOS scheduler\r\n");
+	log_sync("Starting FreeRTOS scheduler\r\n");
+	logger.init();
 	vTaskStartScheduler();
 
-	logger.log_sync("Error in FreeRTOS scheduler\r\n");
+	log_sync("Error in FreeRTOS scheduler\r\n");
 	for (;;) {}
 }
 

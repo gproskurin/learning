@@ -1,6 +1,8 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
+#include "logger_fwd.h"
+
 #include "sx1276.h"
 #include "bsp.h"
 
@@ -16,8 +18,16 @@ extern freertos_utils::pin_toggle_task_t<stm32_lib::gpio::pin_t> g_pin_red;
 extern freertos_utils::pin_toggle_task_t<stm32_lib::gpio::pin_t> g_pin_green;
 
 extern "C" const sx1276::hwconf_t hwc_emb;
+using emb_spi_dma_t = stm32_lib::dma::spi_dma_t<SPI1_BASE, DMA1_Channel3_BASE, DMA1_Channel2_BASE>;
 
 namespace spi {
+	void wait_spi_complete()
+	{
+		auto const _events = freertos_utils::notify_wait_any(
+			stm32_lib::dma::dma_result_t::te | stm32_lib::dma::dma_result_t::tc
+		);
+	}
+
 	void cb_spi_nss(bool s)
 	{
 		hwc_emb.pin_spi_nss.set_state(s);
@@ -25,7 +35,9 @@ namespace spi {
 
 	void cb_spi_write(const uint8_t* tx_data, size_t size, uint8_t* rx_data)
 	{
-		stm32_lib::spi::write<uint8_t>(hwc_emb.spi, size, tx_data, rx_data);
+		emb_spi_dma_t::start(size, tx_data, rx_data);
+		wait_spi_complete();
+		emb_spi_dma_t::stop();
 	}
 } //spi
 
@@ -97,6 +109,7 @@ void task_function_emb(void* arg)
 	const sx1276::hwconf_t* const hwp = reinterpret_cast<const sx1276::hwconf_t*>(arg);
 
 	sx1276::spi_sx_init(*hwp, true);
+	emb_spi_dma_t::init();
 
 	//sx1276::init_radio_pin(hwp->pin_radio_tcxo_vcc);
 	//sx1276::init_radio_pin(hwp->pin_radio_ant_sw_rx);
