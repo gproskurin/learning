@@ -12,8 +12,8 @@
 #include <array>
 
 #define PRIO_BLINK 1
-#define PRIO_IPCC_RECV 5
-#define PRIO_LOGGER 8
+#define PRIO_IPCC_RECV 2
+#define PRIO_LOGGER 3
 
 
 constexpr uint8_t ipcc_ch_lora = 3;

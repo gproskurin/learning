@@ -19,8 +19,8 @@
 
 #define PRIO_BLINK 1
 #define PRIO_DISPLAY_1 2
-#define PRIO_LORA_EMB 6
-#define PRIO_LOGGER 8 // FIXME
+#define PRIO_LORA_EMB 3
+#define PRIO_LOGGER 4
 
 
 lora::task_data_t task_data_lora_emb;

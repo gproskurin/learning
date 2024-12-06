@@ -12,8 +12,8 @@
 #include <array>
 
 #define PRIO_BLINK 1
-#define PRIO_LORA_RECV 5
-#define PRIO_LOGGER 6
+#define PRIO_LORA_RECV 2
+#define PRIO_LOGGER 3
 
 
 void* ipcc_mp; // pointer to mailbox being sent

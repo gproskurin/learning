@@ -17,8 +17,8 @@
 
 #define PRIO_WWDG 1
 #define PRIO_BLINK 2
-#define PRIO_LORA 6
-#define PRIO_LOGGER 8
+#define PRIO_LORA 3
+#define PRIO_LOGGER 4
 
 
 freertos_utils::pin_toggle_task_t g_pin_green("blink_green", bsp::pin_led_green, PRIO_BLINK);
