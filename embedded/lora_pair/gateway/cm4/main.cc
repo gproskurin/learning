@@ -17,7 +17,7 @@
 
 
 constexpr uint8_t ipcc_ch_lora = 3;
-constexpr uint32_t mb_ptr_addr = 0x2000807c; // keep it up-to-date, taken from CM0 linker map file
+constexpr uint32_t mb_ptr_addr = 0x20008068; // keep it up-to-date, taken from CM0 linker map file
 
 using log_dev_t = stm32_lib::dma::dev_usart_dmamux_t<LPUART1_BASE, DMAMUX1_Channel0_BASE>;
 logging::logger_t<log_dev_t> logger("logger_cm4", PRIO_LOGGER);

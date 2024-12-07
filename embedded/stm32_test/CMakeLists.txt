@@ -51,7 +51,7 @@ function(generate_targets T)
 	# FreeRTOS
 	add_library(freertos_config INTERFACE)
 	target_include_directories(freertos_config SYSTEM
-		INTERFACE "${CMAKE_SOURCE_DIR}/src"
+		INTERFACE "${CMAKE_SOURCE_DIR}/src;${CMAKE_SOURCE_DIR}/../stm32_lib/freertos"
 	)
 	target_compile_options(freertos_config
 		INTERFACE ${T_C_FLAGS}
@@ -63,7 +63,6 @@ function(generate_targets T)
 	add_executable(${T_FIRMWARE_ELF}
 		src/startup.c
 		src/main.cc
-		${STM32_LIB_ROOT}/logging.cc
 		src/ad5932.cc
 		${STM32_LIB_ROOT}/my_stdlib.c
 		${STM32_LIB_ROOT}/startup.c

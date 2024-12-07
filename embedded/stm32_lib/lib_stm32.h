@@ -545,7 +545,7 @@ struct spi_dma_t {
 		auto const s = spi();
 		auto sr = s->SR;
 
-#if defined(TARGET_STM32WL55)
+#if defined(TARGET_STM32WL55) || defined(TARGET_STM32G030) || defined(TARGET_STM32G031) /* TODO G03x untested */
 		while (sr & SPI_SR_FTLVL_Msk) {
 			sr = s->SR;
 		}

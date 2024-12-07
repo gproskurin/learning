@@ -46,7 +46,7 @@ function(generate_targets T)
 	# FreeRTOS
 	add_library(freertos_config INTERFACE)
 	target_include_directories(freertos_config SYSTEM
-		INTERFACE "${CMAKE_SOURCE_DIR}/src"
+		INTERFACE "${CMAKE_SOURCE_DIR}/src;${CMAKE_SOURCE_DIR}/../stm32_lib/freertos"
 	)
 	target_compile_options(freertos_config
 		INTERFACE ${T_C_FLAGS}

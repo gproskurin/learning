@@ -11,8 +11,8 @@
 
 
 #define PRIO_BLINK 1
-#define PRIO_NRF1 5
-#define PRIO_NRF2 5
+#define PRIO_NRF1 4
+#define PRIO_NRF2 4
 #define PRIO_BUTTONS_POLL 2
 #define PRIO_LOGGER 3
 

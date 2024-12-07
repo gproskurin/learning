@@ -1,6 +1,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
+#include "logger_fwd.h"
 #include "sx1276.h"
 #include "bsp.h"
 
@@ -8,7 +9,6 @@
 #include "lora.h"
 #include <nrf52.h>
 
-extern usart_logger_t logger;
 
 extern void perif_init_irq_dio0();
 extern freertos_utils::pin_toggle_task_t<nrf5_lib::gpio::pin_t> g_pin_led1;
@@ -21,14 +21,14 @@ extern "C"
 const sx1276::hwconf_t hwc{
 	.spi{NRF_SPIM1},
 
-	.pin_spi_nss{3},
-	.pin_spi_sck{4},
-	.pin_spi_miso{28},
-	.pin_spi_mosi{29},
+	.pin_spi_nss{NRF_P0_BASE, 3},
+	.pin_spi_sck{NRF_P0_BASE, 4},
+	.pin_spi_miso{NRF_P0_BASE, 28},
+	.pin_spi_mosi{NRF_P0_BASE, 29},
 
-	.pin_dio0{31}
+	.pin_dio0{NRF_P0_BASE, 31}
 };
-constexpr nrf5_lib::gpio::pin_t sx1276_reset{30};
+constexpr nrf5_lib::gpio::pin_t sx1276_reset{NRF_P0_BASE, 30};
 
 namespace {
 

@@ -16,6 +16,8 @@
 #include <stdint.h>
 #include <string.h>
 
+#include <array>
+
 
 namespace nrf5_lib {
 
@@ -38,6 +40,7 @@ bool can_dma(const void* ptr)
 #endif
 
 
+inline
 size_t chunk0(void* dst0, const void* src0, size_t max_size)
 {
 	auto const dst = reinterpret_cast<char*>(dst0);
@@ -173,6 +176,7 @@ void uarte_init(NRF_UARTE_Type* uarte, const Pin& pin)
 }
 
 namespace impl {
+	inline
 	void uarte_send_start(NRF_UARTE_Type* uarte, const void* ptr, size_t size)
 	{
 		uarte->EVENTS_ENDTX = 0;
@@ -188,6 +192,7 @@ namespace impl {
 	}
 }
 
+inline
 void uarte_send(NRF_UARTE_Type* uarte, const char* s)
 {
 	std::array<char, 8> buf;

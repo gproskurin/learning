@@ -11,8 +11,8 @@
 
 #include "FreeRTOS.h"
 #include "task.h"
-//#include "semphr.h"
 #include "sx1276.h"
+#include "logger_fwd.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -22,45 +22,22 @@
 
 #define PRIO_BLINK 1
 #define PRIO_DISPLAY 2
-#define PRIO_LORA 6
-#define PRIO_LOGGER 7 // FIXME
+#define PRIO_LORA 4
+#define PRIO_LOGGER 3
+
+
+#define LOG_UART UARTE_VCOM
+
+logging::logger_t<log_dev_t> logger("logger", PRIO_LOGGER);
+
+void log_sync(const char* s)
+{
+	nrf5_lib::uart::uarte_send(LOG_UART, s);
+}
 
 
 lora::task_data_t task_data_lora;
 extern "C" const sx1276::hwconf_t hwc;
-
-#if 0
-constexpr sx1276::hwconf_t hwc_emb = {
-	.spi = SPI1,
-	.spi_af = 0,
-	.pin_spi_nss = bsp::sx1276::pin_spi_nss,
-	.pin_spi_sck = bsp::sx1276::pin_spi_sck,
-	.pin_spi_miso = bsp::sx1276::pin_spi_miso,
-	.pin_spi_mosi = bsp::sx1276::pin_spi_mosi,
-	.pin_dio0 = bsp::sx1276::pin_dio0,
-	//.pin_radio_reset{GPIOC_BASE, 0},
-	//.pin_sx1276_reset{GPIOA_BASE, 11},
-	//.pin_radio_tcxo_vcc{GPIOA_BASE, 12},
-};
-#endif
-
-
-usart_logger_t logger(UART_VCOM, "logger", PRIO_LOGGER);
-
-
-void usart_init(NRF_UART_Type* const usart)
-{
-	bsp::pin_vcom_txd.set(nrf5_lib::gpio::dir_t::output, nrf5_lib::gpio::pull_t::pu);
-
-	usart->CONFIG = 0;
-	usart->BAUDRATE = UART_BAUDRATE_BAUDRATE_Baud115200;
-	static_assert(UART_BAUDRATE_BAUDRATE_Baud115200 == 0x01D7E000);
-	usart->PSELTXD = bsp::pin_vcom_txd.reg;
-	usart->PSELRXD = 0xFFFFFFFF;
-	usart->PSELCTS = 0xFFFFFFFF;
-	usart->PSELRTS = 0xFFFFFFFF;
-	usart->ENABLE = 4; // enable
-}
 
 
 StaticTask_t xTaskBufferIdle;
@@ -81,9 +58,9 @@ freertos_utils::pin_toggle_task_t g_pin_led4("blink_led4", bsp::pin_led_4, PRIO_
 
 
 namespace display {
-	constexpr nrf5_lib::gpio::pin_t pin_vcc{2};
-	constexpr nrf5_lib::gpio::pin_t pin_scl{26};
-	constexpr nrf5_lib::gpio::pin_t pin_sda{27};
+	constexpr nrf5_lib::gpio::pin_t pin_vcc{NRF_P0_BASE, 2};
+	constexpr nrf5_lib::gpio::pin_t pin_scl{NRF_P0_BASE, 26};
+	constexpr nrf5_lib::gpio::pin_t pin_sda{NRF_P0_BASE, 27};
 	constexpr uint8_t i2c_addr = 0x3C;
 
 	void i2c_write_cmd(uint8_t cmd);
@@ -218,10 +195,20 @@ void create_task_display()
 }
 
 
+extern "C" __attribute__ ((interrupt)) void IntHandler_Uart0()
+{
+	if (NRF_UARTE0->EVENTS_ENDTX) {
+		NRF_UARTE0->EVENTS_ENDTX = 0;
+		logger.notify_from_isr(0b11); // FIXME
+	}
+}
+
+
 __attribute__ ((noreturn)) void main()
 {
-	usart_init(UART_VCOM);
-	logger.log_sync("\r\nLogger initialized (sync)\r\n");
+	nrf5_lib::uart::uarte_init(LOG_UART, bsp::pin_vcom_txd);
+	LOG_UART->INTEN = 0;
+	log_sync("\r\nLogger initialized (sync)\r\n");
 
 	g_pin_led1.init_pin();
 	g_pin_led2.init_pin();
@@ -232,18 +219,21 @@ __attribute__ ((noreturn)) void main()
 	//g_pin_led3.pulse_continuous(configTICK_RATE_HZ/13, configTICK_RATE_HZ/7);
 	//g_pin_led4.pulse_continuous(configTICK_RATE_HZ/5, configTICK_RATE_HZ/11);
 
-	logger.log_sync("Creating LORA task...\r\n");
+	log_sync("Creating LORA task...\r\n");
 	lora::create_task("lora", PRIO_LORA, task_data_lora, &hwc);
-	logger.log_sync("Created LORA task\r\n");
+	log_sync("Created LORA task\r\n");
 
-	logger.log_sync("Creating DISPLAY task...\r\n");
+	log_sync("Creating DISPLAY task...\r\n");
 	create_task_display();
-	logger.log_sync("Created DISPLAY task\r\n");
+	log_sync("Created DISPLAY task\r\n");
 
-	logger.log_sync("Starting FreeRTOS scheduler\r\n");
+	log_sync("Starting FreeRTOS scheduler\r\n");
+	LOG_UART->INTEN = UARTE_INTEN_ENDTX_Msk;
+	logger.init();
+	NVIC_EnableIRQ(UARTE0_UART0_IRQn);
 	vTaskStartScheduler();
 
-	logger.log_sync("Error in FreeRTOS scheduler\r\n");
+	log_sync("Error in FreeRTOS scheduler\r\n");
 	for (;;) {}
 }
 
