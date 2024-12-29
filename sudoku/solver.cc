@@ -46,6 +46,13 @@ public:
 		bits_.set(num);
 	}
 
+	static bool eq(const numset_t& a, const numset_t& b)
+	{
+		return a.bits_ == b.bits_;
+	}
+
+	size_t count() const { return bits_.count(); }
+
 	bool has(num_t n) const
 	{
 		return bits_.test(n);
@@ -259,6 +266,64 @@ bool solve_emplace(num_t num, Iter iter)
 }
 
 
+template <typename IterMaker>
+bool solve_clusters(IterMaker&& iter_maker)
+{
+	size_t count_unsolved = 0;
+	for (auto iter = iter_maker(); iter.is_valid(); iter.next()) {
+		if (!iter.const_deref().is_solved()) {
+			++count_unsolved;
+		}
+	}
+
+	for (auto iter = iter_maker(); iter.is_valid(); iter.next()) {
+		if (iter.const_deref().is_solved()) {
+			continue;
+		}
+
+		auto const iter_cluster_begin = iter;
+		const auto& cell_cluster_begin = iter.const_deref();
+		size_t count = 0;
+		for (auto iter2 = iter_cluster_begin; iter2.is_valid(); iter2.next()) {
+			if (iter2.const_deref().is_solved()) {
+				continue;
+			}
+			if (numset_t::eq(iter2.const_deref(), cell_cluster_begin)) {
+				++count;
+			}
+		}
+		assert(count >= 1);
+		assert(count <= count_unsolved);
+
+		if ((count < count_unsolved) && (count == cell_cluster_begin.count())) {
+			size_t count_cells_updated = 0;
+			for (auto iter_update = iter_maker(); iter_update.is_valid(); iter_update.next()) {
+				auto& cell_update = iter_update.deref();
+				if (!cell_update.is_solved()) {
+					if (!numset_t::eq(iter_update.const_deref(), cell_cluster_begin)) {
+						bool cell_updated = false;
+						for(num_t n=0; n<N; ++n) {
+							if (cell_cluster_begin.has(n)) {
+								cell_updated = cell_update.try_exclude(n) || cell_updated;
+							}
+						}
+						if (cell_updated) {
+							++count_cells_updated;
+						}
+					}
+				}
+			}
+			//std::cout << "FOUND_CLUSTER: size=" << count << " cells_updated=" << count_cells_updated << "\n";
+			if (count_cells_updated > 0) {
+				// made some progress and updated some cells
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+
 void sudoku_t::solve()
 {
 	struct iterator_over_row_maker_t {
@@ -300,18 +365,25 @@ void sudoku_t::solve()
 				progress = solve_emplace(num, iterator_over_row_t(data_, idx)) || progress;
 				progress = solve_emplace(num, iterator_over_column_t(data_, idx)) || progress;
 			}
+
+			// clusters
+			progress = solve_clusters(iterator_over_row_maker_t(data_, idx)) || progress;
+			progress = solve_clusters(iterator_over_column_maker_t(data_, idx)) || progress;
 		}
 
 		// iterate over 3*3 squares
 		for (idx_t r = 0; r < N; r += 3) {
 			for (idx_t c = 0; c < N; c += 3) {
 				// simple exclusions
-				progress = solve_exclusions_iterate(iterator_over_sq_maker_t(data_, r,c)) || progress;
+				progress = solve_exclusions_iterate(iterator_over_sq_maker_t(data_, r, c)) || progress;
 
 				// emplace
 				for (num_t num = 0; num < N; ++num) {
 					progress = solve_emplace(num, iterator_over_sq_t(data_, r, c)) || progress;
 				}
+
+				// clusters
+				progress = solve_clusters(iterator_over_sq_maker_t(data_, r, c)) || progress;
 			}
 		}
 
