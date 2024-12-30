@@ -104,6 +104,7 @@ class sudoku_t {
 public:
 	sudoku_t(std::istream&);
 	void print(std::ostream&) const;
+	void print_detailed(std::ostream&) const;
 	void solve();
 };
 
@@ -190,6 +191,46 @@ void sudoku_t::print(std::ostream& os) const
 		os << std::endl;
 		if ((row % 3) == 2) {
 			os << std::endl;
+		}
+	}
+}
+
+
+void sudoku_t::print_detailed(std::ostream& os) const
+{
+	std::array<std::array<char, N*3>, N*3> data_sets; // TODO without additional storage
+	for(idx_t r=0; r<N; ++r) {
+		for(idx_t c=0; c<N; ++c) {
+			const auto& cell = data_.at(r).at(c);
+			for (num_t n=0; n<N; ++n) {
+				data_sets.at(r*3 + n/3).at(c*3 + n%3) = (cell.has(n) ? '0'+n+1 : ' ');
+			}
+		}
+	}
+	for (size_t r=0; r<data_sets.size(); ++r) {
+		const auto& row = data_sets.at(r);
+		os << " ";
+		for (size_t c=0; c<row.size(); ++c) {
+			os << row.at(c);
+			if (c%9 == 8) {
+				if (c < N*3-1) {
+					os << "  |||  ";
+				}
+			} else if (c%3 == 2) {
+				os << " | ";
+			}
+		}
+		os << "\n";
+		constexpr size_t div_len = 61;
+		if (r%9 == 8) {
+			if (r < N*3-1) {
+				os << "\n";
+				for (size_t i=0; i<div_len; ++i) os << "=";
+				os << "\n\n";
+			}
+		} else if (r%3 == 2) {
+			for (size_t i=0; i<div_len; ++i) os << "-";
+			os << "\n";
 		}
 	}
 }
@@ -404,6 +445,11 @@ try {
 	std::cout << std::endl;
 
 	s.solve();
+
+	std::cout << "OUTPUT_DETAILED\n";
+	s.print_detailed(std::cout);
+	std::cout << std::endl;
+
 	std::cout << "OUTPUT\n";
 	s.print(std::cout);
 	std::cout << std::endl;
