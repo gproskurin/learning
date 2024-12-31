@@ -115,6 +115,8 @@ public:
 		return '.';
 	}
 
+	std::string to_string() const { return bits_.to_string(); } // used for tests
+
 private:
 	bitset_t bits_;
 };
@@ -224,44 +226,6 @@ size_t solve_exclusions_iterate(Iter const iter_begin)
 	}
 
 	return progress_count;
-}
-
-
-template <num_t N, typename Iter>
-size_t solve_emplace(num_t num, Iter iter)
-{
-	return 0;
-	// try to emplace number to current row
-	// process current row, count number of eligible places where the number could be emplaced
-	// if this count is 1, emplace it (solve)
-	size_t eligible_cells_count = 0;
-	numset_t<N> * eligible_cell_ptr = nullptr;
-	for (; iter.is_valid(); iter.next()) {
-		auto& cell = iter.deref();
-		if (auto const sv = cell.is_solved()) {
-			if (sv.value() == num) {
-				// this num is already "solved" in this iterator
-				return 0;
-			}
-			// ignore other solved values
-		} else {
-			if (cell.has(num)) {
-				++eligible_cells_count;
-				eligible_cell_ptr = &cell;
-			}
-		}
-	}
-
-	if (eligible_cells_count == 1) {
-		// TODO asserts
-		//assert(eligible_cell_ptr);
-		//assert(eligible_cell_ptr->count() >= 1);
-		//assert(eligible_cell_ptr->test(num));
-		eligible_cell_ptr->assign(num);
-		return 1;
-	}
-
-	return 0;
 }
 
 
@@ -420,12 +384,6 @@ void sudoku_t<N>::solve()
 			updates_current += solve_exclusions_iterate<N>(iterator_over_row_t<N>(data_, idx));
 			updates_current += solve_exclusions_iterate<N>(iterator_over_column_t<N>(data_, idx));
 
-			// emplace
-			for (num_t num = 0; num < N; ++num) {
-				updates_current += solve_emplace<N>(num, iterator_over_row_t<N>(data_, idx));
-				updates_current += solve_emplace<N>(num, iterator_over_column_t<N>(data_, idx));
-			}
-
 			// clusters
 			updates_current += solve_clusters<N>(iterator_over_row_t<N>(data_, idx));
 			updates_current += solve_clusters<N>(iterator_over_column_t<N>(data_, idx));
@@ -437,11 +395,6 @@ void sudoku_t<N>::solve()
 			for (idx_t c = 0; c < N; c += Ns) {
 				// simple exclusions
 				updates_current += solve_exclusions_iterate<N>(iterator_over_sq_t<N>(data_, r, c));
-
-				// emplace
-				for (num_t num = 0; num < N; ++num) {
-					updates_current += solve_emplace<N>(num, iterator_over_sq_t<N>(data_, r, c));
-				}
 
 				// clusters
 				updates_current += solve_clusters<N>(iterator_over_sq_t<N>(data_, r, c));
