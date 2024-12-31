@@ -132,6 +132,7 @@ public:
 	void print(std::ostream&) const;
 	void print_detailed(std::ostream&) const;
 	void solve();
+	void verify(); // TODO make const
 //private: // FIXME public for tests
 	data_t data_;
 };
@@ -153,6 +154,7 @@ struct iterator_over_row_t : public iterator_base_t<N> {
 	iterator_over_row_t(sudoku_t<N>::data_t& data, idx_t row) : iterator_base_t<N>(data, row) {}
 	numset_t<N>& deref() { return iterator_base_t<N>::data_.at(iterator_base_t<N>::fixed_idx_).at(iterator_base_t<N>::mutable_idx_); } // row is fixed
 	const numset_t<N>& const_deref() const { return iterator_base_t<N>::data_.at(iterator_base_t<N>::fixed_idx_).at(iterator_base_t<N>::mutable_idx_); }
+	void print_info(std::ostream& os) const { os << "iterator_row<" << iterator_base_t<N>::fixed_idx_ << ">"; }
 };
 
 template <num_t N>
@@ -160,6 +162,7 @@ struct iterator_over_column_t : public iterator_base_t<N> {
 	iterator_over_column_t(sudoku_t<N>::data_t& data, idx_t col) : iterator_base_t<N>(data, col) {}
 	numset_t<N>& deref() { return iterator_base_t<N>::data_.at(iterator_base_t<N>::mutable_idx_).at(iterator_base_t<N>::fixed_idx_); }
 	const numset_t<N>& const_deref() const { return iterator_base_t<N>::data_.at(iterator_base_t<N>::mutable_idx_).at(iterator_base_t<N>::fixed_idx_); }
+	void print_info(std::ostream& os) const { os << "iterator_column<" << iterator_base_t<N>::fixed_idx_ << ">"; }
 };
 
 template <num_t N>
@@ -185,6 +188,7 @@ struct iterator_over_sq_t {
 			++r_;
 		}
 	}
+	void print_info(std::ostream& os) const { os << "iterator_sq<" << fixed_row_ << "," << fixed_col_ << ">"; }
 private:
 	static constexpr auto Ns = sqrt_t<N>::value;
 	sudoku_t<N>::data_t& data_;
@@ -407,6 +411,52 @@ void sudoku_t<N>::solve()
 			std::cout << "No progress, terminating\n";
 			return;
 		}
+	}
+}
+
+
+template <num_t N, typename Iter>
+bool verify_impl(Iter&& iter_begin)
+{
+	typename numset_t<N>::bitset_t nums = numset_t<N>::make_bitset_empty();
+	for (auto iter = iter_begin; iter.is_valid(); iter.next()){
+		auto const ns = iter.const_deref().is_solved();
+		if (!ns) {
+			std::cout << "UNSOLVED\n";
+			return false;
+		}
+		nums.set(ns.value());
+	}
+	if (nums.all()) {
+		return true;
+	} else {
+		std::cout << "- verify_set:" << nums.to_string() << " iterator:";
+		iter_begin.print_info(std::cout);
+		std::cout << "\n";
+		return false;
+	}
+}
+
+
+template <num_t N>
+void sudoku_t<N>::verify()
+{
+	bool verified = true;
+	for (idx_t idx=0; idx<N; ++idx) {
+		verified = verify_impl<N>(iterator_over_row_t<N>(data_, idx)) && verified;
+		verified = verify_impl<N>(iterator_over_column_t<N>(data_, idx)) && verified;
+	}
+
+	constexpr auto Ns = sqrt_t<N>::value;
+	for (idx_t r = 0; r < N; r += Ns) {
+		for (idx_t c = 0; c < N; c += Ns) {
+			verified = verify_impl<N>(iterator_over_sq_t<N>(data_, r, c)) && verified;
+		}
+	}
+	if (verified) {
+		std::cout << "VERIFY_CORRECT\n";
+	} else {
+		std::cout << "!!! VERIFY_INCORRECT\n";
 	}
 }
 

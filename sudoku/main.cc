@@ -18,6 +18,8 @@ int main()
 		s.print(std::cout);
 		std::cout << std::endl;
 
+		s.verify();
+
 		return 0;
 
 	} catch (const std::exception& e) {
