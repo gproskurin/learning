@@ -1,4 +1,4 @@
-BOOST_INCLUDE ?= /usr/include
+BOOST_INCLUDE ?= /usr/local/pkg/include
 
 .PHONY: test
 

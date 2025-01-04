@@ -62,8 +62,28 @@ public:
 
 	void assign(num_t num)
 	{
+		// TODO return number of changed bits
 		bits_.reset();
 		bits_.set(num);
+	}
+
+	size_t assign_set(const bitset_t& b)
+	{
+		// return number of 1->0 transitions
+		// TODO bit ops
+		size_t r = 0;
+		for (idx_t i=0; i<N; ++i) {
+			if (b.test(i)) {
+				assert(bits_.test(i)); // cannot "add" to set
+			} else {
+				if (bits_.test(i)) {
+					// 1->0 transition
+					bits_.reset(i);
+					++r;
+				}
+			}
+		}
+		return r;
 	}
 
 	static bool eq(const numset_t& a, const numset_t& b)
@@ -87,8 +107,33 @@ public:
 		return false;
 	}
 
+	// exclude "solved_nums" from cell
+	size_t try_exclude_set(bitset_t b)
+	{
+		size_t r = 0;
+		for (num_t n=0; n<N; ++n) {
+			if (b.test(n) && try_exclude(n)) {
+				++r;
+			}
+		}
+		assert(bits_.count() >= 1);
+		return r;
+	}
+
+	bool contains_all(const bitset_t& b) const
+	{
+		// TODO bit operation
+		for (num_t n=0; n<N; ++n) {
+			if (b.test(n) && !bits_.test(n)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 	std::optional<num_t> is_solved() const
 	{
+		// TODO better implementation
 		assert(bits_.count() >= 1);
 		ssize_t idx = -1;
 		for (size_t i = 0; i<N; ++i) {
@@ -115,9 +160,11 @@ public:
 		return '.';
 	}
 
-	std::string to_string() const { return bits_.to_string(); } // used for tests
+	// for tests
+	std::string to_string() const { return bits_.to_string(); }
+	auto to_ulong() const { return bits_.to_ulong(); }
 
-private:
+public: // FIXME
 	bitset_t bits_;
 };
 
@@ -142,7 +189,7 @@ template <num_t N>
 struct iterator_base_t {
 	bool is_valid() const { return mutable_idx_ < N; }
 	void next() { ++mutable_idx_; }
-protected:
+public: // FIXME
 	iterator_base_t(sudoku_t<N>::data_t& data, idx_t idx) : data_(data), fixed_idx_(idx) {}
 	sudoku_t<N>::data_t& data_;
 	idx_t const fixed_idx_;
@@ -219,13 +266,7 @@ size_t solve_exclusions_iterate(Iter const iter_begin)
 	for (auto iter = iter_begin; iter.is_valid(); iter.next()) {
 		auto& cell = iter.deref();
 		if (!cell.is_solved()) {
-			// exclude "solved_nums" from cell
-			// TODO bits operations instead of loop
-			for (num_t n = 0; n < N; ++n) {
-				if (solved_values.test(n) && cell.try_exclude(n)) {
-					++progress_count;
-				}
-			}
+			progress_count += cell.try_exclude_set(solved_values);
 		}
 	}
 
@@ -233,62 +274,77 @@ size_t solve_exclusions_iterate(Iter const iter_begin)
 }
 
 
+// Try to find a SINGLE cell which can contain the number. If found, solve number there.
 template <num_t N, typename Iter>
-size_t solve_clusters(Iter const iter_begin)
+size_t solve_emplace(Iter const iter_begin, num_t num)
 {
-	size_t count_unsolved = 0;
+	numset_t<N> *eligible_cell = nullptr;
 	for (auto iter = iter_begin; iter.is_valid(); iter.next()) {
-		if (!iter.const_deref().is_solved()) {
-			++count_unsolved;
+		auto& cell = iter.deref();
+		if (auto const ns = cell.is_solved()) {
+			// if "num" is already solved in some cell, exit early
+			if (ns.value() == num) {
+				return 0;
+			}
+			// skip other solved values
+		}
+		if (cell.bits_.test(num)) {
+			if (eligible_cell) {
+				// already have eligible cell, and current is the second
+				return 0;
+			}
+			eligible_cell = &cell;
 		}
 	}
 
-	for (auto iter = iter_begin; iter.is_valid(); iter.next()) {
-		if (iter.const_deref().is_solved()) {
-			continue;
-		}
-
-		auto const iter_cluster_begin = iter;
-		const auto& cell_cluster_begin = iter.const_deref();
-		size_t count = 0;
-		for (auto iter2 = iter_cluster_begin; iter2.is_valid(); iter2.next()) {
-			if (iter2.const_deref().is_solved()) {
-				continue;
-			}
-			if (numset_t<N>::eq(iter2.const_deref(), cell_cluster_begin)) {
-				++count;
-			}
-		}
-		assert(count >= 1);
-		assert(count <= count_unsolved);
-
-		if ((count < count_unsolved) && (count == cell_cluster_begin.count())) {
-			size_t count_updates = 0;
-			for (auto iter_update = iter_begin; iter_update.is_valid(); iter_update.next()) {
-				auto& cell_update = iter_update.deref();
-				if (!cell_update.is_solved()) {
-					if (!numset_t<N>::eq(iter_update.const_deref(), cell_cluster_begin)) {
-						for(num_t n=0; n<N; ++n) {
-							if (cell_cluster_begin.has(n)) {
-								if (cell_update.try_exclude(n)) {
-									++count_updates;
-								}
-							}
-						}
-					}
-				}
-			}
-			//std::cout << "FOUND_CLUSTER: size=" << count << " cells_updated=" << count_cells_updated << "\n";
-			if (count_updates > 0) {
-				// made some progress and updated some cells
-				return count_updates;
-			}
-		}
+	if (!eligible_cell) {
+		return 0;
 	}
-	return 0;
+
+	assert(eligible_cell->bits_.count() >= 2);
+	assert(eligible_cell->bits_.test(num));
+	eligible_cell->assign(num);
+	return 1; // TODO return number of changed bits
 }
 
-#endif
+
+template <num_t N, typename Iter>
+size_t solve_clusters_exact_match(Iter const iter_begin, const typename numset_t<N>::bitset_t& test_set)
+{
+	assert(test_set.count() >= 2);
+
+	size_t count_exact_match = 0;
+	for (auto iter = iter_begin; iter.is_valid(); iter.next()) {
+		auto const& cell = iter.const_deref();
+		if (cell.bits_ == test_set) {
+			++count_exact_match;
+		}
+	}
+	assert(count_exact_match <= test_set.count());
+
+	if (count_exact_match != test_set.count()) {
+		return 0;
+	}
+
+	size_t count_exact_match_check = 0;
+	size_t count_solved = 0;
+	size_t count_cell_upd = 0;
+	size_t progress = 0;
+	for (auto iter = iter_begin; iter.is_valid(); iter.next()) {
+		auto& cell = iter.deref();
+		if (cell.bits_ == test_set) {
+			++count_exact_match_check;
+		} else if (cell.is_solved()) {
+			++count_solved;
+		} else {
+			progress += cell.try_exclude_set(test_set);
+			++count_cell_upd;
+		}
+	}
+	assert(count_exact_match_check == count_exact_match);
+	assert(count_exact_match_check + count_solved + count_cell_upd == N);
+	return progress;
+}
 
 
 template <num_t N>
@@ -378,36 +434,69 @@ void sudoku_t<N>::print_detailed(std::ostream& os) const
 template <num_t N>
 void sudoku_t<N>::solve()
 {
+	constexpr unsigned long long test_cluster_last = (1 << N) - 2;
+	static_assert(test_cluster_last == ((1 << (N-1)) - 1) << 1); // N-1 1's then 0
+	static_assert(typename numset_t<N>::bitset_t(test_cluster_last).count() == N-1);
+	static_assert(typename numset_t<N>::bitset_t(test_cluster_last).test(0) == 0);
+
 	size_t updates_total = 0;
 	for (size_t iter = 1; ; ++iter) {
 		size_t updates_current = 0;
 
 		// iterate over over rows & columns
 		for (idx_t idx = 0; idx < N; ++idx) {
-			// simple exclusions
-			updates_current += solve_exclusions_iterate<N>(iterator_over_row_t<N>(data_, idx));
-			updates_current += solve_exclusions_iterate<N>(iterator_over_column_t<N>(data_, idx));
+			auto const iter_row_begin = iterator_over_row_t<N>(data_, idx);
+			auto const iter_column_begin = iterator_over_column_t<N>(data_, idx);
 
-			// clusters
-			updates_current += solve_clusters<N>(iterator_over_row_t<N>(data_, idx));
-			updates_current += solve_clusters<N>(iterator_over_column_t<N>(data_, idx));
+			// simple exclusions
+			updates_current += solve_exclusions_iterate<N>(iter_row_begin);
+			updates_current += solve_exclusions_iterate<N>(iter_column_begin);
+
+			// emplace
+			for (num_t n=0; n<N; ++n) {
+				updates_current += solve_emplace<N>(iter_row_begin, n);
+				updates_current += solve_emplace<N>(iter_column_begin, n);
+			}
+
+			// exact clusters
+			// iterate over all possible sets of N bits
+			static_assert(N < 16); // conservative, make sure std::bitset doesn't overflow
+			for (unsigned long long n = 1; n <= test_cluster_last; ++n) {
+				typename numset_t<N>::bitset_t const test_cluster(n);
+				if (test_cluster.count() >= 2) {
+					updates_current += solve_clusters_exact_match<N>(iter_row_begin, test_cluster);
+					updates_current += solve_clusters_exact_match<N>(iter_column_begin, test_cluster);
+				}
+			}
 		}
 
 		// iterate over 3*3 (Ns*Ns) squares
 		constexpr auto Ns = sqrt_t<N>::value;
 		for (idx_t r = 0; r < N; r += Ns) {
 			for (idx_t c = 0; c < N; c += Ns) {
-				// simple exclusions
-				updates_current += solve_exclusions_iterate<N>(iterator_over_sq_t<N>(data_, r, c));
+				auto const iter_sq_begin = iterator_over_sq_t<N>(data_, r, c);
 
-				// clusters
-				updates_current += solve_clusters<N>(iterator_over_sq_t<N>(data_, r, c));
+				// simple exclusions
+				updates_current += solve_exclusions_iterate<N>(iter_sq_begin);
+
+				// emplace
+				for (num_t n=0; n<N; ++n) {
+					updates_current += solve_emplace<N>(iter_sq_begin, n);
+				}
+
+				// exact clusters
+				for (unsigned long long n = 1; n <= test_cluster_last; ++n) {
+					typename numset_t<N>::bitset_t const test_cluster(n);
+					if (test_cluster.count() >= 2) {
+						updates_current += solve_clusters_exact_match<N>(iter_sq_begin, test_cluster);
+					}
+				}
 			}
 		}
 
 		std::cout << "Iteration=" << iter << " updates:" << updates_total << "+" << updates_current << "\n";
 		updates_total += updates_current;
-		if (updates_current == 0) {
+		if (updates_current == 0 /* || iter>20*/) {
 			std::cout << "No progress, terminating\n";
 			return;
 		}
@@ -459,4 +548,6 @@ void sudoku_t<N>::verify()
 		std::cout << "!!! VERIFY_INCORRECT\n";
 	}
 }
+
+#endif
 
