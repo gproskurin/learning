@@ -1,5 +1,9 @@
 #include "solver.h"
 
+#include <exception>
+#include <iostream>
+
+
 int main()
 {
 	try {

@@ -80,20 +80,6 @@ BOOST_AUTO_TEST_CASE(test_bitset)
 	}
 }
 
-BOOST_AUTO_TEST_CASE(test_bitset_exclude)
-{
-	constexpr num_t N = 4;
-
-	auto bs = bitset_make_full<N>();
-	BOOST_TEST(bs.to_ulong() == 0b1111);
-
-	BOOST_TEST(bitset_try_exclude<N>(bs, 1) == true);
-	BOOST_TEST(bs.to_ulong() == 0b1101);
-
-	BOOST_TEST(bitset_try_exclude<N>(bs, 1) == false);
-	BOOST_TEST(bs.to_ulong() == 0b1101);
-}
-
 BOOST_AUTO_TEST_CASE(test_bitset_exclude_set)
 {
 	constexpr num_t N = 4;
@@ -105,9 +91,9 @@ BOOST_AUTO_TEST_CASE(test_bitset_exclude_set)
 		bitset_t<N> const bs1(0b0011ULL);
 		BOOST_TEST(bs1.to_ulong() == 0b0011);
 
-		BOOST_TEST(bitset_exclude_set<N>(bs, bs1) == 2);
+		BOOST_TEST(bitset_exclude_set<N>(bs, bs1) == true);
 		BOOST_TEST(bs.to_ulong() == 0b1100);
-		BOOST_TEST(bitset_exclude_set<N>(bs, bs1) == 0);
+		BOOST_TEST(bitset_exclude_set<N>(bs, bs1) == false);
 		BOOST_TEST(bs.to_ulong() == 0b1100);
 	}
 
@@ -116,61 +102,12 @@ BOOST_AUTO_TEST_CASE(test_bitset_exclude_set)
 
 		bitset_t<N> const bs2(0b0110ULL);
 		BOOST_TEST(bs2.to_ulong() == 0b0110);
-		BOOST_TEST(bitset_exclude_set<N>(bs, bs2) == 1);
+		BOOST_TEST(bitset_exclude_set<N>(bs, bs2) == true);
 		BOOST_TEST(bs.to_ulong() == 0b1000);
-		BOOST_TEST(bitset_exclude_set<N>(bs, bs2) == 0);
+		BOOST_TEST(bitset_exclude_set<N>(bs, bs2) == false);
 		BOOST_TEST(bs.to_ulong() == 0b1000);
 	}
 }
-
-BOOST_AUTO_TEST_CASE(test_bitset_assign_set)
-{
-	constexpr num_t N = 4;
-	auto bs = bitset_make_full<N>();
-	BOOST_TEST(bs.to_ulong() == 0b1111);
-
-	BOOST_TEST(bitset_assign_set<N>(bs, bitset_t<N>(0b1111ULL)) == 0);
-	BOOST_TEST(bs.to_ulong() == 0b1111);
-
-	BOOST_TEST(bitset_assign_set<N>(bs, bitset_t<N>(0b1110ULL)) == 1);
-	BOOST_TEST(bs.to_ulong() == 0b1110);
-
-	BOOST_TEST(bitset_assign_set<N>(bs, bitset_t<N>(0b0010ULL)) == 2);
-	BOOST_TEST(bs.to_ulong() == 0b0010);
-
-	BOOST_TEST(bitset_assign_set<N>(bs, bitset_t<N>(0b0010ULL)) == 0);
-	BOOST_TEST(bs.to_ulong() == 0b0010);
-}
-
-#if 0
-BOOST_AUTO_TEST_CASE(test_contains_all)
-{
-	constexpr num_t N = 4;
-
-	numset_t<N> ns;
-	BOOST_TEST(ns.to_ulong() == 0b1111);
-	numset_t<N>::bitset_t const bs_all(0b1111ULL);
-
-	BOOST_TEST(ns.contains_all(bs_all));
-
-	numset_t<N>::bitset_t bs1(0b1100ULL);
-	BOOST_TEST(ns.contains_all(bs1));
-
-	BOOST_TEST(ns.assign_set(bs1) == 2);
-	BOOST_TEST(ns.to_ulong() == 0b1100);
-	BOOST_TEST(!ns.contains_all(bs_all));
-
-	BOOST_TEST(ns.contains_all(numset_t<N>::bitset_t(0b0000ULL)));
-	BOOST_TEST(ns.contains_all(numset_t<N>::bitset_t(0b0100ULL)));
-	BOOST_TEST(ns.contains_all(numset_t<N>::bitset_t(0b1000ULL)));
-	BOOST_TEST(ns.contains_all(numset_t<N>::bitset_t(0b1100ULL)));
-
-	BOOST_TEST(!ns.contains_all(numset_t<N>::bitset_t(0b0001ULL)));
-	BOOST_TEST(!ns.contains_all(numset_t<N>::bitset_t(0b1001ULL)));
-	BOOST_TEST(!ns.contains_all(numset_t<N>::bitset_t(0b1101ULL)));
-	BOOST_TEST(!ns.contains_all(numset_t<N>::bitset_t(0b1110ULL)));
-}
-#endif
 
 BOOST_AUTO_TEST_CASE(test_exclusions_solve_row)
 {
@@ -346,9 +283,9 @@ BOOST_AUTO_TEST_CASE(test_solve_full_samples)
 		sudoku_t<N> s(is);
 		s.solve();
 		// test it is solved
-		for (idx_t r=0; r<N; ++r) {
-			for (idx_t c=0; c<N; ++c) {
-				BOOST_TEST(s.data_.at(r).at(c).count() == 1);
+		for (const auto& row : s.data_) {
+			for (const auto& cell : row) {
+				BOOST_TEST(bitset_is_solved<N>(cell));
 			}
 		}
 	}
