@@ -6,6 +6,41 @@
 #include <iostream>
 #include <sstream>
 
+BOOST_AUTO_TEST_CASE(test_parse_print)
+{
+	constexpr std::array<std::pair<num_t, char>, 16> prn{ {
+		{0, '1'},
+		{1, '2'},
+		{2, '3'},
+		{3, '4'},
+		{4, '5'},
+		{5, '6'},
+		{6, '7'},
+		{7, '8'},
+		{8, '9'},
+		{9, 'a'},
+		{10, 'b'},
+		{11, 'c'},
+		{12, 'd'},
+		{13, 'e'},
+		{14, 'f'},
+		{15, 'g'}
+	} };
+	for (num_t n = 0; n<prn.size(); ++n) {
+		auto const num_internal = prn.at(n).first;
+		auto const num_printed = prn.at(n).second;
+		if (n < 4) {
+			BOOST_TEST(num_parse<4>(num_printed) == num_internal);
+			BOOST_TEST(num_print<4>(num_internal) == num_printed);
+		}
+		if (n < 9) {
+			BOOST_TEST(num_parse<9>(num_printed) == num_internal);
+			BOOST_TEST(num_print<9>(num_internal) == num_printed);
+		}
+		BOOST_TEST(num_parse<16>(num_printed) == num_internal);
+		BOOST_TEST(num_print<16>(num_internal) == num_printed);
+	}
+}
 
 BOOST_AUTO_TEST_CASE(test_bitset)
 {
@@ -242,6 +277,31 @@ BOOST_AUTO_TEST_CASE(test_cluster_column_size_2)
 	BOOST_TEST(s.data_.at(2).at(2).to_ulong() == 0b001111110);
 }
 
+BOOST_AUTO_TEST_CASE(test_solve_16)
+{
+	constexpr num_t N = 16;
+	std::istringstream is(
+		"*23456789abcdefg\n"
+		"****************\n"
+		"****************\n"
+		"****************\n"
+		"****************\n"
+		"****************\n"
+		"****************\n"
+		"****************\n"
+		"****************\n"
+		"****************\n"
+		"****************\n"
+		"****************\n"
+		"****************\n"
+		"****************\n"
+		"****************\n"
+		"****************\n"
+	);
+	sudoku_t<N> s(is);
+	s.solve();
+	BOOST_TEST(bitset_parser_print<N>(s.data_.at(0).at(0)) == '1');
+}
 
 const std::array<std::string, 3> sudoku_samples{
 	// easy 299

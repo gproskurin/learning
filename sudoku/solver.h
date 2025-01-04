@@ -20,23 +20,46 @@ using idx_t = char;
 
 
 template <num_t N> num_t num_parse(char c);
-template<> num_t num_parse<9>(char c)
-{
-	if (c >= '1' && c <= '9')
-		return c - '0' - 1;
-	throw std::runtime_error("Num[1..9] parsing error");
-}
 template<> num_t num_parse<4>(char c)
 {
 	if (c >= '1' && c <= '4')
 		return c - '0' - 1;
 	throw std::runtime_error("Num[1..4] parsing error");
 }
+template<> num_t num_parse<9>(char c)
+{
+	if (c >= '1' && c <= '9')
+		return c - '0' - 1;
+	throw std::runtime_error("Num[1..9] parsing error");
+}
+template<> num_t num_parse<16>(char c)
+{
+	if (c >= '1' && c <= '9')
+		return c - '0' - 1;
+	if (c >= 'a' && c <= 'g')
+		return c - 'a' + 10 - 1;
+	throw std::runtime_error("Num[1..a..g] parsing error");
+}
+
+template <num_t N>
+char num_print(num_t n)
+{
+	assert(n < N);
+	static_assert(N == 4 || N == 9 || N == 16);
+	if ((N==4 && n<4) || (N==9 && n<9) || (N==16 && n<9)) {
+		return '0' + n + 1;
+	}
+	if (N==16 && n<16) {
+		return 'a' + n - 10 + 1;
+	}
+	throw std::runtime_error("Num printing error");
+}
 
 
 template <num_t N> struct sqrt_t;
-template<> struct sqrt_t<9> { static constexpr num_t value = 3; };
 template<> struct sqrt_t<4> { static constexpr num_t value = 2; };
+template<> struct sqrt_t<9> { static constexpr num_t value = 3; };
+template<> struct sqrt_t<16> { static constexpr num_t value = 4; };
 
 
 template <num_t N>
@@ -141,7 +164,7 @@ char bitset_parser_print(const bitset_t<N>& bs)
 		case N:
 			return '*';
 		case 1:
-			return bitset_get_solved_opt<N>(bs).value() + '0' + 1;
+			return num_print<N>(bitset_get_solved_opt<N>(bs).value());
 		default:
 			return '.';
 	}
@@ -376,7 +399,7 @@ void sudoku_t<N>::print_detailed(std::ostream& os) const
 		for(idx_t c=0; c<N; ++c) {
 			const auto& cell = data_.at(r).at(c);
 			for (num_t n=0; n<N; ++n) {
-				data_sets.at(r*Ns + n/Ns).at(c*Ns + n%Ns) = (cell.test(n) ? '0'+n+1 : ' '); // TODO reuse bitset_...print()
+				data_sets.at(r*Ns + n/Ns).at(c*Ns + n%Ns) = (cell.test(n) ? num_print<N>(n) : ' ');
 			}
 		}
 	}
@@ -394,7 +417,7 @@ void sudoku_t<N>::print_detailed(std::ostream& os) const
 			}
 		}
 		os << "\n";
-		constexpr size_t div_len = (N==9 ? 61 : 23);
+		constexpr size_t div_len = (N==4 ? 23 : N==9 ? 61 : 123);
 		if (r%N == N-1) {
 			if (r < N*Ns-1) {
 				os << "\n";
@@ -438,7 +461,7 @@ void sudoku_t<N>::solve()
 
 			// exact clusters
 			// iterate over all possible sets of N bits
-			static_assert(N < 16); // conservative, make sure std::bitset doesn't overflow
+			static_assert(N <= 16); // conservative, make sure std::bitset doesn't overflow
 			for (unsigned long long n = 1; n <= test_cluster_last; ++n) {
 				bitset_t<N> const test_cluster(n);
 				if (test_cluster.count() >= 2) {
