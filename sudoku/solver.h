@@ -40,140 +40,118 @@ template<> struct sqrt_t<4> { static constexpr num_t value = 2; };
 
 
 template <num_t N>
-class numset_t {
-public:
-	using bitset_t = std::bitset<N>;
+using bitset_t = std::bitset<N>;
 
-public:
-	static constexpr bitset_t make_bitset_full()
-	{
-		bitset_t r;
-		r.set();
-		return r;
+template <num_t N>
+constexpr bitset_t<N> bitset_make_full()
+{
+	return bitset_t<N>(static_cast<unsigned long long>((1 << N) - 1));
+}
+
+template <num_t N>
+constexpr bitset_t<N> bitset_make_empty()
+{
+	return bitset_t<N>(0ULL);
+}
+
+template <num_t N>
+bitset_t<N> bitset_make_solved(num_t num)
+{
+	return bitset_t<N>(static_cast<unsigned long long>(1 << num));
+}
+
+
+template <num_t N>
+bool bitset_is_solved(const bitset_t<N>& bs)
+{
+	assert(bs.any());
+	return bs.count() == 1;
+}
+
+
+template <num_t N>
+bool bitset_try_exclude(bitset_t<N>& bs, num_t n)
+{
+	if (bs.test(n)) {
+		bs.reset(n);
+		return true;
 	}
+	return false;
+}
 
-	static constexpr bitset_t make_bitset_empty()
-	{
-		return bitset_t();
-	}
 
-public:
-	numset_t() : bits_(make_bitset_full()) {}
-
-	void assign(num_t num)
-	{
-		// TODO return number of changed bits
-		bits_.reset();
-		bits_.set(num);
-	}
-
-	size_t assign_set(const bitset_t& b)
-	{
-		// return number of 1->0 transitions
-		// TODO bit ops
-		size_t r = 0;
-		for (idx_t i=0; i<N; ++i) {
-			if (b.test(i)) {
-				assert(bits_.test(i)); // cannot "add" to set
-			} else {
-				if (bits_.test(i)) {
-					// 1->0 transition
-					bits_.reset(i);
-					++r;
-				}
-			}
+template <num_t N>
+size_t bitset_exclude_set(bitset_t<N>& bs, const bitset_t<N>& excl)
+{
+	assert(bs.any());
+	size_t r = 0;
+	for (num_t n=0; n<N; ++n) {
+		if (excl.test(n) && bitset_try_exclude<N>(bs, n)) {
+			++r;
 		}
-		return r;
 	}
+	assert(bs.any());
+	return r;
+}
 
-	static bool eq(const numset_t& a, const numset_t& b)
-	{
-		return a.bits_ == b.bits_;
+
+template <num_t N>
+std::optional<num_t> bitset_get_solved_opt(const bitset_t<N>& bs)
+{
+	assert(bs.any());
+	if (bs.count() != 1) {
+		return std::nullopt;
 	}
-
-	size_t count() const { return bits_.count(); }
-
-	bool has(num_t n) const
-	{
-		return bits_.test(n);
-	}
-
-	bool try_exclude(num_t n)
-	{
-		if (bits_.test(n)) {
-			bits_.reset(n);
-			return true;
+	for (num_t n=0; n<N; ++n) {
+		if (bs.test(n)) {
+			return n;
 		}
-		return false;
 	}
+	assert("unreacheable code");
+	return std::nullopt; // FIXME
+}
 
-	// exclude "solved_nums" from cell
-	size_t try_exclude_set(bitset_t b)
-	{
-		size_t r = 0;
-		for (num_t n=0; n<N; ++n) {
-			if (b.test(n) && try_exclude(n)) {
+
+template <num_t N>
+size_t bitset_assign_set(bitset_t<N>& bs, const bitset_t<N>& set)
+{
+	// return number of 1->0 transitions
+	// TODO bit ops
+	size_t r = 0;
+	for (num_t i=0; i<N; ++i) {
+		if (set.test(i)) {
+			assert(bs.test(i)); // cannot "add" to set
+		} else {
+			if (bs.test(i)) {
+				// 1->0 transition
+				bs.reset(i);
 				++r;
 			}
 		}
-		assert(bits_.count() >= 1);
-		return r;
 	}
+	return r;
+}
 
-	bool contains_all(const bitset_t& b) const
-	{
-		// TODO bit operation
-		for (num_t n=0; n<N; ++n) {
-			if (b.test(n) && !bits_.test(n)) {
-				return false;
-			}
-		}
-		return true;
-	}
 
-	std::optional<num_t> is_solved() const
-	{
-		// TODO better implementation
-		assert(bits_.count() >= 1);
-		ssize_t idx = -1;
-		for (size_t i = 0; i<N; ++i) {
-			if (bits_.test(i)) {
-				if (idx != -1) {
-					return std::nullopt;
-				}
-				idx = i;
-			}
-		}
-		assert(idx != -1);
-		return idx;
-	}
-
-	char print() const
-	{
-		auto const ns = is_solved();
-		if (ns.has_value()) {
-			return ns.value() + '0' + 1;
-		}
-		if (bits_.count() == N) {
+template <num_t N>
+char bitset_parser_print(const bitset_t<N>& bs)
+{
+	assert(bs.any());
+	switch (bs.count()) {
+		case N:
 			return '*';
-		}
-		return '.';
+		case 1:
+			return bitset_get_solved_opt<N>(bs).value() + '0' + 1;
+		default:
+			return '.';
 	}
-
-	// for tests
-	std::string to_string() const { return bits_.to_string(); }
-	auto to_ulong() const { return bits_.to_ulong(); }
-
-public: // FIXME
-	bitset_t bits_;
-};
-
+}
 
 
 template <num_t N>
 class sudoku_t {
 public:
-	using data_t = std::array<std::array<numset_t<N>, N>, N>;
+	using data_t = std::array<std::array<bitset_t<N>, N>, N>;
 public:
 	sudoku_t(std::istream&);
 	void print(std::ostream&) const;
@@ -199,16 +177,16 @@ public: // FIXME
 template <num_t N>
 struct iterator_over_row_t : public iterator_base_t<N> {
 	iterator_over_row_t(sudoku_t<N>::data_t& data, idx_t row) : iterator_base_t<N>(data, row) {}
-	numset_t<N>& deref() { return iterator_base_t<N>::data_.at(iterator_base_t<N>::fixed_idx_).at(iterator_base_t<N>::mutable_idx_); } // row is fixed
-	const numset_t<N>& const_deref() const { return iterator_base_t<N>::data_.at(iterator_base_t<N>::fixed_idx_).at(iterator_base_t<N>::mutable_idx_); }
+	bitset_t<N>& deref() { return iterator_base_t<N>::data_.at(iterator_base_t<N>::fixed_idx_).at(iterator_base_t<N>::mutable_idx_); } // row is fixed
+	const bitset_t<N>& const_deref() const { return iterator_base_t<N>::data_.at(iterator_base_t<N>::fixed_idx_).at(iterator_base_t<N>::mutable_idx_); }
 	void print_info(std::ostream& os) const { os << "iterator_row<" << iterator_base_t<N>::fixed_idx_ << ">"; }
 };
 
 template <num_t N>
 struct iterator_over_column_t : public iterator_base_t<N> {
 	iterator_over_column_t(sudoku_t<N>::data_t& data, idx_t col) : iterator_base_t<N>(data, col) {}
-	numset_t<N>& deref() { return iterator_base_t<N>::data_.at(iterator_base_t<N>::mutable_idx_).at(iterator_base_t<N>::fixed_idx_); }
-	const numset_t<N>& const_deref() const { return iterator_base_t<N>::data_.at(iterator_base_t<N>::mutable_idx_).at(iterator_base_t<N>::fixed_idx_); }
+	bitset_t<N>& deref() { return iterator_base_t<N>::data_.at(iterator_base_t<N>::mutable_idx_).at(iterator_base_t<N>::fixed_idx_); }
+	const bitset_t<N>& const_deref() const { return iterator_base_t<N>::data_.at(iterator_base_t<N>::mutable_idx_).at(iterator_base_t<N>::fixed_idx_); }
 	void print_info(std::ostream& os) const { os << "iterator_column<" << iterator_base_t<N>::fixed_idx_ << ">"; }
 };
 
@@ -221,8 +199,8 @@ struct iterator_over_sq_t {
 		, r_(row)
 		, c_(col)
 		{}
-	numset_t<N>& deref() { return data_.at(r_).at(c_); }
-	const numset_t<N>& const_deref() const { return data_.at(r_).at(c_); }
+	bitset_t<N>& deref() { return data_.at(r_).at(c_); }
+	const bitset_t<N>& const_deref() const { return data_.at(r_).at(c_); }
 	bool is_valid() const
 	{
 		return (c_ < fixed_col_ + Ns) && (r_ < fixed_row_ + Ns);
@@ -252,12 +230,12 @@ size_t solve_exclusions_iterate(Iter const iter_begin)
 {
 	size_t progress_count = 0;
 
-	typename numset_t<N>::bitset_t solved_values(numset_t<N>::make_bitset_empty());
+	bitset_t<N> solved_values(bitset_make_empty<N>());
 
 	for (auto iter = iter_begin; iter.is_valid(); iter.next()) {
 		// collect all solved nums in the row
 		auto const& cell = iter.const_deref();
-		if (auto const n = cell.is_solved()) {
+		if (auto const n = bitset_get_solved_opt<N>(cell)) {
 			solved_values.set(n.value());
 		}
 	}
@@ -265,8 +243,8 @@ size_t solve_exclusions_iterate(Iter const iter_begin)
 	// exclude each "solved" num from all cells
 	for (auto iter = iter_begin; iter.is_valid(); iter.next()) {
 		auto& cell = iter.deref();
-		if (!cell.is_solved()) {
-			progress_count += cell.try_exclude_set(solved_values);
+		if (!bitset_is_solved<N>(cell)) {
+			progress_count += bitset_exclude_set<N>(cell, solved_values);
 		}
 	}
 
@@ -278,17 +256,17 @@ size_t solve_exclusions_iterate(Iter const iter_begin)
 template <num_t N, typename Iter>
 size_t solve_emplace(Iter const iter_begin, num_t num)
 {
-	numset_t<N> *eligible_cell = nullptr;
+	bitset_t<N> *eligible_cell = nullptr;
 	for (auto iter = iter_begin; iter.is_valid(); iter.next()) {
 		auto& cell = iter.deref();
-		if (auto const ns = cell.is_solved()) {
+		if (auto const ns = bitset_get_solved_opt<N>(cell)) {
 			// if "num" is already solved in some cell, exit early
 			if (ns.value() == num) {
 				return 0;
 			}
 			// skip other solved values
 		}
-		if (cell.bits_.test(num)) {
+		if (cell.test(num)) {
 			if (eligible_cell) {
 				// already have eligible cell, and current is the second
 				return 0;
@@ -301,22 +279,22 @@ size_t solve_emplace(Iter const iter_begin, num_t num)
 		return 0;
 	}
 
-	assert(eligible_cell->bits_.count() >= 2);
-	assert(eligible_cell->bits_.test(num));
-	eligible_cell->assign(num);
+	assert(eligible_cell->count() >= 2);
+	assert(eligible_cell->test(num));
+	*eligible_cell = bitset_make_solved<N>(num);
 	return 1; // TODO return number of changed bits
 }
 
 
 template <num_t N, typename Iter>
-size_t solve_clusters_exact_match(Iter const iter_begin, const typename numset_t<N>::bitset_t& test_set)
+size_t solve_clusters_exact_match(Iter const iter_begin, const bitset_t<N>& test_set)
 {
 	assert(test_set.count() >= 2);
 
 	size_t count_exact_match = 0;
 	for (auto iter = iter_begin; iter.is_valid(); iter.next()) {
 		auto const& cell = iter.const_deref();
-		if (cell.bits_ == test_set) {
+		if (cell == test_set) {
 			++count_exact_match;
 		}
 	}
@@ -332,12 +310,12 @@ size_t solve_clusters_exact_match(Iter const iter_begin, const typename numset_t
 	size_t progress = 0;
 	for (auto iter = iter_begin; iter.is_valid(); iter.next()) {
 		auto& cell = iter.deref();
-		if (cell.bits_ == test_set) {
+		if (cell == test_set) {
 			++count_exact_match_check;
-		} else if (cell.is_solved()) {
+		} else if (bitset_is_solved<N>(cell)) {
 			++count_solved;
 		} else {
-			progress += cell.try_exclude_set(test_set);
+			progress += bitset_exclude_set<N>(cell, test_set);
 			++count_cell_upd;
 		}
 	}
@@ -357,9 +335,9 @@ sudoku_t<N>::sudoku_t(std::istream& is)
 			char const c = *iter;
 			++iter;
 			if (c == '*') {
-				// do nothing, numset_t is "full" by default
+				data_.at(row).at(col) = bitset_make_full<N>();
 			} else {
-				data_.at(row).at(col).assign(num_parse<N>(c));
+				data_.at(row).at(col) = bitset_make_solved<N>(num_parse<N>(c));
 			}
 		}
 	}
@@ -373,7 +351,7 @@ void sudoku_t<N>::print(std::ostream& os) const
 
 	for (size_t row = 0; row < N; ++row) {
 		for (size_t col = 0; col < N; ++col) {
-			os << data_.at(row).at(col).print();
+			os << bitset_parser_print<N>(data_.at(row).at(col));
 			if (col < N-1) {
 				os << ' ';
 				if ((col % Ns) == (Ns - 1)) {
@@ -398,7 +376,7 @@ void sudoku_t<N>::print_detailed(std::ostream& os) const
 		for(idx_t c=0; c<N; ++c) {
 			const auto& cell = data_.at(r).at(c);
 			for (num_t n=0; n<N; ++n) {
-				data_sets.at(r*Ns + n/Ns).at(c*Ns + n%Ns) = (cell.has(n) ? '0'+n+1 : ' ');
+				data_sets.at(r*Ns + n/Ns).at(c*Ns + n%Ns) = (cell.test(n) ? '0'+n+1 : ' '); // TODO reuse bitset_...print()
 			}
 		}
 	}
@@ -436,8 +414,8 @@ void sudoku_t<N>::solve()
 {
 	constexpr unsigned long long test_cluster_last = (1 << N) - 2;
 	static_assert(test_cluster_last == ((1 << (N-1)) - 1) << 1); // N-1 1's then 0
-	static_assert(typename numset_t<N>::bitset_t(test_cluster_last).count() == N-1);
-	static_assert(typename numset_t<N>::bitset_t(test_cluster_last).test(0) == 0);
+	static_assert(bitset_t<N>(test_cluster_last).count() == N-1);
+	static_assert(bitset_t<N>(test_cluster_last).test(0) == 0);
 
 	size_t updates_total = 0;
 	for (size_t iter = 1; ; ++iter) {
@@ -462,7 +440,7 @@ void sudoku_t<N>::solve()
 			// iterate over all possible sets of N bits
 			static_assert(N < 16); // conservative, make sure std::bitset doesn't overflow
 			for (unsigned long long n = 1; n <= test_cluster_last; ++n) {
-				typename numset_t<N>::bitset_t const test_cluster(n);
+				bitset_t<N> const test_cluster(n);
 				if (test_cluster.count() >= 2) {
 					updates_current += solve_clusters_exact_match<N>(iter_row_begin, test_cluster);
 					updates_current += solve_clusters_exact_match<N>(iter_column_begin, test_cluster);
@@ -486,7 +464,7 @@ void sudoku_t<N>::solve()
 
 				// exact clusters
 				for (unsigned long long n = 1; n <= test_cluster_last; ++n) {
-					typename numset_t<N>::bitset_t const test_cluster(n);
+					bitset_t<N> const test_cluster(n);
 					if (test_cluster.count() >= 2) {
 						updates_current += solve_clusters_exact_match<N>(iter_sq_begin, test_cluster);
 					}
@@ -507,9 +485,9 @@ void sudoku_t<N>::solve()
 template <num_t N, typename Iter>
 bool verify_impl(Iter&& iter_begin)
 {
-	typename numset_t<N>::bitset_t nums = numset_t<N>::make_bitset_empty();
+	auto nums = bitset_make_empty<N>();
 	for (auto iter = iter_begin; iter.is_valid(); iter.next()){
-		auto const ns = iter.const_deref().is_solved();
+		auto const ns = bitset_get_solved_opt<N>(iter.const_deref());
 		if (!ns) {
 			std::cout << "UNSOLVED\n";
 			return false;

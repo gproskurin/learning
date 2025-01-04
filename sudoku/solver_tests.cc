@@ -7,58 +7,108 @@
 #include <sstream>
 
 
-BOOST_AUTO_TEST_CASE(test_bitset_exclude_1)
+BOOST_AUTO_TEST_CASE(test_bitset)
 {
-	numset_t<4> ns;
-	BOOST_TEST(ns.to_ulong() == 0b1111);
-
-	BOOST_TEST(ns.try_exclude(1) == true);
-	BOOST_TEST(ns.to_ulong() == 0b1101);
-
-	BOOST_TEST(ns.try_exclude(1) == false);
-	BOOST_TEST(ns.to_ulong() == 0b1101);
+	constexpr num_t N = 4;
+	{
+		auto const bs = bitset_make_empty<N>();
+		BOOST_TEST(bs.count() == 0);
+		BOOST_TEST(bs.none());
+		BOOST_TEST(bs.to_ulong() == 0);
+	}
+	{
+		auto const bs = bitset_make_full<N>();
+		BOOST_TEST(bs.count() == 4);
+		BOOST_TEST(bs.all());
+		BOOST_TEST(bs.to_ulong() == 0b1111);
+	}
+	{
+		auto const bs = bitset_make_solved<N>(0);
+		BOOST_TEST(bs.count() == 1);
+		BOOST_TEST(!bs.all());
+		BOOST_TEST(!bs.none());
+		BOOST_TEST(bs.to_ulong() == 0b0001);
+	}
+	{
+		auto const bs = bitset_make_solved<N>(1);
+		BOOST_TEST(bs.count() == 1);
+		BOOST_TEST(!bs.all());
+		BOOST_TEST(!bs.none());
+		BOOST_TEST(bs.to_ulong() == 0b0010);
+	}
+	{
+		auto const bs = bitset_make_solved<N>(3);
+		BOOST_TEST(bs.count() == 1);
+		BOOST_TEST(!bs.all());
+		BOOST_TEST(!bs.none());
+		BOOST_TEST(bs.to_ulong() == 0b1000);
+	}
 }
 
-BOOST_AUTO_TEST_CASE(test_bitset_exclude_2)
+BOOST_AUTO_TEST_CASE(test_bitset_exclude)
 {
-	numset_t<4> ns;
-	BOOST_TEST(ns.to_ulong() == 0b1111);
+	constexpr num_t N = 4;
 
-	numset_t<4>::bitset_t bs1(0b0011);
-	BOOST_TEST(bs1.to_ulong() == 0b0011);
+	auto bs = bitset_make_full<N>();
+	BOOST_TEST(bs.to_ulong() == 0b1111);
 
-	BOOST_TEST(ns.try_exclude_set(bs1) == 2);
-	BOOST_TEST(ns.to_ulong() == 0b1100);
-	BOOST_TEST(ns.try_exclude_set(bs1) == 0);
-	BOOST_TEST(ns.to_ulong() == 0b1100);
+	BOOST_TEST(bitset_try_exclude<N>(bs, 1) == true);
+	BOOST_TEST(bs.to_ulong() == 0b1101);
 
-	numset_t<4>::bitset_t bs2(0b0110);
-	BOOST_TEST(bs2.to_ulong() == 0b0110);
-	BOOST_TEST(ns.try_exclude_set(bs2) == 1);
-	BOOST_TEST(ns.to_ulong() == 0b1000);
-	BOOST_TEST(ns.try_exclude_set(bs2) == 0);
-	BOOST_TEST(ns.to_ulong() == 0b1000);
+	BOOST_TEST(bitset_try_exclude<N>(bs, 1) == false);
+	BOOST_TEST(bs.to_ulong() == 0b1101);
 }
 
-BOOST_AUTO_TEST_CASE(test_bitset_assign_set_1)
+BOOST_AUTO_TEST_CASE(test_bitset_exclude_set)
 {
-	numset_t<4> ns;
-	BOOST_TEST(ns.to_ulong() == 0b1111);
+	constexpr num_t N = 4;
 
-	BOOST_TEST(ns.assign_set(numset_t<4>::bitset_t(0b1111)) == 0);
-	BOOST_TEST(ns.to_ulong() == 0b1111);
+	auto bs = bitset_make_full<N>();
+	BOOST_TEST(bs.to_ulong() == 0b1111);
 
-	BOOST_TEST(ns.assign_set(numset_t<4>::bitset_t(0b1110)) == 1);
-	BOOST_TEST(ns.to_ulong() == 0b1110);
+	{
+		bitset_t<N> const bs1(0b0011ULL);
+		BOOST_TEST(bs1.to_ulong() == 0b0011);
 
-	BOOST_TEST(ns.assign_set(numset_t<4>::bitset_t(0b0010)) == 2);
-	BOOST_TEST(ns.to_ulong() == 0b0010);
+		BOOST_TEST(bitset_exclude_set<N>(bs, bs1) == 2);
+		BOOST_TEST(bs.to_ulong() == 0b1100);
+		BOOST_TEST(bitset_exclude_set<N>(bs, bs1) == 0);
+		BOOST_TEST(bs.to_ulong() == 0b1100);
+	}
 
-	BOOST_TEST(ns.assign_set(numset_t<4>::bitset_t(0b0010)) == 0);
-	BOOST_TEST(ns.to_ulong() == 0b0010);
+	{
+		BOOST_TEST(bs.to_ulong() == 0b1100);
+
+		bitset_t<N> const bs2(0b0110ULL);
+		BOOST_TEST(bs2.to_ulong() == 0b0110);
+		BOOST_TEST(bitset_exclude_set<N>(bs, bs2) == 1);
+		BOOST_TEST(bs.to_ulong() == 0b1000);
+		BOOST_TEST(bitset_exclude_set<N>(bs, bs2) == 0);
+		BOOST_TEST(bs.to_ulong() == 0b1000);
+	}
 }
 
-BOOST_AUTO_TEST_CASE(test_contains_all_1)
+BOOST_AUTO_TEST_CASE(test_bitset_assign_set)
+{
+	constexpr num_t N = 4;
+	auto bs = bitset_make_full<N>();
+	BOOST_TEST(bs.to_ulong() == 0b1111);
+
+	BOOST_TEST(bitset_assign_set<N>(bs, bitset_t<N>(0b1111ULL)) == 0);
+	BOOST_TEST(bs.to_ulong() == 0b1111);
+
+	BOOST_TEST(bitset_assign_set<N>(bs, bitset_t<N>(0b1110ULL)) == 1);
+	BOOST_TEST(bs.to_ulong() == 0b1110);
+
+	BOOST_TEST(bitset_assign_set<N>(bs, bitset_t<N>(0b0010ULL)) == 2);
+	BOOST_TEST(bs.to_ulong() == 0b0010);
+
+	BOOST_TEST(bitset_assign_set<N>(bs, bitset_t<N>(0b0010ULL)) == 0);
+	BOOST_TEST(bs.to_ulong() == 0b0010);
+}
+
+#if 0
+BOOST_AUTO_TEST_CASE(test_contains_all)
 {
 	constexpr num_t N = 4;
 
@@ -85,61 +135,67 @@ BOOST_AUTO_TEST_CASE(test_contains_all_1)
 	BOOST_TEST(!ns.contains_all(numset_t<N>::bitset_t(0b1101ULL)));
 	BOOST_TEST(!ns.contains_all(numset_t<N>::bitset_t(0b1110ULL)));
 }
+#endif
 
 BOOST_AUTO_TEST_CASE(test_exclusions_solve_row)
 {
+	constexpr num_t N = 4;
 	std::istringstream is(
 		"4*21\n"
 		"****\n"
 		"****\n"
 		"****\n"
 	);
-	sudoku_t<4> s(is);
+	sudoku_t<N> s(is);
 	s.solve();
-	BOOST_TEST(s.data_.at(0).at(1).print() == '3');
+	BOOST_TEST(bitset_parser_print<N>(s.data_.at(0).at(1)) == '3');
 }
 
 BOOST_AUTO_TEST_CASE(test_exclusions_solve_column)
 {
+	constexpr num_t N = 4;
 	std::istringstream is(
 		"4***\n"
 		"****\n"
 		"2***\n"
 		"1***\n"
 	);
-	sudoku_t<4> s(is);
+	sudoku_t<N> s(is);
 	s.solve();
-	BOOST_TEST(s.data_.at(1).at(0).print() == '3');
+	BOOST_TEST(bitset_parser_print<N>(s.data_.at(1).at(0)) == '3');
 }
 
 BOOST_AUTO_TEST_CASE(test_exclusions_solve_sq)
 {
+	constexpr num_t N = 4;
 	std::istringstream is(
 		"4***\n"
 		"21**\n"
 		"****\n"
 		"****\n"
 	);
-	sudoku_t<4> s(is);
+	sudoku_t<N> s(is);
 	s.solve();
-	BOOST_TEST(s.data_.at(0).at(1).print() == '3');
+	BOOST_TEST(bitset_parser_print<N>(s.data_.at(0).at(1)) == '3');
 }
 
 BOOST_AUTO_TEST_CASE(test_emplace_sq)
 {
+	constexpr num_t N = 4;
 	std::istringstream is(
 		"*2**\n" /* 1 can be placed only in the first column of this row */
 		"***1\n"
 		"****\n"
 		"****\n"
 	);
-	sudoku_t<4> s(is);
+	sudoku_t<N> s(is);
 	s.solve();
-	BOOST_TEST(s.data_.at(0).at(0).print() == '1');
+	BOOST_TEST(bitset_parser_print<N>(s.data_.at(0).at(0)) == '1');
 }
 
 BOOST_AUTO_TEST_CASE(test_emplace_column)
 {
+	constexpr num_t N = 9;
 	std::istringstream is(
 		"*********\n"
 		"********1\n"
@@ -153,11 +209,12 @@ BOOST_AUTO_TEST_CASE(test_emplace_column)
 	);
 	sudoku_t<9> s(is);
 	s.solve();
-	BOOST_TEST(s.data_.at(3).at(7).print() == '1');
+	BOOST_TEST(bitset_parser_print<N>(s.data_.at(3).at(7)) == '1');
 }
 
 BOOST_AUTO_TEST_CASE(test_cluster_column_size_2)
 {
+	constexpr num_t N = 9;
 	std::istringstream is(
 		// first column (2 elements) miss {8,9}, this is a cluster of size 2
 		"*********\n"
@@ -170,19 +227,19 @@ BOOST_AUTO_TEST_CASE(test_cluster_column_size_2)
 		"6********\n"
 		"7********\n"
 	);
-	sudoku_t<9> s(is);
+	sudoku_t<N> s(is);
 	s.solve();
 	// can contain {8,9} only
-	BOOST_TEST(s.data_.at(0).at(0).to_string() == "110000000");
-	BOOST_TEST(s.data_.at(1).at(0).to_string() == "110000000");
+	BOOST_TEST(s.data_.at(0).at(0).to_ulong() == 0b110000000);
+	BOOST_TEST(s.data_.at(1).at(0).to_ulong() == 0b110000000);
 
 	// {8,9} is excluded from top-left square
-	BOOST_TEST(s.data_.at(0).at(1).to_string() == "001111110");
-	BOOST_TEST(s.data_.at(1).at(1).to_string() == "001111110");
-	BOOST_TEST(s.data_.at(2).at(1).to_string() == "001111110");
-	BOOST_TEST(s.data_.at(0).at(2).to_string() == "001111110");
-	BOOST_TEST(s.data_.at(1).at(2).to_string() == "001111110");
-	BOOST_TEST(s.data_.at(2).at(2).to_string() == "001111110");
+	BOOST_TEST(s.data_.at(0).at(1).to_ulong() == 0b001111110);
+	BOOST_TEST(s.data_.at(1).at(1).to_ulong() == 0b001111110);
+	BOOST_TEST(s.data_.at(2).at(1).to_ulong() == 0b001111110);
+	BOOST_TEST(s.data_.at(0).at(2).to_ulong() == 0b001111110);
+	BOOST_TEST(s.data_.at(1).at(2).to_ulong() == 0b001111110);
+	BOOST_TEST(s.data_.at(2).at(2).to_ulong() == 0b001111110);
 }
 
 
@@ -231,7 +288,7 @@ BOOST_AUTO_TEST_CASE(test_solve_full_samples)
 		// test it is solved
 		for (idx_t r=0; r<N; ++r) {
 			for (idx_t c=0; c<N; ++c) {
-				BOOST_TEST(s.data_.at(r).at(c).bits_.count() == 1);
+				BOOST_TEST(s.data_.at(r).at(c).count() == 1);
 			}
 		}
 	}
