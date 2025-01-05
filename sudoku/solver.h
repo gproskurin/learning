@@ -38,16 +38,24 @@ template<> num_t num_parse<16>(char c)
 		return c - 'a' + 10 - 1;
 	throw std::runtime_error("Num[1..a..g] parsing error");
 }
+template<> num_t num_parse<25>(char c)
+{
+	if (c >= '1' && c <= '9')
+		return c - '0' - 1;
+	if (c >= 'a' && c <= 'q')
+		return c - 'a' + 10 - 1;
+	throw std::runtime_error("Num[1..a..q] parsing error");
+}
 
 template <num_t N>
 char num_print(num_t n)
 {
 	assert(n < N);
-	static_assert(N == 4 || N == 9 || N == 16);
-	if ((N==4 && n<4) || (N==9 && n<9) || (N==16 && n<9)) {
+	static_assert(N==4 || N==9 || N==16 || N==25);
+	if ((N==4 && n<4) || n<9) {
 		return '0' + n + 1;
 	}
-	if (N==16 && n<16) {
+	if ((N==16 && n<16) || (N==25 && n<25)) {
 		return 'a' + n - 10 + 1;
 	}
 	throw std::runtime_error("Num printing error");
@@ -58,6 +66,7 @@ template <num_t N> struct sqrt_t;
 template<> struct sqrt_t<4> { static constexpr num_t value = 2; };
 template<> struct sqrt_t<9> { static constexpr num_t value = 3; };
 template<> struct sqrt_t<16> { static constexpr num_t value = 4; };
+template<> struct sqrt_t<25> { static constexpr num_t value = 5; };
 
 
 template <num_t N>
@@ -427,7 +436,7 @@ void sudoku_t<N>::solve()
 
 			// exact clusters
 			// iterate over all possible sets of N bits
-			static_assert(N <= 16); // conservative, make sure std::bitset doesn't overflow
+			static_assert(N <= sizeof(unsigned long long)*8 - 1); // make sure std::bitset doesn't overflow
 			for (unsigned long long n = 1; n <= test_cluster_last; ++n) {
 				bitset_t<N> const test_cluster(n);
 				if (test_cluster.count() >= 2) {
