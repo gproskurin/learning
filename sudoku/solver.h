@@ -271,13 +271,11 @@ size_t solve_emplace(Iter const iter_begin, num_t num)
 		}
 	}
 
-	if (!eligible_cell) {
-		return 0;
-	}
+	assert(eligible_cell); // completed loop above, it means there is eligible cell
 
 	assert(eligible_cell->count() >= 2);
 	assert(eligible_cell->test(num));
-	*eligible_cell = bitset_make_solved<N>(num);
+	*eligible_cell = solved_cell_num;
 	return 1; // TODO return number of changed bits
 }
 
