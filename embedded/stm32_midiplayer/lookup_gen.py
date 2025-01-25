@@ -3,7 +3,7 @@ import math
 
 DDS_VALUE_T = 'dds_value_t' # c++ type
 DDS_INC_T = 'uint32_t'
-DDS_FREQ = 40000 # keep in sync with C++ code
+DDS_FREQ = 32000 # keep in sync with C++ code
 
 def dds_notes_incs():
     M = 2 ** (1/12)

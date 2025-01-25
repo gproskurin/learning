@@ -47,7 +47,7 @@ function(generate_targets T)
 	set(T_C_CXX_FLAGS
 		${${T}_C_CXX_ARCH_FLAGS}
 		-D_POSIX_C_SOURCE=200809
-		-g -Og -ffreestanding -Wall -Wno-unused-but-set-variable -Wno-unused-variable
+		-O3 -ffreestanding -Wall -Wno-unused-but-set-variable -Wno-unused-variable
 		-fno-builtin-memset -fno-builtin-memcpy -fno-builtin-stpcpy
 		${T_DEFINITIONS}
 		-I${CMSIS_ROOT}
@@ -65,7 +65,7 @@ function(generate_targets T)
 	generate_freertos_targets("${T_FREERTOS_PREFIX}" "${T_FREERTOS_PORT}")
 	set_target_properties(${T_FREERTOS_PREFIX}freertos_config
 		PROPERTIES
-		INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/src"
+		INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/src;${CMAKE_SOURCE_DIR}/../stm32_lib/freertos"
 		INTERFACE_COMPILE_OPTIONS "${T_C_FLAGS}"
 		INTERFACE_COMPILE_DEFINITIONS "${T_DEFINITIONS}"
 	)

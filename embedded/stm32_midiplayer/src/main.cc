@@ -95,26 +95,9 @@ void bus_init()
 	// DMA
 	RCC->AHBENR |= RCC_AHBENR_DMAEN_Msk;
 	toggle_bits_10(&RCC->AHBRSTR, RCC_AHBRSTR_DMARST_Msk);
-
-	// AHB1: DMA1 & DMAMUX1
-	RCC->AHB1ENR |= RCC_AHB1ENR_DMAMUX1EN | RCC_AHB1ENR_DMA1EN /*| RCC_AHB1ENR_DMA2EN*/;
-	toggle_bits_10(&RCC->AHB1RSTR, RCC_AHB1RSTR_DMA1RST_Msk /*| RCC_AHB1RSTR_DMA2RST_Msk*/ | RCC_AHB1RSTR_DMAMUX1RST_Msk);
-
-	// AHB2: GPIOs
-	RCC->AHB2ENR |= RCC_AHB2ENR_GPIOAEN_Msk | RCC_AHB2ENR_GPIOBEN_Msk | RCC_AHB2ENR_GPIOCEN_Msk;
-	toggle_bits_10(
-		&RCC->AHB2RSTR,
-		RCC_AHB2RSTR_GPIOARST_Msk | RCC_AHB2RSTR_GPIOBRST_Msk | RCC_AHB2RSTR_GPIOCRST_Msk
-	);
-
-	// AHB3
-	//RCC->AHB3ENR |= RCC_AHB3ENR_FLASHEN;
-
-	// APB1: LPUART1
-	RCC->APB1ENR2 |= RCC_APB1ENR2_LPUART1EN;
-	toggle_bits_10(&RCC->APB1RSTR2, RCC_APB1RSTR2_LPUART1RST_Msk);
-	RCC->CCIPR = (RCC->CCIPR & ~(RCC_CCIPR_LPUART1SEL_Msk))
-		| (0b01/*SYSCLK*/ << RCC_CCIPR_LPUART1SEL_Pos)
+	DMA1_CSELR->CSELR =
+		(0b1001/*TIM6&DAC1*/ << DMA_CSELR_C2S_Pos)
+		| (0b0100/*USART2_TX*/ << DMA_CSELR_C4S_Pos)
 		;
 
 
@@ -407,19 +390,12 @@ __attribute__ ((noreturn)) void main()
 	log_sync("\r\nLogger initialized (sync)\r\n");
 
 #ifdef TARGET_STM32L072
-	log_sync("Initializing blink task pin...\r\n");
 	g_pin_green2.init_pin();
 	g_pin_green2.pulse_continuous(configTICK_RATE_HZ/50, configTICK_RATE_HZ/25);
-	log_sync("Initialized blink task pin\r\n");
 #endif
 
-	log_sync("Creating player task...\r\n");
 	player::create_task("player", PRIO_PLAYER);
-	log_sync("Created player task\r\n");
-
-	log_sync("Creating sender task...\r\n");
 	create_task_sender();
-	log_sync("Created sender task\r\n");
 
 	log_sync("Starting FreeRTOS scheduler\r\n");
 	logger.init();

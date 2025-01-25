@@ -10,7 +10,7 @@
 #include <limits>
 
 
-#define DDS_FREQ 40000 // keep in sync with python generator
+#define DDS_FREQ 32000 // keep in sync with python generator
 
 #if defined TARGET_STM32L072
 	#define TIM_DAC TIM6
@@ -203,7 +203,7 @@ void queue_item_decode(queue_item_t item, notes::sym_t& n, notes::duration_t& d,
 
 
 struct player_task_data_t {
-	std::array<StackType_t, 128> stack;
+	std::array<StackType_t, 256> stack;
 	TaskHandle_t task_handle = nullptr;
 	StaticTask_t task_buffer;
 
@@ -278,7 +278,6 @@ void dac_init()
 {
 	// ensure there is no truncation in calculation
 	static_assert((CLOCK_SPEED % DDS_FREQ) == 0);
-	constexpr auto psc_arr = calc_psc_arr();
 	//static_assert((uint64_t(arr) + 1) * uint64_t(DDS_FREQ) == uint64_t(CLOCK_SPEED));
 	//static_assert(uint64_t(psc_arr.second-1) * uint64_t(DDS_FREQ) * uint64_t(psc_arr.first+1) == uint64_t(CLOCK_SPEED));
 
@@ -288,8 +287,8 @@ void dac_init()
 
 	TIM_DAC->DIER = TIM_DIER_UDE;
 	TIM_DAC->CR2 = (0b010 << TIM_CR2_MMS_Pos);
-	TIM_DAC->PSC = psc_arr.first;
-	TIM_DAC->ARR = psc_arr.second;
+	TIM_DAC->PSC = calc_psc_arr().first;
+	TIM_DAC->ARR = calc_psc_arr().second;
 
 #if defined TARGET_STM32L072
 	NVIC_SetPriority(DMA1_Channel2_3_IRQn, 3);
@@ -306,18 +305,13 @@ void dac_init()
 	//DAC->MCR = (DAC->MCR & ~DAC_MCR_MODE1_Msk) | (0b000 << DAC_MCR_MODE1_Pos); // buffer
 
 #if defined TARGET_STM32L072
-	// init DMA
-	DMA1_CSELR->CSELR =
-		(0b1001/*TIM6&DAC1*/ << DMA_CSELR_C2S_Pos)
-		| (0b0100/*USART2_TX*/ << DMA_CSELR_C4S_Pos) // TODO move to main
-		;
 	DMA_CHANNEL_DAC->CPAR = reinterpret_cast<uint32_t>(&DAC1->DHR12L1);
 #elif defined TARGET_STM32WL55_CPU1
 	// TODO init DMA
 	DMA_CHANNEL_DAC->CPAR = reinterpret_cast<uint32_t>(&DAC->DHR12L1);
 #endif
 	DMA_CHANNEL_DAC->CMAR = reinterpret_cast<uint32_t>(player_task_data.dma_buffer.data());
-	DMA_CHANNEL_DAC->CNDTR = player_task_data.dma_buffer.size();
+	//DMA_CHANNEL_DAC->CNDTR = player_task_data.dma_buffer.size();
 }
 
 
@@ -333,6 +327,7 @@ void timer_start()
 	DAC->CR = dac_cr_dmaen;
 
 	// timer
+	TIM_DAC->CR1 = tim_dac_cr1;
 	TIM_DAC->CNT = 0;
 	TIM_DAC->CR1 = tim_dac_cr1_en;
 
@@ -342,11 +337,13 @@ void timer_start()
 
 void timer_stop()
 {
-	// disable DAC DMA
-	DAC->CR = dac_cr_en;
-
 	// stop timer
 	TIM_DAC->CR1 = tim_dac_cr1;
+	while (TIM_DAC->CR1 & TIM_CR1_CEN) {}
+
+	// disable DAC DMA
+	DAC->CR = dac_cr_en;
+	while (DAC->CR & DAC_CR_DMAEN1) {}
 
 	// disable DMA channel
 	{
@@ -370,8 +367,10 @@ void timer_stop()
 
 void play_note(notes::sym_t n, notes::duration_t d, notes::instrument_t instr, note_id_t note_id)
 {
-	constexpr uint32_t fade = DDS_FREQ/512;
-	const uint32_t dds_ticks = uint32_t(DDS_FREQ)*d/64 - fade;
+	constexpr uint32_t fade = DDS_FREQ/1000;
+	constexpr uint32_t dds_freq_64 = DDS_FREQ/64;
+	static_assert((DDS_FREQ % 64) == 0); // avoid truncation
+	const uint32_t dds_ticks = dds_freq_64 * d - fade;
 
 	const auto voice_idx = find_free_voice();
 	g_voices[voice_idx].set(g_instr_info[instr].lookup_func, dds_notes_incs[n], dds_ticks, note_id);
@@ -429,10 +428,12 @@ namespace dmafill_fsm {
 				// all voices are silent
 				// fill remaining part with previous value (if any) or with middle value
 				const dds_value_t fill = (i != idx_begin) ? player_task_data.dma_buffer[i-1] : 32768;
+				/*
 				for (size_t j=i; j<idx_end; ++j) {
 					// TODO
 					//player_task_data.dma_buffer[j] = fill;
 				}
+				*/
 				return false;
 			}
 			// FIXME
@@ -440,9 +441,10 @@ namespace dmafill_fsm {
 			switch (voices_count) {
 				case 1: break;
 				case 2: v /= 2; break;
-				case 3: v /= 4; break; // FIXME
+				case 3: v = v*3/8; break; // FIXME
 				case 4: v /= 4; break;
 			}
+			v /= 4; // lower volume
 			//player_task_data.dma_buffer[i] = static_cast<uint16_t>(value / voices_count);
 			player_task_data.dma_buffer[i] = static_cast<uint16_t>(v);
 		}
@@ -515,40 +517,30 @@ void player_task_function(void*)
 		//logger.log_async(ht ? "*** YES_HT\r\n" : "*** NO_HT\r\n");
 		//logger.log_async(tc ? "*** YES_TC\r\n" : "*** NO_TC\r\n");
 		if (!ht && !tc) {
-			//logger.log_async("*** CASE 10 - just note\r\n");
 			// no dma flags, probably just note added
 			if (state == dma_empty) {
-				//logger.log_async("*** CASE 10-1\r\n");
 				if (action_fill()) {
-					//logger.log_async("*** CASE 10 - starting timer\r\n");
 					timer_start();
 					state = dma_doing_1;
 				} else {
-					//logger.log_async("*** CASE 10-2\r\n");
 				}
 			} else {
-				logger.log_async("*** CASE 10-3\r\n");
 			}
 		} else if (state == dma_empty) {
 			// ignore
-			//logger.log_async("*** CASE 20 - dma_empty\r\n");
 		} else if (ht && !tc && state==dma_doing_1) {
-			//logger.log_async("*** CASE 30 = ht usual\r\n");
+			// transferred first half, refill it
 			if (action_fill_bottom_half()) {
-				//logger.log_async("*** CASE 30-1 - continuing\r\n");
 				state = dma_doing_2;
 			} else {
-				//logger.log_async("*** CASE 30-2 stopping timer\r\n");
 				timer_stop();
 				state = dma_empty;
 			}
 		} else if (!ht && tc && state==dma_doing_2) {
-			//logger.log_async("*** CASE 40 - tc usual\r\n");
+			// transferred second half, refill it
 			if (action_fill_top_half()) {
-				//logger.log_async("*** CASE 40-1 - tc continuing\r\n");
 				state = dma_doing_1;
 			} else {
-				//logger.log_async("*** CASE 40-2 - stopping timer\r\n");
 				timer_stop();
 				state = dma_empty;
 			}
