@@ -1,14 +1,15 @@
-extern void _reset(void);
-extern void _estack(void);
-
-extern void SVC_Handler(void);
-extern void PendSV_Handler(void);
-extern void SysTick_Handler(void);
+extern void _reset();
+extern void _estack();
 
 
 #if defined TARGET_STM32L072
+extern void SVC_Handler();
+extern void PendSV_Handler();
+extern void SysTick_Handler();
+
 extern void IntHandler_DMA1_Channel2_3();
 extern void IntHandler_DMA1_Channel4_5_6_7();
+
 __attribute__((section(".vectors"))) void (*tab[16+32])(void) =
 {
 	_estack,
@@ -33,8 +34,15 @@ __attribute__((section(".vectors"))) void (*tab[16+32])(void) =
 };
 #endif
 
+
 #if defined TARGET_STM32WL55_CPU1
+extern void vPortSVCHandler();
+extern void xPortPendSVHandler();
+extern void xPortSysTickHandler();
+
 extern void IntHandler_Dma1Ch1();
+extern void IntHandler_Dma1Ch2();
+
 __attribute__((section(".vectors"))) void (*tab[16+62])(void) =
 {
 	_estack,
@@ -54,7 +62,8 @@ __attribute__((section(".vectors"))) void (*tab[16+62])(void) =
 	&xPortPendSVHandler,
 	&xPortSysTickHandler,
 
-	[16+11] = IntHandler_Dma1Ch1,
+	[16 + 11] = IntHandler_Dma1Ch1,
+	[16 + 12] = IntHandler_Dma1Ch2,
 };
 #endif
 

@@ -18,7 +18,7 @@
 	constexpr stm32_lib::gpio::gpio_pin_t pin_dac(GPIOA_BASE, 4);
 #elif defined TARGET_STM32WL55_CPU1
 	#define TIM_DAC TIM2
-	#define DMA_CHANNEL_DAC DMA1_Channel1
+	#define DMA_CHANNEL_DAC DMA1_Channel2
 	constexpr stm32_lib::gpio::gpio_pin_t pin_dac(GPIOA_BASE, 10);
 #endif
 
@@ -26,7 +26,12 @@ constexpr uint16_t tim_dac_cr1 = 0;
 constexpr uint16_t tim_dac_cr1_en = TIM_CR1_CEN;
 
 constexpr uint32_t dac_cr_en =
+#ifdef TARGET_STM32L072
 	(/*TIM6*/0b000 << DAC_CR_TSEL1_Pos)
+#endif
+#ifdef TARGET_STM32WL55_CPU1
+	(/*TIM2*/0b0010 << DAC_CR_TSEL1_Pos)
+#endif
 	| DAC_CR_TEN1
 	| DAC_CR_EN1
 	;
@@ -46,7 +51,9 @@ constexpr uint32_t dma_ccr =
 	;
 constexpr uint32_t dma_ccr_en = dma_ccr | DMA_CCR_EN;
 
+#ifdef TARGET_STM32L072
 freertos_utils::pin_toggle_task_t pin_green("pin_toggle_green", bsp::pin_led_green, 1);
+#endif
 freertos_utils::pin_toggle_task_t pin_blue("pin_toggle_blue", bsp::pin_led_blue, 1);
 freertos_utils::pin_toggle_task_t pin_red("pin_toggle_red", bsp::pin_led_red, 1);
 
@@ -227,39 +234,6 @@ void player::enqueue_note(notes::sym_t n, notes::duration_t d, notes::instrument
 }
 
 
-extern "C" __attribute__ ((interrupt)) void IntHandler_DMA1_Channel2_3()
-{
-	uint8_t events = 0;
-	uint32_t clear = 0;
-	const auto isr = DMA1->ISR;
-	if (isr & DMA_ISR_HTIF2) {
-		clear |= DMA_IFCR_CHTIF2;
-		events |= queue_nf_t::ht;
-	}
-	if (isr & DMA_ISR_TCIF2) {
-		clear |= DMA_IFCR_CTCIF2;
-		events |= queue_nf_t::tc;
-	}
-	if (isr & DMA_ISR_TEIF2) {
-		clear |= DMA_IFCR_CTEIF2;
-		events |= queue_nf_t::te;
-	}
-	if (events) {
-		DMA1->IFCR = clear;
-
-		BaseType_t yield = pdFALSE;
-		queue_item_t const item = queue_item_encode(
-			notes::sym_t::sym_none,
-			notes::duration_t::dur_zero,
-			static_cast<notes::instrument_t>(0),
-			static_cast<queue_nf_t>(events)
-		);
-		xQueueSendFromISR(player_task_data.queue_handle, reinterpret_cast<const void*>(&item), &yield);
-		portYIELD_FROM_ISR(yield);
-	}
-}
-
-
 #define CLOCK_SPEED configCPU_CLOCK_HZ
 
 
@@ -292,13 +266,13 @@ void dac_init()
 	TIM_DAC->ARR = calc_psc_arr().second;
 
 #if defined TARGET_STM32L072
+	// dma ch2 / dac
 	NVIC_SetPriority(DMA1_Channel2_3_IRQn, 3);
 	NVIC_EnableIRQ(DMA1_Channel2_3_IRQn);
-
-	// TODO move to main
-	NVIC_SetPriority(DMA1_Channel4_5_6_7_IRQn, 4);
-	NVIC_EnableIRQ(DMA1_Channel4_5_6_7_IRQn);
 #elif defined TARGET_STM32WL55_CPU1
+	// dma/dac
+	NVIC_SetPriority(DMA1_Channel2_IRQn, 12);
+	NVIC_EnableIRQ(DMA1_Channel2_IRQn);
 #endif
 
 	stm32_lib::gpio::set_mode_output_analog(pin_dac);
@@ -308,11 +282,13 @@ void dac_init()
 #if defined TARGET_STM32L072
 	DMA_CHANNEL_DAC->CPAR = reinterpret_cast<uint32_t>(&DAC1->DHR12L1);
 #elif defined TARGET_STM32WL55_CPU1
-	// TODO init DMA
 	DMA_CHANNEL_DAC->CPAR = reinterpret_cast<uint32_t>(&DAC->DHR12L1);
 #endif
 	DMA_CHANNEL_DAC->CMAR = reinterpret_cast<uint32_t>(player_task_data.dma_buffer.data());
-	//DMA_CHANNEL_DAC->CNDTR = player_task_data.dma_buffer.size();
+
+#ifdef TARGET_STM32WL55_CPU1
+	DMAMUX1_Channel1->CCR = stm32_lib::dma::consts::dmamux_reqid_tx<DAC_BASE>() << DMAMUX_CxCR_DMAREQ_ID_Pos;
+#endif
 }
 
 
@@ -332,8 +308,10 @@ void timer_start()
 	TIM_DAC->CNT = 0;
 	TIM_DAC->CR1 = tim_dac_cr1_en;
 
+#ifdef TARGET_STM32L072
 	pin_green.on();
 	logger.log_async(">>> timer_started\r\n");
+#endif
 }
 
 void timer_stop()
@@ -358,11 +336,18 @@ void timer_stop()
 		while (DMA_CHANNEL_DAC->CCR & DMA_CCR_EN) {}
 
 		// clear interrupt flags
+#ifdef TARGET_STM32L072
 		DMA1->IFCR = DMA_IFCR_CHTIF2 | DMA_IFCR_CTCIF2 | DMA_IFCR_CTEIF2 | DMA_IFCR_CGIF2;
+#endif
+#ifdef TARGET_STM32WL55_CPU1
+		DMA1->IFCR = DMA_IFCR_CHTIF2 | DMA_IFCR_CTCIF2 | DMA_IFCR_CTEIF2 | DMA_IFCR_CGIF2;
+#endif
 	}
 
+#ifdef TARGET_STM32L072
 	pin_green.off();
 	logger.log_async("<<< - timer_stopped\r\n");
+#endif
 }
 
 
@@ -381,13 +366,13 @@ void play_note(notes::sym_t n, notes::duration_t d, notes::instrument_t instr, n
 void player_task_function(void*); // FIXME
 void player::create_task(const char* task_name, UBaseType_t prio)
 {
-	dac_init();
 	player_task_data.queue_handle = xQueueCreateStatic(
 		player_task_data.queue_buffer.size(),
 		sizeof(queue_item_t),
 		reinterpret_cast<uint8_t*>(player_task_data.queue_buffer.data()),
 		&player_task_data.queue_q
 	);
+	dac_init();
 	player_task_data.task_handle = xTaskCreateStatic(
 		&player_task_function,
 		task_name,
@@ -437,17 +422,19 @@ namespace dmafill_fsm {
 				*/
 				return false;
 			}
+#ifdef TARGET_STM32L072
 			// FIXME
-			uint32_t v = value;
 			switch (voices_count) {
 				case 1: break;
-				case 2: v /= 2; break;
-				case 3: v = v*3/8; break; // FIXME
-				case 4: v /= 4; break;
+				case 2: value /= 2; break;
+				case 3: value = value*3/8; break; // FIXME
+				case 4: value /= 4; break;
 			}
-			v /= 4; // lower volume
-			//player_task_data.dma_buffer[i] = static_cast<uint16_t>(value / voices_count);
-			player_task_data.dma_buffer[i] = static_cast<uint16_t>(v);
+#else
+			value /= voices_count;
+#endif
+			value /= 4; // lower volume
+			player_task_data.dma_buffer[i] = static_cast<uint16_t>(value);
 		}
 		return true;
 	}
@@ -474,7 +461,10 @@ namespace dmafill_fsm {
 void player_task_function(void*)
 {
 	using namespace dmafill_fsm;
+
+#ifdef TARGET_STM32L072
 	pin_green.init_pin();
+#endif
 	pin_blue.init_pin();
 	pin_red.init_pin();
 
@@ -554,4 +544,64 @@ void player_task_function(void*)
 		}
 	}
 }
+
+
+template <
+	uint32_t IsrCheckHt, uint32_t IfcrClearHt,
+	uint32_t IsrCheckTc, uint32_t IfcrClearTc,
+	uint32_t IsrCheckTe, uint32_t IfcrClearTe
+>
+inline
+void int_handler_dma_dac_impl(uint32_t isr)
+{
+	uint8_t events = 0;
+	if (isr & IsrCheckHt) {
+		DMA1->IFCR = IfcrClearHt;
+		events |= queue_nf_t::ht;
+	}
+	if (isr & IsrCheckTc) {
+		DMA1->IFCR = IfcrClearTc;
+		events |= queue_nf_t::tc;
+	}
+	if (isr & IsrCheckTe) {
+		DMA1->IFCR = IfcrClearTe;
+		events |= queue_nf_t::te;
+		logger.log_async_from_isr("DMA error\r\n");
+	}
+	if (events) {
+		BaseType_t yield = pdFALSE;
+		queue_item_t const item = queue_item_encode(
+			notes::sym_t::sym_none,
+			notes::duration_t::dur_zero,
+			static_cast<notes::instrument_t>(0),
+			static_cast<queue_nf_t>(events)
+		);
+		xQueueSendFromISR(player_task_data.queue_handle, reinterpret_cast<const void*>(&item), &yield);
+		portYIELD_FROM_ISR(yield);
+	}
+}
+
+
+#ifdef TARGET_STM32L072
+extern "C" __attribute__ ((interrupt)) void IntHandler_DMA1_Channel2_3()
+{
+	int_handler_dma_dac_impl<
+		DMA_ISR_HTIF2, DMA_IFCR_CHTIF2,
+		DMA_ISR_TCIF2, DMA_IFCR_CTCIF2,
+		DMA_ISR_TEIF2, DMA_IFCR_CTEIF2
+	>(DMA1->ISR);
+}
+#endif
+
+#ifdef TARGET_STM32WL55_CPU1
+extern "C" __attribute__ ((interrupt)) void IntHandler_Dma1Ch2()
+{
+	auto const isr = DMA1->ISR;
+	int_handler_dma_dac_impl<
+		DMA_ISR_HTIF2, DMA_IFCR_CHTIF2,
+		DMA_ISR_TCIF2, DMA_IFCR_CTCIF2,
+		DMA_ISR_TEIF2, DMA_IFCR_CTEIF2
+	>(DMA1->ISR);
+}
+#endif
 

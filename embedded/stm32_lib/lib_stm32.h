@@ -491,6 +491,7 @@ namespace consts {
 	template<> constexpr inline uint32_t dmamux_reqid_tx<SPI1_BASE>() { return 8; }
 	template<> constexpr inline uint32_t dmamux_reqid_rx<SPI1_BASE>() { return 7; }
 	template<> constexpr inline uint32_t dmamux_reqid_tx<LPUART1_BASE>() { return 22; }
+	template<> constexpr inline uint32_t dmamux_reqid_tx<DAC_BASE>() { return 6; }
 #endif
 #if defined(TARGET_STM32WB55)
 	template<> constexpr inline uint32_t dmamux_reqid_tx<USART1_BASE>() { return 15; }

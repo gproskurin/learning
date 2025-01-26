@@ -26,8 +26,8 @@ logger: DMA1 Channel4, USART2
 dac: DMA1 Channel2
 
 stm32wl55
-logger: DMAMUX1 Channel0, LPUART1
-dac: DMMAUX1 Channel1
+logger: DMAMUX1 Channel0 -> DMA1 channel 1, LPUART1
+dac: DMAMUX1 Channel1 -> DMA1 channel 2
 
 */
 
@@ -100,13 +100,33 @@ void bus_init()
 		| (0b0100/*USART2_TX*/ << DMA_CSELR_C4S_Pos)
 		;
 
+	// dma ch4 / logger
+	NVIC_SetPriority(DMA1_Channel4_5_6_7_IRQn, 11);
+	NVIC_EnableIRQ(DMA1_Channel4_5_6_7_IRQn);
 
-	NVIC_SetPriority(DMA1_Channel1_IRQn, 11);
-	NVIC_EnableIRQ(DMA1_Channel1_IRQn);
 #elif defined TARGET_STM32WL55_CPU1
 	// GPIOs
 	RCC->AHB2ENR = RCC_AHB2ENR_GPIOAEN | RCC_AHB2ENR_GPIOBEN;
 	toggle_bits_10(&RCC->AHB2RSTR, RCC_AHB2RSTR_GPIOARST | RCC_AHB2RSTR_GPIOBRST);
+
+	// DMA
+	RCC->AHB1ENR = RCC_AHB1ENR_DMAMUX1EN | RCC_AHB1ENR_DMA1EN;
+	toggle_bits_10(&RCC->AHB1RSTR, RCC_AHB1RSTR_DMA1RST_Msk | RCC_AHB1RSTR_DMAMUX1RST_Msk);
+
+	// DAC & TIM2
+	RCC->APB1ENR1 = RCC_APB1ENR1_DACEN | RCC_APB1ENR1_TIM2EN;
+	toggle_bits_10(&RCC->AHB1RSTR, RCC_APB1RSTR1_DACRST_Msk | RCC_APB1RSTR1_TIM2RST_Msk);
+
+	// LPUART1
+	RCC->APB1ENR2 = RCC_APB1ENR2_LPUART1EN;
+	toggle_bits_10(&RCC->APB1RSTR2, RCC_APB1RSTR2_LPUART1RST_Msk);
+	RCC->CCIPR = (RCC->CCIPR & ~(RCC_CCIPR_LPUART1SEL_Msk))
+		| (0b01 << RCC_CCIPR_LPUART1SEL_Pos)
+		;
+
+	// dma ch1 / logger
+	NVIC_SetPriority(DMA1_Channel1_IRQn, 11);
+	NVIC_EnableIRQ(DMA1_Channel1_IRQn);
 #endif
 }
 
@@ -130,6 +150,9 @@ void vApplicationIdleHook(void)
 
 #ifdef TARGET_STM32L072
 freertos_utils::pin_toggle_task_t g_pin_green2("blink_green2", bsp::pin_led_green2, PRIO_BLINK);
+#endif
+#ifdef TARGET_STM32WL55_CPU1
+freertos_utils::pin_toggle_task_t g_pin_green("blink_green", bsp::pin_led_green, PRIO_BLINK);
 #endif
 
 
@@ -590,43 +613,33 @@ void create_task_sender()
 }
 
 
-#if defined TARGET_STM32L072
-extern "C" __attribute__ ((interrupt)) void IntHandler_DMA1_Channel4_5_6_7()
+template <uint32_t IsrCheckTc, uint32_t IfcrClearTc, uint32_t IsrCheckTe, uint32_t IfcrClearTe>
+inline
+void int_handler_logger_impl(uint32_t isr)
 {
-	auto const isr = DMA1->ISR;
-
-	{
-		uint32_t ev_log = 0;
-		if (isr & DMA_ISR_TCIF4) {
-			DMA1->IFCR = DMA_IFCR_CTCIF4;
-			ev_log |= stm32_lib::dma::dma_result_t::tc;
-		}
-		if (isr & DMA_ISR_TEIF4) {
-			DMA1->IFCR = DMA_IFCR_CTEIF4;
-			ev_log |= stm32_lib::dma::dma_result_t::te;
-		}
-		if (ev_log) {
-			logger.notify_from_isr(ev_log);
-		}
+	uint32_t ev_log = 0;
+	if (isr & IsrCheckTc) {
+		DMA1->IFCR = IfcrClearTc;
+		ev_log |= stm32_lib::dma::dma_result_t::tc;
+	}
+	if (isr & IsrCheckTe) {
+		DMA1->IFCR = IfcrClearTe;
+		ev_log |= stm32_lib::dma::dma_result_t::te;
+	}
+	if (ev_log) {
+		logger.notify_from_isr(ev_log);
 	}
 }
 
+#if defined TARGET_STM32L072
+extern "C" __attribute__ ((interrupt)) void IntHandler_DMA1_Channel4_5_6_7()
+{
+	int_handler_logger_impl<DMA_ISR_TCIF4, DMA_IFCR_CTCIF4, DMA_ISR_TEIF4, DMA_IFCR_CTEIF4>(DMA1->ISR);
+}
 #elif defined TARGET_STM32WL55_CPU1
 extern "C" __attribute__ ((interrupt)) void IntHandler_Dma1Ch1()
 {
-	auto const isr = DMA1->ISR;
-	uint32_t events = 0;
-	if (isr & DMA_ISR_TCIF1) {
-		DMA1->IFCR = DMA_IFCR_CTCIF1;
-		events |= stm32_lib::dma::dma_result_t::tc;
-	}
-	if (isr & DMA_ISR_TEIF1) {
-		DMA1->IFCR = DMA_IFCR_CTEIF1;
-		events |= stm32_lib::dma::dma_result_t::te;
-	}
-	if (events) {
-		logger.notify_from_isr(events);
-	}
+	int_handler_logger_impl<DMA_ISR_TCIF1, DMA_IFCR_CTCIF1, DMA_ISR_TEIF1, DMA_IFCR_CTEIF1>(DMA1->ISR);
 }
 #endif
 
@@ -634,17 +647,30 @@ extern "C" __attribute__ ((interrupt)) void IntHandler_Dma1Ch1()
 __attribute__ ((noreturn)) void main()
 {
 	bus_init();
+#ifdef TARGET_STM32L072
 	stm32_lib::usart::init_logger_uart<configCPU_CLOCK_HZ>(
 		USART_STLINK,
 		bsp::usart_stlink_pin_tx,
 		USART_STLINK_PIN_TX_AF
 	);
+#endif
+#ifdef TARGET_STM32WL55_CPU1
+	stm32_lib::usart::init_logger_lpuart<configCPU_CLOCK_HZ>(
+		USART_STLINK,
+		bsp::usart_stlink_pin_tx,
+		USART_STLINK_PIN_TX_AF
+	);
+#endif
 
 	log_sync("\r\nLogger initialized (sync)\r\n");
 
 #ifdef TARGET_STM32L072
 	g_pin_green2.init_pin();
 	g_pin_green2.pulse_continuous(configTICK_RATE_HZ/50, configTICK_RATE_HZ/25);
+#endif
+#ifdef TARGET_STM32WL55_CPU1
+	g_pin_green.init_pin();
+	g_pin_green.pulse_continuous(configTICK_RATE_HZ/50, configTICK_RATE_HZ/25);
 #endif
 
 	player::create_task("player", PRIO_PLAYER);
