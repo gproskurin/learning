@@ -135,8 +135,13 @@ namespace notes {
 		l2 = 32,
 		l2d = 48,
 		l4 = 16,
+		l4d = 24,
+		l4s = 10, //staccato
 		l8 = 8,
-		l16 = 4
+		l8d = 12,
+		l16 = 4,
+		l16s = 3,
+		l32 = 2,
 	};
 
 	enum instrument_t : uint8_t {
