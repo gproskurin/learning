@@ -88,3 +88,8 @@ for sz in [3, 4, 5, 10, 12]:
     print(f' ' + ", ".join([str(x) for x in sin_points_quarter(count_full)]))
     print('};\n')
 
+    print(f'\n// sin{sz}_full')
+    print(f'constexpr std::array<{DDS_VALUE_T}, {int(count_full)}> lookup_table_sin{sz}_full = ' + '{')
+    print(f' ' + ", ".join([str(x) for x in sin_points_full(count_full)]))
+    print('};\n')
+

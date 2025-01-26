@@ -118,7 +118,8 @@ dds_value_t lookup_sin10(uint32_t x)
 
 dds_value_t lookup_sin12(uint32_t x)
 {
-	return lookup_sin_quarter(lookup_table_sin12, x >> 20);
+	//return lookup_sin_quarter(lookup_table_sin12, x >> 20);
+	return lookup_table_sin12_full[x >> 20];
 }
 
 constexpr std::array<instr_info_t, 6> g_instr_info{

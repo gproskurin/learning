@@ -566,7 +566,7 @@ void sender_task_function(void*)
 					player::enqueue_note(
 						n.note,
 						n.duration,
-						notes::instrument_t::sin5
+						notes::instrument_t::sin12
 					);
 				}
 			}
