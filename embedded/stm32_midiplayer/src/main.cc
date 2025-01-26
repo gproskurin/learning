@@ -14,8 +14,8 @@
 
 
 #define PRIO_BLINK 1
-#define PRIO_SENDER 2
-#define PRIO_LOGGER 3
+#define PRIO_SENDER 3
+#define PRIO_LOGGER 2
 #define PRIO_PLAYER 4
 
 /*
@@ -543,6 +543,7 @@ struct sender_task_data_t {
 
 void sender_task_function(void*)
 {
+	logger.log_async("SENDER started\r\n");
 	vTaskDelay(configTICK_RATE_HZ);
 
 #if 0
@@ -582,6 +583,20 @@ void sender_task_function(void*)
 		}
 		vTaskDelay(configTICK_RATE_HZ*3);
 		*/
+
+		for (const auto& beat : music_menuet_g_minor) {
+			for (const auto& n : beat.notes) {
+				if (n.duration) {
+					player::enqueue_note(
+						n.note,
+						n.duration,
+						notes::instrument_t::sin12
+					);
+				}
+			}
+			vTaskDelay(configTICK_RATE_HZ/32*beat.duration);
+		}
+		vTaskDelay(configTICK_RATE_HZ*5);
 
 		for (const auto& beat : music_k545) {
 			for (const auto& n : beat.notes) {

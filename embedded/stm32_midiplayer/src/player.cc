@@ -164,9 +164,10 @@ public:
 	dds_value_t tick()
 	{
 		const auto r = lookup_func(phase_acc);
-		phase_acc += phase_inc;
 		if (--dds_ticks == 0) {
 			reset();
+		} else {
+			phase_acc += phase_inc;
 		}
 		return r;
 	}
@@ -310,7 +311,6 @@ void timer_start()
 
 #ifdef TARGET_STM32L072
 	pin_green.on();
-	logger.log_async(">>> timer_started\r\n");
 #endif
 }
 
@@ -346,7 +346,6 @@ void timer_stop()
 
 #ifdef TARGET_STM32L072
 	pin_green.off();
-	logger.log_async("<<< - timer_stopped\r\n");
 #endif
 }
 
@@ -402,19 +401,19 @@ namespace dmafill_fsm {
 	bool fill_buffer_impl(size_t idx_begin, size_t idx_end)
 	{
 		for (size_t i=idx_begin; i<idx_end; ++i) {
-			uint8_t voices_count = 0;
+			uint_fast8_t voices_count = 0;
 			uint32_t value = 0;
 			for (auto& v : g_voices) {
 				if (v.is_busy()) {
-					value += uint32_t(v.tick());
+					value += v.tick();
 					++voices_count;
 				}
 			}
 			if (voices_count == 0) {
 				// all voices are silent
 				// fill remaining part with previous value (if any) or with middle value
-				const dds_value_t fill = (i != idx_begin) ? player_task_data.dma_buffer[i-1] : 32768;
 				/*
+				const dds_value_t fill = (i != idx_begin) ? player_task_data.dma_buffer[i-1] : 32768;
 				for (size_t j=i; j<idx_end; ++j) {
 					// TODO
 					//player_task_data.dma_buffer[j] = fill;
@@ -461,6 +460,7 @@ namespace dmafill_fsm {
 void player_task_function(void*)
 {
 	using namespace dmafill_fsm;
+	logger.log_async("PLAYER started\r\n");
 
 #ifdef TARGET_STM32L072
 	pin_green.init_pin();
@@ -490,7 +490,7 @@ void player_task_function(void*)
 			// update voices, note will start sounding on next dma transfer
 			play_note(item_n, item_d, item_i, player_task_data.next_note_id);
 			++player_task_data.next_note_id; // TODO handle wrap
-			pin_blue.pulse_once(configTICK_RATE_HZ/50);
+			pin_blue.pulse_once(configTICK_RATE_HZ/100);
 			//logger.log_async("*** YES_NOTE\r\n");
 		} else {
 			//logger.log_async("*** NO_NOTE\r\n");
@@ -509,16 +509,11 @@ void player_task_function(void*)
 		//logger.log_async(tc ? "*** YES_TC\r\n" : "*** NO_TC\r\n");
 		if (!ht && !tc) {
 			// no dma flags, probably just note added
-			if (state == dma_empty) {
-				if (action_fill()) {
-					timer_start();
-					state = dma_doing_1;
-				} else {
-				}
-			} else {
+			// if there is no transfer, start it
+			if (state==dma_empty && action_fill()) {
+				timer_start();
+				state = dma_doing_1;
 			}
-		} else if (state == dma_empty) {
-			// ignore
 		} else if (ht && !tc && state==dma_doing_1) {
 			// transferred first half, refill it
 			if (action_fill_bottom_half()) {
