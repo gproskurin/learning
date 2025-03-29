@@ -90,6 +90,9 @@ constexpr stm32_lib::gpio::gpio_pin_t pin_led_green2{GPIOA_BASE, 5};
 
 constexpr stm32_lib::gpio::gpio_pin_t pin_userbutton{GPIOB_BASE, 2};
 
+constexpr stm32_lib::gpio::gpio_pin_t pin_usb_dm{GPIOA_BASE, 11};
+constexpr stm32_lib::gpio::gpio_pin_t pin_usb_dp{GPIOA_BASE, 12};
+
 namespace sx1276 {
 	// Connection between STM32 and Semtech IC
 	constexpr stm32_lib::gpio::gpio_pin_t pin_dio0{GPIOB_BASE, 4};
@@ -140,6 +143,10 @@ constexpr stm32_lib::gpio::gpio_pin_t pin_led_green{GPIOJ_BASE, 2};
 constexpr stm32_lib::gpio::gpio_pin_t pin_led_green_arduino{GPIOD_BASE, 3};
 constexpr stm32_lib::gpio::gpio_pin_t pin_led_green_vbus_usb_fs{GPIOA_BASE, 9};
 constexpr stm32_lib::gpio::gpio_pin_t pin_led_red_otg_overcurrent{GPIOH_BASE, 11};
+
+constexpr stm32_lib::gpio::gpio_pin_t pin_usb_dm{GPIOA_BASE, 11};
+constexpr stm32_lib::gpio::gpio_pin_t pin_usb_dp{GPIOA_BASE, 12};
+#define USB_AF 10
 
 //constexpr stm32_lib::gpio::gpio_pin_t pin_userbutton{GPIOD_BASE, 1};
 

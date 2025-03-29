@@ -15,9 +15,13 @@ set(stm32l072_FREERTOS_PREFIX "STM32L072_")
 set(stm32l072_FIRMWARE_ELF ${PROJECT_NAME}_stm32l072.elf)
 set(stm32l072_FIRMWARE_BIN ${PROJECT_NAME}_stm32l072.bin)
 
-
-set(FIRMWARE_ELF ${PROJECT_NAME}.elf)
-set(FIRMWARE_BIN ${PROJECT_NAME}.bin)
+set(stm32h745cm4_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/../ld/stm32h745_cm4.ld)
+set(stm32h745cm4_DEFINITIONS "-DTARGET_STM32H745_CM4")
+set(stm32h745cm4_C_CXX_ARCH_FLAGS -mcpu=cortex-m4 -mthumb -DCORE_CM4)
+set(stm32h745cm4_FREERTOS_PORT "GCC_ARM_CM3")
+set(stm32h745cm4_FREERTOS_PREFIX "STM32H745CM4_")
+set(stm32h745cm4_FIRMWARE_ELF ${PROJECT_NAME}_stm32h745cm4.elf)
+set(stm32h745cm4_FIRMWARE_BIN ${PROJECT_NAME}_stm32h745cm4.bin)
 
 set(CMSIS_ROOT "${CMAKE_SOURCE_DIR}/../_deps")
 set(CMSIS_ARM_INCLUDE "${CMAKE_SOURCE_DIR}/../_deps/CMSIS_6/CMSIS/Core/Include")
@@ -31,8 +35,8 @@ set(COMMON_C_CXX_FLAGS
 )
 
 function(generate_targets T)
-	set(T_FIRMWARE_ELF "${T}_${FIRMWARE_ELF}")
-	set(T_FIRMWARE_BIN "${T}_${FIRMWARE_BIN}")
+	set(T_FIRMWARE_ELF "${T}_${PROJECT_NAME}.elf")
+	set(T_FIRMWARE_BIN "${T}_${PROJECT_NAME}.bin")
 	set(T_LINKER_SCRIPT "${${T}_LINKER_SCRIPT}")
 	set(T_DEFINITIONS "${${T}_DEFINITIONS}")
 	set(T_FREERTOS_PORT "${${T}_FREERTOS_PORT}")
@@ -94,5 +98,6 @@ endfunction()
 
 
 generate_targets("stm32l072")
+#generate_targets("stm32h745cm4")
 
 ###
