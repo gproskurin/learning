@@ -4,9 +4,9 @@
 #define configUSE_PORT_OPTIMISED_TASK_SELECTION		1
 #define configUSE_TICKLESS_IDLE				1
 
-#if defined TARGET_STM32H745_CM4
+#if defined TARGET_STM32H747_CM4
 	#define configCPU_CLOCK_HZ			(64000000UL)
-#elif defined TARGET_STM32H745_CM7
+#elif defined TARGET_STM32H747_CM7
 	#define configCPU_CLOCK_HZ			(64000000UL)
 #endif
 

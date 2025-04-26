@@ -131,7 +131,7 @@ constexpr stm32_lib::gpio::pin_inverted_t pin_led{GPIOB_BASE, 12};
 #endif
 
 
-#if defined TARGET_STM32H745_CM4 || defined TARGET_STM32H745_CM7
+#if defined TARGET_STM32H747_CM4 || defined TARGET_STM32H747_CM7
 
 // TODO use/check stlink pin
 #define USART_STLINK USART3

@@ -23,7 +23,7 @@ __attribute__((section(".vectors"))) void (*tab[16+32])(void) =
 	[16 + 31] = IntHandler_USB,
 };
 
-#elif defined TARGET_STM32H745_CM4
+#elif defined TARGET_STM32H747_CM4
 
 extern void vPortSVCHandler(void);
 extern void xPortPendSVHandler(void);

@@ -258,7 +258,7 @@ namespace usart {
 
 namespace impl {
 	constexpr uint32_t baudrate = 115200;
-#if defined TARGET_STM32H745_CM4 || defined TARGET_STM32H745_CM7
+#if defined TARGET_STM32H747_CM4 || defined TARGET_STM32H747_CM7
 	constexpr uint32_t cr1 = USART_CR1_TE | USART_CR1_FIFOEN;
 #else
 	constexpr uint32_t cr1 = USART_CR1_TE;
@@ -333,7 +333,7 @@ void send(Usart* const usart, const char* s)
 #endif
 
 	while (*s) {
-#if defined TARGET_STM32H745_CM4 || defined TARGET_STM32H745_CM7 || defined TARGET_STM32WB55 || defined TARGET_STM32WL55 || defined TARGET_STM32G030 || defined TARGET_STM32G031
+#if defined TARGET_STM32H747_CM4 || defined TARGET_STM32H747_CM7 || defined TARGET_STM32WB55 || defined TARGET_STM32WL55 || defined TARGET_STM32G030 || defined TARGET_STM32G031
 		while (! (usart->ISR & USART_ISR_TXE_TXFNF)) {}
 		usart->TDR = *s;
 #elif defined TARGET_STM32L072
@@ -443,7 +443,7 @@ enum dma_result_t : uint32_t {
 
 
 namespace impl {
-#if defined(TARGET_STM32H745_CM7) || defined(TARGET_STM32H745_CM4)
+#if defined(TARGET_STM32H747_CM7) || defined(TARGET_STM32H747_CM4)
 	//using dma_channel_t = BDMA_Channel_TypeDef;
 	using dma_channel_t = DMA_Stream_TypeDef;
 #else
@@ -463,7 +463,7 @@ namespace cast_convert {
 	template<> inline constexpr uint32_t dmamux_to_dmachannel<DMAMUX1_Channel10_BASE>() { return DMA2_Channel4_BASE; }
 	template<> inline constexpr uint32_t dmamux_to_dmachannel<DMAMUX1_Channel11_BASE>() { return DMA2_Channel5_BASE; }
 #endif
-#if defined(TARGET_STM32H745_CM7) || defined(TARGET_STM32H745_CM4)
+#if defined(TARGET_STM32H747_CM7) || defined(TARGET_STM32H747_CM4)
 	template<> inline constexpr uint32_t dmamux_to_dmachannel<DMAMUX1_Channel0_BASE>() { return DMA1_Stream0_BASE; }
 	template<> inline constexpr uint32_t dmamux_to_dmachannel<DMAMUX1_Channel1_BASE>() { return DMA1_Stream1_BASE; }
 #endif
@@ -474,7 +474,7 @@ namespace cast {
 	{
 		return reinterpret_cast<impl::dma_channel_t*>(DmaChannelBase);
 	}
-#if defined(TARGET_STM32WL55) || defined(TARGET_STM32WB55) || defined(TARGET_STM32H745_CM7) || defined(TARGET_STM32H745_CM4)
+#if defined(TARGET_STM32WL55) || defined(TARGET_STM32WB55) || defined(TARGET_STM32H747_CM7) || defined(TARGET_STM32H747_CM4)
 	inline DMAMUX_Channel_TypeDef* dmamux_channel(uint32_t DmamuxChannelBase)
 	{
 		return reinterpret_cast<DMAMUX_Channel_TypeDef*>(DmamuxChannelBase);
@@ -496,13 +496,13 @@ namespace consts {
 #if defined(TARGET_STM32WB55)
 	template<> constexpr inline uint32_t dmamux_reqid_tx<USART1_BASE>() { return 15; }
 #endif
-#if defined(TARGET_STM32H745_CM7) || defined(TARGET_STM32H745_CM4)
+#if defined(TARGET_STM32H747_CM7) || defined(TARGET_STM32H747_CM4)
 	// NOTE: constants are for DMAMUX1 (not for DMAMUX2)
 	template<> constexpr inline uint32_t dmamux_reqid_tx<USART3_BASE>() { return 46; }
 #endif
 }
 
-#if !defined(TARGET_STM32H745_CM7) && !defined(TARGET_STM32H745_CM4)
+#if !defined(TARGET_STM32H747_CM7) && !defined(TARGET_STM32H747_CM4)
 template <uint32_t SpiBase, uint32_t DmaChannelBaseTx, uint32_t DmaChannelBaseRx>
 struct spi_dma_t {
 	static void init()
@@ -639,7 +639,7 @@ struct dev_usart_dma_t {
 	static void init()
 	{
 		auto const dc = dma_channel();
-#if defined(TARGET_STM32H745_CM7) || defined(TARGET_STM32H745_CM4)
+#if defined(TARGET_STM32H747_CM7) || defined(TARGET_STM32H747_CM4)
 		dc->CR = dma_scr_tx;
 		dc->PAR = reinterpret_cast<uint32_t>(&usart()->TDR);
 #else
@@ -651,7 +651,7 @@ struct dev_usart_dma_t {
 	static void start(size_t size, const uint8_t* tx_data)
 	{
 		auto const dc = dma_channel();
-#if defined(TARGET_STM32H745_CM7) || defined(TARGET_STM32H745_CM4)
+#if defined(TARGET_STM32H747_CM7) || defined(TARGET_STM32H747_CM4)
 		dc->M0AR = reinterpret_cast<uint32_t>(tx_data);
 		dc->NDTR = size;
 		dc->CR = dma_scr_tx_en;
@@ -666,7 +666,7 @@ struct dev_usart_dma_t {
 	static void stop()
 	{
 		usart()->CR3 = 0;
-#if defined(TARGET_STM32H745_CM7) || defined(TARGET_STM32H745_CM4)
+#if defined(TARGET_STM32H747_CM7) || defined(TARGET_STM32H747_CM4)
 		dma_channel()->CR = dma_scr_tx;
 #else
 		dma_channel()->CCR = dma_ccr_tx;
@@ -676,7 +676,7 @@ struct dev_usart_dma_t {
 private:
 	static USART_TypeDef* usart() { return reinterpret_cast<USART_TypeDef*>(UsartBase); }
 	static impl::dma_channel_t* dma_channel() { return cast::dma_channel(DmaChannelBaseTx); }
-#if defined(TARGET_STM32H745_CM7) || defined(TARGET_STM32H745_CM4)
+#if defined(TARGET_STM32H747_CM7) || defined(TARGET_STM32H747_CM4)
 	static constexpr uint32_t dma_scr_tx = DMA_SxCR_TRBUFF | (0b00 << DMA_SxCR_PL_Pos) | DMA_SxCR_MINC | (0b01 << DMA_SxCR_DIR_Pos) | DMA_SxCR_TCIE | DMA_SxCR_TEIE | DMA_SxCR_DMEIE;
 	static constexpr uint32_t dma_scr_tx_en = dma_scr_tx | DMA_SxCR_EN;
 #else
@@ -686,7 +686,7 @@ private:
 };
 
 
-#if defined(TARGET_STM32WL55) || defined(TARGET_STM32WB55) || defined(TARGET_STM32H745_CM7) || defined(TARGET_STM32H745_CM4)
+#if defined(TARGET_STM32WL55) || defined(TARGET_STM32WB55) || defined(TARGET_STM32H747_CM7) || defined(TARGET_STM32H747_CM4)
 namespace impl {
 	template <uint32_t UsartBase, uint32_t DmamuxChannelBase>
 	using dev_usart_dmamux_base_t = dev_usart_dma_t<UsartBase, cast_convert::dmamux_to_dmachannel<DmamuxChannelBase>()>;
@@ -752,7 +752,7 @@ template <typename T>
 void write(SPI_TypeDef* const spi, size_t const size, const T* const tx_buf, T* const rx_buf)
 {
 	static_assert(sizeof(T) == 1 || sizeof(T) == 2); // FIXME
-#if defined TARGET_STM32H745_CM4 || defined TARGET_STM32H745_CM7
+#if defined TARGET_STM32H747_CM4 || defined TARGET_STM32H747_CM7
 	auto const txdr = reinterpret_cast<volatile T*>(&spi->TXDR);
 	auto const rxdr = reinterpret_cast<volatile T*>(&spi->RXDR);
 	bool tx_started = false;
@@ -769,7 +769,7 @@ void write(SPI_TypeDef* const spi, size_t const size, const T* const tx_buf, T* 
 	while (tx_done < size || rx_done < size) {
 		bool progress = false; // did something in current iteration?
 
-#if defined TARGET_STM32H745_CM4 || defined TARGET_STM32H745_CM7
+#if defined TARGET_STM32H747_CM4 || defined TARGET_STM32H747_CM7
 		while (tx_done < size && (spi->SR & SPI_SR_TXP)) // fill tx buffer
 #else
 		if (mode_tx && tx_done < size && (spi->SR & SPI_SR_TXE)) // write one item to tx buffer
@@ -780,7 +780,7 @@ void write(SPI_TypeDef* const spi, size_t const size, const T* const tx_buf, T* 
 			mode_tx = false;
 			progress = true;
 		}
-#if defined TARGET_STM32H745_CM4 || defined TARGET_STM32H745_CM7
+#if defined TARGET_STM32H747_CM4 || defined TARGET_STM32H747_CM7
 		if (!tx_started && tx_done>0) {
 			// something was written to tx buffer, start transfer
 			spi->CR1 |= SPI_CR1_CSTART_Msk;
@@ -788,7 +788,7 @@ void write(SPI_TypeDef* const spi, size_t const size, const T* const tx_buf, T* 
 		}
 #endif
 
-#if defined TARGET_STM32H745_CM4 || defined TARGET_STM32H745_CM7
+#if defined TARGET_STM32H747_CM4 || defined TARGET_STM32H747_CM7
 		while (rx_done < size && (spi->SR & SPI_SR_RXP))
 #else
 		if (!mode_tx && rx_done < size && (spi->SR & SPI_SR_RXNE))
@@ -813,7 +813,7 @@ void write(SPI_TypeDef* const spi, size_t const size, const T* const tx_buf, T* 
 		}
 	}
 
-#if defined TARGET_STM32H745_CM4 || defined TARGET_STM32H745_CM7
+#if defined TARGET_STM32H747_CM4 || defined TARGET_STM32H747_CM7
 #else
 	count_without_progress = 0;
 	while(spi->SR & SPI_SR_BSY) {
@@ -876,7 +876,7 @@ void c1_mark_received()
 #endif
 
 
-#if defined TARGET_STM32H745_CM4 || defined TARGET_STM32H745_CM7
+#if defined TARGET_STM32H747_CM4 || defined TARGET_STM32H747_CM7
 namespace hsem {
 
 

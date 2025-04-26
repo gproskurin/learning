@@ -4,7 +4,7 @@
 #if defined TARGET_STM32L072
 	#define configCPU_CLOCK_HZ	(16000000UL)
 #endif
-#if defined TARGET_STM32H745_CM4
+#if defined TARGET_STM32H747_CM4
 	#define configCPU_CLOCK_HZ	(64000000UL)
 
 	#define configUSE_PORT_OPTIMISED_TASK_SELECTION		1

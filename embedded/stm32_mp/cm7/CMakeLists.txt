@@ -4,12 +4,12 @@ include("${CMAKE_SOURCE_DIR}/../cmake/freertos.cmake")
 set(UGUI_DIR "${CMAKE_SOURCE_DIR}/../_deps/UGUI")
 set(UGUI_SRC "${UGUI_DIR}/ugui.c")
 
-set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/../ld/stm32h745_cm7.ld)
+set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/../ld/stm32h7_cm7.ld)
 
 set(FIRMWARE_ELF ${PROJECT_NAME}_cm7.elf)
 set(FIRMWARE_BIN ${PROJECT_NAME}_cm7.bin)
 
-set(ARCH_FLAGS -mcpu=cortex-m7 -mfloat-abi=hard -mthumb -DTARGET_STM32H745_CM7 -DCORE_CM7 -DUSE_FONT_8X12)
+set(ARCH_FLAGS -mcpu=cortex-m7 -mfloat-abi=hard -mthumb -DTARGET_STM32H747_CM7 -DCORE_CM7 -DUSE_FONT_8X12)
 set(COMMON_C_CXX_FLAGS ${COMMON_C_CXX_FLAGS} ${ARCH_FLAGS})
 
 generate_freertos_targets("CM7_" "GCC_ARM_CM7")

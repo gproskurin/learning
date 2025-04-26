@@ -77,7 +77,7 @@ struct display_type_72_40 {
 };
 
 
-#if defined(TARGET_STM32H745_CM7)
+#if defined(TARGET_STM32H747_CM7)
 
 constexpr uint32_t hs = 2;
 constexpr uint32_t vs = 10;

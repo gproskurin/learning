@@ -1,12 +1,12 @@
 ###
 include("${CMAKE_SOURCE_DIR}/../cmake/freertos.cmake")
 
-set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/../ld/stm32h745_cm4.ld)
+set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/../ld/stm32h7_cm4.ld)
 
 set(FIRMWARE_ELF ${PROJECT_NAME}_cm4.elf)
 set(FIRMWARE_BIN ${PROJECT_NAME}_cm4.bin)
 
-set(ARCH_FLAGS -mcpu=cortex-m4 -mthumb -DTARGET_STM32H745_CM4 -DCORE_CM4)
+set(ARCH_FLAGS -mcpu=cortex-m4 -mthumb -DTARGET_STM32H747_CM4 -DCORE_CM4)
 set(COMMON_C_CXX_FLAGS ${COMMON_C_CXX_FLAGS} ${ARCH_FLAGS})
 
 generate_freertos_targets("CM4_" "GCC_ARM_CM3")

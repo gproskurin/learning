@@ -117,7 +117,7 @@ void init_periph()
 	NVIC_EnableIRQ(DMA1_Channel4_5_6_7_IRQn);
 #endif
 
-#ifdef TARGET_STM32H745_CM4
+#ifdef TARGET_STM32H747_CM4
 	RCC->AHB4ENR =
 		RCC_AHB4ENR_GPIOAEN_Msk
 		| RCC_AHB4ENR_GPIOBEN_Msk
@@ -154,7 +154,7 @@ void init_periph()
 #endif
 }
 
-//#ifdef TARGET_STM32H745_CM7
+//#ifdef TARGET_STM32H747_CM7
 template <typename Pin>
 void init_pin_usb(const Pin& pin)
 {
@@ -318,7 +318,7 @@ void init_usb()
 	USB->CNTR = cntr;
 #endif
 
-#ifdef TARGET_STM32H745_CM7
+#ifdef TARGET_STM32H747_CM7
 	NVIC_SetPriority(OTG_HS_IRQn, configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY);
 	//USBDEV_HOST->
 #endif
@@ -349,7 +349,7 @@ extern "C" __attribute__ ((interrupt)) void IntHandler_DMA1_Channel4_5_6_7()
 #endif
 
 uint8_t usb_setaddr = 0;
-#ifdef TARGET_STM32H745_CM4
+#ifdef TARGET_STM32H747_CM4
 extern "C" __attribute__ ((interrupt)) void IntHandler_Dma1S1()
 {
 	auto const isr = DMA1->LISR;
@@ -514,7 +514,7 @@ void task_function_usb_periph(void*)
 }
 
 
-#ifdef TARGET_STM32H745_CM4
+#ifdef TARGET_STM32H747_CM4
 freertos_utils::task_data_t<128> task_data_usb_host;
 
 void task_function_usb_host(void*)
@@ -542,7 +542,7 @@ void create_task_usb_periph()
 }
 
 
-#ifdef TARGET_STM32H745_CM4
+#ifdef TARGET_STM32H747_CM4
 void create_task_usb_host()
 {
 	task_data_usb_host.task_handle = xTaskCreateStatic(
@@ -576,7 +576,7 @@ __attribute__ ((noreturn)) void main()
 	g_pin_red.pulse_continuous(configTICK_RATE_HZ/2, configTICK_RATE_HZ/2);
 
 	create_task_usb_periph();
-#ifdef TARGET_STM32H745_CM4
+#ifdef TARGET_STM32H747_CM4
 	create_task_usb_host();
 #endif
 

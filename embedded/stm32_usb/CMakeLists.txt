@@ -15,13 +15,13 @@ set(stm32l072_FREERTOS_PREFIX "STM32L072_")
 set(stm32l072_FIRMWARE_ELF ${PROJECT_NAME}_stm32l072.elf)
 set(stm32l072_FIRMWARE_BIN ${PROJECT_NAME}_stm32l072.bin)
 
-set(stm32h745cm4_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/../ld/stm32h745_cm4.ld)
-set(stm32h745cm4_DEFINITIONS "-DTARGET_STM32H745_CM4")
-set(stm32h745cm4_C_CXX_ARCH_FLAGS -mcpu=cortex-m4 -mthumb -DCORE_CM4)
-set(stm32h745cm4_FREERTOS_PORT "GCC_ARM_CM3")
-set(stm32h745cm4_FREERTOS_PREFIX "STM32H745CM4_")
-set(stm32h745cm4_FIRMWARE_ELF ${PROJECT_NAME}_stm32h745cm4.elf)
-set(stm32h745cm4_FIRMWARE_BIN ${PROJECT_NAME}_stm32h745cm4.bin)
+set(stm32h747cm4_LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/../ld/stm32h7_cm4.ld)
+set(stm32h747cm4_DEFINITIONS "-DTARGET_STM32H747_CM4")
+set(stm32h747cm4_C_CXX_ARCH_FLAGS -mcpu=cortex-m4 -mthumb -DCORE_CM4)
+set(stm32h747cm4_FREERTOS_PORT "GCC_ARM_CM3")
+set(stm32h747cm4_FREERTOS_PREFIX "STM32H747CM4_")
+set(stm32h747cm4_FIRMWARE_ELF ${PROJECT_NAME}_stm32h747cm4.elf)
+set(stm32h747cm4_FIRMWARE_BIN ${PROJECT_NAME}_stm32h747cm4.bin)
 
 set(CMSIS_ROOT "${CMAKE_SOURCE_DIR}/../_deps")
 set(CMSIS_ARM_INCLUDE "${CMAKE_SOURCE_DIR}/../_deps/CMSIS_6/CMSIS/Core/Include")
@@ -98,6 +98,6 @@ endfunction()
 
 
 generate_targets("stm32l072")
-#generate_targets("stm32h745cm4")
+#generate_targets("stm32h747cm4")
 
 ###
