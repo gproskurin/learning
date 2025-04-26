@@ -132,17 +132,20 @@ namespace notes {
 	enum duration_t : uint8_t {
 		dur_zero = 0,
 		l1 = 64,
-		l2 = 32,
-		l2d = 48,
-		l4 = 16,
-		l4d = 24,
-		l4s = 10, //staccato
-		l8 = 8,
-		l8d = 12,
-		l16 = 4,
-		l16s = 3,
-		l32 = 2,
+		l2 = l1/2,
+		l2d = l2 + l2/2,
+		l4 = l2/2,
+		l4d = l4 + l4/2,
+		l4s = l4/4*3, //staccato
+		l8 = l4/2,
+		l8d = l8 + l8/2,
+		l16 = l8/2,
+		l16s = l16/4*3,
+		l32 = l16/2,
 	};
+	// avoid truncation
+	static_assert(duration_t::l32 * 32 == duration_t::l1);
+	static_assert(duration_t::l16s * 4 / 3 == duration_t::l16);
 
 	enum instrument_t : uint8_t {
 		sq, sin3, sin4, sin5, sin10, sin12
@@ -152,6 +155,18 @@ namespace notes {
 
 
 namespace player {
+
+constexpr uint32_t dds_freq = 32000; // keep in sync with python generator
+
+inline
+uint32_t dds_ticks(notes::duration_t d)
+{
+	constexpr uint32_t tempo_l4_per_minute = 60;
+	constexpr uint32_t fade = dds_freq/1000;
+	constexpr uint32_t mul = dds_freq * tempo_l4_per_minute / notes::l4 / 60;
+	auto const r = mul * d;
+	return (r <= fade) ? r : (r - fade);
+}
 
 void create_task(const char* task_name, UBaseType_t prio);
 void enqueue_note(notes::sym_t, notes::duration_t, notes::instrument_t);

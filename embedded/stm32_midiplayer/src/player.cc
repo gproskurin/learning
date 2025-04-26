@@ -10,8 +10,6 @@
 #include <limits>
 
 
-#define DDS_FREQ 32000 // keep in sync with python generator
-
 #if defined TARGET_STM32L072
 	#define TIM_DAC TIM6
 	#define DMA_CHANNEL_DAC DMA1_Channel2
@@ -241,7 +239,7 @@ void player::enqueue_note(notes::sym_t n, notes::duration_t d, notes::instrument
 constexpr std::pair<uint16_t, uint16_t> calc_psc_arr()
 {
 	uint16_t psc = 0;
-	uint32_t arr = CLOCK_SPEED / DDS_FREQ;
+	uint32_t arr = CLOCK_SPEED / player::dds_freq;
 	while (arr >= 65535) {
 		++psc;
 		arr /= 2;
@@ -253,7 +251,7 @@ constexpr std::pair<uint16_t, uint16_t> calc_psc_arr()
 void dac_init()
 {
 	// ensure there is no truncation in calculation
-	static_assert((CLOCK_SPEED % DDS_FREQ) == 0);
+	static_assert((CLOCK_SPEED % player::dds_freq) == 0);
 	//static_assert((uint64_t(arr) + 1) * uint64_t(DDS_FREQ) == uint64_t(CLOCK_SPEED));
 	//static_assert(uint64_t(psc_arr.second-1) * uint64_t(DDS_FREQ) * uint64_t(psc_arr.first+1) == uint64_t(CLOCK_SPEED));
 
@@ -352,13 +350,8 @@ void timer_stop()
 
 void play_note(notes::sym_t n, notes::duration_t d, notes::instrument_t instr, note_id_t note_id)
 {
-	constexpr uint32_t fade = DDS_FREQ/1000;
-	constexpr uint32_t dds_freq_64 = DDS_FREQ/64;
-	static_assert((DDS_FREQ % 64) == 0); // avoid truncation
-	const uint32_t dds_ticks = dds_freq_64 * d - fade;
-
 	const auto voice_idx = find_free_voice();
-	g_voices[voice_idx].set(g_instr_info[instr].lookup_func, dds_notes_incs[n], dds_ticks, note_id);
+	g_voices[voice_idx].set(g_instr_info[instr].lookup_func, dds_notes_incs[n], player::dds_ticks(d), note_id);
 }
 
 
