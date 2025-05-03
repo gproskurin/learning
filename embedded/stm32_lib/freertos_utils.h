@@ -276,9 +276,11 @@ void pinpoll_impl::task_function(pin_info_t<Pin>* const pin_info, size_t size)
 	constexpr auto poll_delay = configTICK_RATE_HZ/20;
 	static_assert(poll_delay*20 == configTICK_RATE_HZ); // ensure no truncation
 
+#if 0
 	for (size_t i=0; i<size; ++i) {
 		pin_info[i].pin.set_mode_button();
 	}
+#endif
 
 	//logger.log_async("PINPOLL start polling\r\n");
 	for(;;) {

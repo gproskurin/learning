@@ -138,8 +138,19 @@ constexpr stm32_lib::gpio::pin_inverted_t pin_led{GPIOB_BASE, 12};
 #define USART_STLINK_PIN_TX_AF 7
 constexpr stm32_lib::gpio::gpio_pin_t usart_stlink_pin_tx{GPIOB_BASE, 10};
 
-constexpr stm32_lib::gpio::gpio_pin_t pin_led_red{GPIOI_BASE, 13};
-constexpr stm32_lib::gpio::gpio_pin_t pin_led_green{GPIOJ_BASE, 2};
+constexpr stm32_lib::gpio::gpio_pin_t pin_btn{GPIOC_BASE, 13};
+
+constexpr stm32_lib::gpio::gpio_pin_t pin_joy_sel{GPIOK_BASE, 2};
+constexpr stm32_lib::gpio::gpio_pin_t pin_joy_down{GPIOK_BASE, 3};
+constexpr stm32_lib::gpio::gpio_pin_t pin_joy_left{GPIOK_BASE, 4};
+constexpr stm32_lib::gpio::gpio_pin_t pin_joy_right{GPIOK_BASE, 5};
+constexpr stm32_lib::gpio::gpio_pin_t pin_joy_up{GPIOK_BASE, 6};
+
+constexpr stm32_lib::gpio::gpio_pin_t pin_led_green{GPIOI_BASE, 12};
+constexpr stm32_lib::gpio::gpio_pin_t pin_led_orange{GPIOI_BASE, 13};
+constexpr stm32_lib::gpio::gpio_pin_t pin_led_red{GPIOI_BASE, 14};
+constexpr stm32_lib::gpio::gpio_pin_t pin_led_blue{GPIOI_BASE, 15};
+
 constexpr stm32_lib::gpio::gpio_pin_t pin_led_green_arduino{GPIOD_BASE, 3};
 constexpr stm32_lib::gpio::gpio_pin_t pin_led_green_vbus_usb_fs{GPIOA_BASE, 9};
 constexpr stm32_lib::gpio::gpio_pin_t pin_led_red_otg_overcurrent{GPIOH_BASE, 11};
