@@ -151,10 +151,6 @@ constexpr stm32_lib::gpio::gpio_pin_t pin_led_orange{GPIOI_BASE, 13};
 constexpr stm32_lib::gpio::gpio_pin_t pin_led_red{GPIOI_BASE, 14};
 constexpr stm32_lib::gpio::gpio_pin_t pin_led_blue{GPIOI_BASE, 15};
 
-constexpr stm32_lib::gpio::gpio_pin_t pin_led_green_arduino{GPIOD_BASE, 3};
-constexpr stm32_lib::gpio::gpio_pin_t pin_led_green_vbus_usb_fs{GPIOA_BASE, 9};
-constexpr stm32_lib::gpio::gpio_pin_t pin_led_red_otg_overcurrent{GPIOH_BASE, 11};
-
 constexpr stm32_lib::gpio::gpio_pin_t pin_usb_dm{GPIOA_BASE, 11};
 constexpr stm32_lib::gpio::gpio_pin_t pin_usb_dp{GPIOA_BASE, 12};
 #define USB_AF 10

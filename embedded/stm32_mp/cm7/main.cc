@@ -44,6 +44,7 @@ void periph_init()
 	RCC->AHB4ENR |=
 		RCC_AHB4ENR_GPIOAEN_Msk
 		| RCC_AHB4ENR_GPIOBEN_Msk
+		| RCC_AHB4ENR_GPIOCEN_Msk
 		| RCC_AHB4ENR_GPIODEN_Msk
 		| RCC_AHB4ENR_GPIOGEN_Msk
 		| RCC_AHB4ENR_GPIOHEN_Msk
@@ -55,6 +56,7 @@ void periph_init()
 		&RCC->AHB4RSTR,
 		RCC_AHB4RSTR_GPIOARST_Msk
 			| RCC_AHB4RSTR_GPIOBRST_Msk
+			| RCC_AHB4RSTR_GPIOCRST_Msk
 			| RCC_AHB4RSTR_GPIODRST_Msk
 			| RCC_AHB4RSTR_GPIOGRST_Msk
 			| RCC_AHB4RSTR_GPIOHRST_Msk
@@ -95,8 +97,7 @@ void vApplicationIdleHook(void)
 
 
 freertos_utils::pin_toggle_task_t g_pin_green("blink_green", bsp::pin_led_green, PRIO_BLINK);
-freertos_utils::pin_toggle_task_t g_pin_green_arduino("blink_green_arduino", bsp::pin_led_green_arduino, PRIO_BLINK);
-freertos_utils::pin_toggle_task_t g_pin_green_vbus("blink_green_vbus", bsp::pin_led_green_vbus_usb_fs, PRIO_BLINK);
+freertos_utils::pin_toggle_task_t g_pin_orange("blink_orange", bsp::pin_led_orange, PRIO_BLINK);
 
 
 constexpr uint32_t display_w = 480;
@@ -477,13 +478,9 @@ __attribute__ ((noreturn)) void main()
 	periph_init();
 
 	g_pin_green.init_pin();
-	g_pin_green.pulse_continuous(configTICK_RATE_HZ, configTICK_RATE_HZ*2);
-
-	g_pin_green_arduino.init_pin();
-	g_pin_green_arduino.pulse_continuous(configTICK_RATE_HZ/20, configTICK_RATE_HZ/11);
-
-	g_pin_green_vbus.init_pin();
-	g_pin_green_vbus.pulse_continuous(configTICK_RATE_HZ/2, configTICK_RATE_HZ);
+	g_pin_orange.init_pin();
+	g_pin_green.pulse_continuous(configTICK_RATE_HZ/3, configTICK_RATE_HZ/5);
+	g_pin_orange.pulse_continuous(configTICK_RATE_HZ/5, configTICK_RATE_HZ*4/5);
 
 	stm32_lib::usart::init_logger_uart<configCPU_CLOCK_HZ>(
 		USART_STLINK,
@@ -492,6 +489,7 @@ __attribute__ ((noreturn)) void main()
 	);
 	log_sync("\r\nCM7: USART initialized (sync)\r\n");
 
+#if 0
 	log_sync("Creating LCD task...\r\n");
 	create_task_lcd();
 	log_sync("Created LCD task\r\n");
@@ -499,6 +497,7 @@ __attribute__ ((noreturn)) void main()
 	log_sync("Creating UGUI task...\r\n");
 	create_task_ugui();
 	log_sync("Created UGUI task\r\n");
+#endif
 
 	log_sync("CM7: Starting FreeRTOS scheduler\r\n");
 	logger.init();

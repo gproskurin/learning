@@ -10,6 +10,7 @@
 
 
 #define PRIO_BLINK 1
+#define PRIO_PINPOLL 2
 #define PRIO_TEST1 2
 #define PRIO_LOGGER 3
 
@@ -21,6 +22,87 @@ void log_sync(const char* s)
 {
 	stm32_lib::usart::send(USART_STLINK, s);
 }
+
+
+freertos_utils::pin_toggle_task_t g_pin_blue("blink_blue", bsp::pin_led_blue, PRIO_BLINK);
+freertos_utils::pin_toggle_task_t g_pin_red("blink_red", bsp::pin_led_red, PRIO_BLINK);
+
+
+void pinpoll_cb_joysel(const stm32_lib::gpio::pin_t&, bool new_status)
+{
+	if (new_status) {
+		g_pin_blue.pulse_many(configTICK_RATE_HZ/10, configTICK_RATE_HZ/2, 1);
+		logger.log_async("PINPOLL: joysel UP\r\n");
+	} else {
+		logger.log_async("PINPOLL: joysel DOWN\r\n");
+		g_pin_blue.pulse_many(configTICK_RATE_HZ/10, configTICK_RATE_HZ/2, 2);
+	}
+}
+
+void pinpoll_cb_joyup(const stm32_lib::gpio::pin_t&, bool new_status)
+{
+	if (new_status) {
+		g_pin_blue.pulse_many(configTICK_RATE_HZ/10, configTICK_RATE_HZ/2, 3);
+		logger.log_async("PINPOLL: joyup UP\r\n");
+	} else {
+		g_pin_blue.pulse_many(configTICK_RATE_HZ/10, configTICK_RATE_HZ/2, 4);
+		logger.log_async("PINPOLL: joyup DOWN\r\n");
+	}
+}
+
+void pinpoll_cb_joydown(const stm32_lib::gpio::pin_t&, bool new_status)
+{
+	if (new_status) {
+		g_pin_blue.pulse_many(configTICK_RATE_HZ/10, configTICK_RATE_HZ/2, 5);
+		logger.log_async("PINPOLL: joydown UP\r\n");
+	} else {
+		g_pin_blue.pulse_many(configTICK_RATE_HZ/10, configTICK_RATE_HZ/2, 6);
+		logger.log_async("PINPOLL: joydown DOWN\r\n");
+	}
+}
+
+void pinpoll_cb_joyleft(const stm32_lib::gpio::pin_t&, bool new_status)
+{
+	if (new_status) {
+		g_pin_blue.pulse_many(configTICK_RATE_HZ/10, configTICK_RATE_HZ/2, 7);
+		logger.log_async("PINPOLL: joyleft UP\r\n");
+	} else {
+		g_pin_blue.pulse_many(configTICK_RATE_HZ/10, configTICK_RATE_HZ/2, 8);
+		logger.log_async("PINPOLL: joyleft DOWN\r\n");
+	}
+}
+
+void pinpoll_cb_joyright(const stm32_lib::gpio::pin_t&, bool new_status)
+{
+	if (new_status) {
+		g_pin_blue.pulse_many(configTICK_RATE_HZ/10, configTICK_RATE_HZ/2, 9);
+		logger.log_async("PINPOLL: joyright UP\r\n");
+	} else {
+		g_pin_blue.pulse_many(configTICK_RATE_HZ/10, configTICK_RATE_HZ/2, 10);
+		logger.log_async("PINPOLL: joyright DOWN\r\n");
+	}
+}
+
+void pinpoll_cb_btn(const stm32_lib::gpio::pin_t&, bool new_status)
+{
+	if (new_status) {
+		g_pin_blue.pulse_many(configTICK_RATE_HZ/3, configTICK_RATE_HZ/4, 2);
+		logger.log_async("PINPOLL: button UP\r\n");
+	} else {
+		g_pin_blue.pulse_many(configTICK_RATE_HZ/3, configTICK_RATE_HZ/4, 1);
+		logger.log_async("PINPOLL: button DOWN\r\n");
+	}
+}
+
+
+freertos_utils::pinpoll::task_arg_t<stm32_lib::gpio::pin_t, 6> pinpoll_task_arg{
+	freertos_utils::pinpoll::make_pin_info(bsp::pin_joy_sel, &pinpoll_cb_joysel),
+	freertos_utils::pinpoll::make_pin_info(bsp::pin_joy_left, &pinpoll_cb_joyleft),
+	freertos_utils::pinpoll::make_pin_info(bsp::pin_joy_right, &pinpoll_cb_joyright),
+	freertos_utils::pinpoll::make_pin_info(bsp::pin_joy_up, &pinpoll_cb_joyup),
+	freertos_utils::pinpoll::make_pin_info(bsp::pin_joy_down, &pinpoll_cb_joydown),
+	freertos_utils::pinpoll::make_pin_info(bsp::pin_btn, &pinpoll_cb_btn)
+};
 
 
 StaticTask_t xTaskBufferIdle;
@@ -38,10 +120,6 @@ void vApplicationIdleHook(void)
 {
 	__WFI();
 }
-
-
-freertos_utils::pin_toggle_task_t g_pin_red("blink_red", bsp::pin_led_red, PRIO_BLINK);
-freertos_utils::pin_toggle_task_t g_pin_red_otg("blink_red_otg", bsp::pin_led_red_otg_overcurrent, PRIO_BLINK);
 
 
 inline
@@ -123,7 +201,7 @@ __attribute__ ((noreturn)) void main()
 {
 	for (volatile int i=0; i<1000000; ++i) {}
 
-	const auto& pin = bsp::pin_led_red;
+	//const auto& pin = bsp::pin_led_red;
 
 	//pin.set_state(1);
 	//pin.set_mode_output_lowspeed_pushpull();
@@ -156,15 +234,23 @@ __attribute__ ((noreturn)) void main()
 	NVIC_SetPriority(DMA1_Stream1_IRQn, 12);
 	NVIC_EnableIRQ(DMA1_Stream1_IRQn);
 
+	g_pin_blue.init_pin();
 	g_pin_red.init_pin();
-	g_pin_red.pulse_continuous(configTICK_RATE_HZ/10, configTICK_RATE_HZ);
-
-	g_pin_red_otg.init_pin();
-	g_pin_red_otg.pulse_continuous(configTICK_RATE_HZ/10, configTICK_RATE_HZ);
+	//g_pin_blue.pulse_continuous(configTICK_RATE_HZ/20, configTICK_RATE_HZ/5);
+	g_pin_red.pulse_continuous(configTICK_RATE_HZ, configTICK_RATE_HZ);
 
 	log_sync("\r\nCM4: USART initialized (sync)\r\n");
 
 	create_task_test1();
+
+	// pinpoll task
+	bsp::pin_joy_sel.set(stm32_lib::gpio::pupd_t::pu, stm32_lib::gpio::mode_t::input);
+	bsp::pin_joy_down.set(stm32_lib::gpio::pupd_t::pu, stm32_lib::gpio::mode_t::input);
+	bsp::pin_joy_left.set(stm32_lib::gpio::pupd_t::pu, stm32_lib::gpio::mode_t::input);
+	bsp::pin_joy_right.set(stm32_lib::gpio::pupd_t::pu, stm32_lib::gpio::mode_t::input);
+	bsp::pin_joy_up.set(stm32_lib::gpio::pupd_t::pu, stm32_lib::gpio::mode_t::input);
+	bsp::pin_btn.set(stm32_lib::gpio::pupd_t::pd, stm32_lib::gpio::mode_t::input);
+	freertos_utils::pinpoll::create_task("pinpoll", PRIO_PINPOLL, &pinpoll_task_arg);
 
 	log_sync("CM4: Starting FreeRTOS scheduler\r\n");
 	logger.init();
