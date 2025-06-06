@@ -100,11 +100,11 @@ freertos_utils::pin_toggle_task_t g_pin_green("blink_green", bsp::pin_led_green,
 freertos_utils::pin_toggle_task_t g_pin_orange("blink_orange", bsp::pin_led_orange, PRIO_BLINK);
 
 
-constexpr uint32_t display_w = 480;
-constexpr uint32_t display_h = 272;
-constexpr uint32_t l1_w = 320;
-constexpr uint32_t l1_h = 240;
-extern std::array<unsigned char, l1_w * l1_h * 3> fb; // RGB888
+constexpr uint32_t display_x = 480;
+constexpr uint32_t display_y = 800;
+constexpr uint32_t l1_x = 320;
+constexpr uint32_t l1_y = 240;
+extern std::array<unsigned char, l1_x * l1_y * 3> fb; // RGB888
 
 namespace lcd {
 
@@ -120,6 +120,7 @@ void init_pin_af(const stm32_lib::gpio::pin_t& pin, uint8_t af)
 }
 
 
+#if 0
 void ts_init()
 {
 	RCC->APB4ENR |= RCC_APB4ENR_I2C4EN_Msk;
@@ -135,9 +136,12 @@ void ts_init()
 	I2C_TS->CR2 = (1 << I2C_CR2_NBYTES_Pos);
 	I2C_TS->CR1 = I2C_CR1_PE;
 }
+#endif
 
 
-stm32_lib::display::lcd_t<480,272> lcd;
+constexpr uint16_t lcd_x = 480;
+constexpr uint16_t lcd_y = 800;
+stm32_lib::display::lcd_t<lcd_x, lcd_y> lcd;
 void init()
 {
 	// lcd pixel clock, PLL3(=64)/div
@@ -145,53 +149,49 @@ void init()
 	RCC->CR |= RCC_CR_PLL3ON;
 	while (!(RCC->CR & RCC_CR_PLL3RDY)) {}
 
-	RCC->APB3ENR |= RCC_APB3ENR_LTDCEN_Msk;
-	toggle_bits_10(&RCC->APB3RSTR, RCC_APB3RSTR_LTDCRST_Msk);
+	RCC->APB3ENR |= RCC_APB3ENR_LTDCEN_Msk | RCC_APB3ENR_DSIEN_Msk;
+	toggle_bits_10(&RCC->APB3RSTR, RCC_APB3RSTR_LTDCRST_Msk | RCC_APB3RSTR_DSIRST_Msk);
 
-	bsp::lcd::pin_disp.set(stm32_lib::gpio::speed_t::bits_00);
-	bsp::lcd::pin_disp.set_state(1);
-	bsp::lcd::pin_disp.set(stm32_lib::gpio::mode_t::output);
+        DSI->MCR = 0; // video mode
+        DSI->WCFGR = 0; // ~DSIM
+        DSI->VMCR = 0b00 << DSI_VMCR_VMT_Pos; // non-burst with sync pulses
+        DSI->VPCR = 32 << DSI_VPCR_VPSIZE_Pos; // FIXME video packet size
+        DSI->VCCR = 5 << DSI_VCCR_NUMC_Pos; // FIXME number of chunks
+        DSI->VNPCR = 32 << DSI_VNPCR_NPSIZE_Pos; // FIXME video null packet size
+        DSI->LVCIDR = 1 << DSI_LVCIDR_VCID_Pos; // FIXME virtual channel id
+        DSI->LPCR = 0; // HSYNC,VSYNC,DE polarity
+        DSI->LCOLCR = 0b0101 << DSI_LCOLCR_COLC_Pos; // color coding: 24 bit
+        DSI->WCFGR = 0b0101 << DSI_WCFGR_COLMUX_Pos;
 
-	init_pin_af(bsp::lcd::pin_de, bsp::lcd::af);
-	init_pin_af(bsp::lcd::pin_vsync, bsp::lcd::af);
-	init_pin_af(bsp::lcd::pin_hsync, bsp::lcd::af);
-	init_pin_af(bsp::lcd::pin_clk, bsp::lcd::af);
+        DSI->VHSACR = 0 << DSI_VHSACR_HSA_Pos; // FIXME
+        DSI->VHBPCR = 0 << DSI_VHBPCR_HBP_Pos; // FIXME
+        DSI->VLCR = 0 << DSI_VLCR_HLINE_Pos; // FIXME
+        DSI->VVSACR = 0 << DSI_VVSACR_VSA_Pos; // FIXME
+        DSI->VVBPCR = 0 << DSI_VVBPCR_VBP_Pos; // FIXME
+        DSI->VVFPCR = 0 << DSI_VVFPCR_VFP_Pos; // FIXME
+        DSI->VVACR = 0 << DSI_VVACR_VA_Pos; // FIXME
+        DSI->VMCR = DSI_VMCR_LPCE; // FIXME
 
-	init_pin_af(bsp::lcd::pin_r0, bsp::lcd::af);
-	init_pin_af(bsp::lcd::pin_r1, bsp::lcd::af);
-	init_pin_af(bsp::lcd::pin_r2, bsp::lcd::af);
-	init_pin_af(bsp::lcd::pin_r3, bsp::lcd::af);
-	init_pin_af(bsp::lcd::pin_r4, bsp::lcd::af);
-	init_pin_af(bsp::lcd::pin_r5, bsp::lcd::af);
-	init_pin_af(bsp::lcd::pin_r6, bsp::lcd::af);
-	init_pin_af(bsp::lcd::pin_r7, bsp::lcd::af);
+        DSI->LPMCR = 10 << DSI_LPMCR_LPSIZE_Pos; // FIXME low power largest packet size
 
-	init_pin_af(bsp::lcd::pin_g0, bsp::lcd::af);
-	init_pin_af(bsp::lcd::pin_g1, bsp::lcd::af);
-	init_pin_af(bsp::lcd::pin_g2, bsp::lcd::af);
-	init_pin_af(bsp::lcd::pin_g3, bsp::lcd::af);
-	init_pin_af(bsp::lcd::pin_g4, bsp::lcd::af);
-	init_pin_af(bsp::lcd::pin_g5, bsp::lcd::af);
-	init_pin_af(bsp::lcd::pin_g6, bsp::lcd::af);
-	init_pin_af(bsp::lcd::pin_g7, bsp::lcd::af);
+	//bsp::lcd::pin_disp.set(stm32_lib::gpio::speed_t::bits_00);
+	//bsp::lcd::pin_disp.set_state(1);
+	//bsp::lcd::pin_disp.set(stm32_lib::gpio::mode_t::output);
 
-	init_pin_af(bsp::lcd::pin_b0, bsp::lcd::af);
-	init_pin_af(bsp::lcd::pin_b1, bsp::lcd::af);
-	init_pin_af(bsp::lcd::pin_b2, bsp::lcd::af);
-	init_pin_af(bsp::lcd::pin_b3, bsp::lcd::af);
-	init_pin_af(bsp::lcd::pin_b4, bsp::lcd::af);
-	init_pin_af(bsp::lcd::pin_b5, bsp::lcd::af);
-	init_pin_af(bsp::lcd::pin_b6, bsp::lcd::af);
-	init_pin_af(bsp::lcd::pin_b7, bsp::lcd::af);
+	//init_pin_af(bsp::lcd::pin_de, bsp::lcd::af);
+	//init_pin_af(bsp::lcd::pin_vsync, bsp::lcd::af);
+	//init_pin_af(bsp::lcd::pin_hsync, bsp::lcd::af);
+	//init_pin_af(bsp::lcd::pin_clk, bsp::lcd::af);
+
 
 	lcd.init();
 
 	lcd.layer1.start_x = 20;
-	lcd.layer1.width = 320;
+	lcd.layer1.width = l1_x;
 	lcd.layer1.reconfig_x();
 
 	lcd.layer1.start_y = 10;
-	lcd.layer1.height = 240;
+	lcd.layer1.height = l1_y;
 	lcd.layer1.reconfig_y();
 
 #if 0
@@ -240,7 +240,7 @@ void task_function_lcd(void*)
 {
 	logger.log_async("LCD task started\r\n");
 	lcd::init();
-	lcd::ts_init();
+	//lcd::ts_init();
 	int32_t dx1 = 1;
 	int32_t dy1 = 1;
 	//int32_t dx2 = 2;
@@ -489,7 +489,7 @@ __attribute__ ((noreturn)) void main()
 	);
 	log_sync("\r\nCM7: USART initialized (sync)\r\n");
 
-#if 0
+#if 1
 	log_sync("Creating LCD task...\r\n");
 	create_task_lcd();
 	log_sync("Created LCD task\r\n");
