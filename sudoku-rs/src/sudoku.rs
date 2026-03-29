@@ -1,6 +1,6 @@
 use crate::bitset;
 use crate::consts;
-use crate::consts::Alphabet;
+use crate::consts::Consts;
 
 
 type Num = u8;
@@ -14,11 +14,9 @@ pub struct Sudoku<const N: usize> {
 }
 
 impl<const N: usize> Sudoku<N>
-    where () : Alphabet<N>
+    where () : Consts<N>
 {
-    const fn alphabet() -> [ char; N ] {
-        <() as Alphabet<N>>::ALPHABET
-    }
+    const ALPHABET: [ char; N ] = <() as Consts<N>>::ALPHABET;
 
     pub fn from_stdin() -> Self {
         Self::from_reader(&mut std::io::BufReader::new(std::io::stdin()))
@@ -43,7 +41,7 @@ impl<const N: usize> Sudoku<N>
             line.chars().map(|c| {
                 if c == consts::UNSOLVED {
                     bitset::Bitset::<N>::make_full()
-                } else if let Some(num) = Self::alphabet().iter().position(|&x| x == c) {
+                } else if let Some(num) = Self::ALPHABET.iter().position(|&x| x == c) {
                     bitset::Bitset::<N>::make_solved(num as Num)
                 } else {
                     panic!("Invalid character in input: '{}'", c);
@@ -57,21 +55,11 @@ impl<const N: usize> Sudoku<N>
     }
 
     pub fn at(&self, i: usize, j: usize) -> &bitset::Bitset<N> {
-        assert!(i < N);
-        assert!(j < N);
-        assert!(self.data.len() == N);
-        let row = &self.data[i];
-        assert!(row.len() == N);
-        &row[j]
+        &self.data[i][j]
     }
 
     pub fn at_mut(&mut self, i: usize, j: usize) -> &mut bitset::Bitset<N> {
-        assert!(i < N);
-        assert!(j < N);
-        assert!(self.data.len() == N);
-        let row = &mut self.data[i];
-        assert!(row.len() == N);
-        &mut row[j]
+        &mut self.data[i][j]
     }
 }
 

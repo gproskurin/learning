@@ -1,5 +1,5 @@
 use crate::consts;
-use crate::consts::{Alphabet};
+use crate::consts::Consts;
 
 
 type Num = u8;
@@ -9,11 +9,9 @@ pub struct Bitset<const N: usize> {
 }
 
 impl <const N: usize> Bitset<N>
-    where () : Alphabet<N>
+    where () : Consts<N>
 {
-    const fn alphabet() -> [ char; N ] {
-        <() as Alphabet<N>>::ALPHABET
-    }
+    const ALPHABET: [ char; N ] = <() as Consts<N>>::ALPHABET;
 
     pub fn make_empty() -> Self {
         Self { bits: 0 }
@@ -66,7 +64,7 @@ impl <const N: usize> Bitset<N>
         assert!(ones <= N);
         match ones {
             0 => panic!("Invalid Bitset: no bits set"),
-            1 => Self::alphabet()[self.bits.trailing_zeros() as usize],
+            1 => Self::ALPHABET[self.bits.trailing_zeros() as usize],
             n if n == N => consts::UNSOLVED,
             _ => consts::PARTIAL
         }
@@ -76,7 +74,7 @@ impl <const N: usize> Bitset<N>
         match c {
             consts::UNSOLVED => return Self::make_full(),
             _ => {
-                let pos = Self::alphabet().iter().position(|&x| x == c);
+                let pos = Self::ALPHABET.iter().position(|&x| x == c);
                 match pos {
                     Some(i) => Self::make_solved(i as Num),
                     None => panic!("Invalid character for Bitset: {}", c)
@@ -205,7 +203,7 @@ fn test_bitset_printable_roundtrip()
         assert_eq!(bs.to_ulong(), bs2.to_ulong());
     }
 
-    for c in Bitset::<9>::alphabet() {
+    for c in Bitset::<9>::ALPHABET {
         let bs = Bitset::<9>::from_printable_char(c);
         let c2 = bs.to_printable_char();
         assert_eq!(c, c2);
