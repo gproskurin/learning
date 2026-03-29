@@ -58,6 +58,11 @@ impl <const N: usize> Bitset<N>
         self.bits
     }
 
+    pub fn test(&self, num: Num) -> bool {
+        assert!((num as usize) < N);
+        (self.bits & (1 << num)) != 0
+    }
+
     pub fn to_printable_char(&self) -> char {
         let ones = self.bits.count_ones() as usize;
         assert!(ones > 0);

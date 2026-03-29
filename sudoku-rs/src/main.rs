@@ -6,32 +6,20 @@ mod sudoku;
 fn main()
 {
     let mut s = sudoku::Sudoku::<9>::from_stdin();
+    println!("INPUT");
+    s.to_stdout();
+    println!();
+
     s.solve();
-    /*
-	try {
-		sudoku_t<9> s(std::cin);
-		std::cout << "INPUT\n";
-		s.print(std::cout);
-		std::cout << std::endl;
 
-		s.solve();
+    println!("OUTPUT_DETAILED");
+    s.detailed_to_stdout();
+    println!();
 
-		std::cout << "OUTPUT_DETAILED\n";
-		s.print_detailed(std::cout);
-		std::cout << std::endl;
+    println!("OUTPUT");
+    s.to_stdout();
+    println!();
 
-		std::cout << "OUTPUT\n";
-		s.print(std::cout);
-		std::cout << std::endl;
-
-		s.verify();
-
-		return 0;
-
-	} catch (const std::exception& e) {
-		std::cerr << "Exception: " << e.what() << "\n";
-		return 1;
-	}
-    */
+    s.verify();
 }
 
