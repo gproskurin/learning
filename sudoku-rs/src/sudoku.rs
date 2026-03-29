@@ -4,7 +4,6 @@ use crate::consts::Consts;
 
 
 type Num = u8;
-const N: usize = 9;
 
 
 type SudokuData<const N: usize> = [ [bitset::Bitset<N>; N]; N ];
@@ -159,7 +158,7 @@ fn test_load()
             "8********\n",
             "*********\n"
         );
-        let mut s = Sudoku::<9>::from_reader(&mut std::io::Cursor::new(input));
+        let mut _s = Sudoku::<9>::from_reader(&mut std::io::Cursor::new(input));
     }
 
     {
@@ -169,7 +168,7 @@ fn test_load()
             "2*4*\n",
             "**2*\n"
         );
-        let mut s = Sudoku::<4>::from_reader(&mut std::io::Cursor::new(input));
+        let mut _s = Sudoku::<4>::from_reader(&mut std::io::Cursor::new(input));
     }
 }
 
